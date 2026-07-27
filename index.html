@@ -379,31 +379,42 @@ var _safety=setTimeout(function(){_firstServerSnap=false;},3000);
 FB.listener=docRef.onSnapshot(function(snap){
 var fromCache=!!(snap.metadata&&snap.metadata.fromCache);
 var docData=snap.exists?snap.data():null;
-var remote=fbExtractRemote(docData);
 var ts=fbExtractTs(docData);
-if(remote){
 var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-/* Juste après un rechargement (ex: après un import), le tout premier
-   instantané peut venir uniquement du cache local du navigateur — et ce
-   cache peut encore contenir une version périmée de cet appareil, plus
-   ancienne que ce qu'il vient tout juste de pousser. On ignore donc les
-   instantanés cache-only tant qu'aucune confirmation serveur n'est arrivée
-   (ou que les 3s de filet de sécurité ne se sont pas écoulées). */
+/* Juste après un rechargement, le tout premier instantané peut venir
+   du cache local et contenir une version périmée. On l'ignore. */
 if(fromCache&&_firstServerSnap)return;
-/* On n'écrase jamais des données locales par une version distante
-   plus ancienne ou identique. Seule une version cloud strictement
-   plus récente (ts > localTs) peut remplacer les données locales,
-   quel que soit l'appareil source — ce qui permet à un autre
-   appareil plus actif de "réparer" un appareil resté coincé,
-   mais empêche le serveur d'écraser un import fraîchement poussé
-   avec une version périmée encore en transit. */
+/* Format ancien (json unique ou data nested) : données directement
+   dans le document principal. On les applique si ts > localTs. */
+var remote=fbExtractRemote(docData);
+if(remote){
 if(ts>localTs){
 fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
 }
+}else if(docData&&docData._ts&&!docData.json&&!docData.data){
+/* Format SPLIT v3 : le document principal ne contient que _ts.
+   Les données sont dans la sous-collection "chunks".
+   On lit les chunks uniquement si ts > localTs. */
+if(ts>localTs){
+console.log('[Firebase] onSnapshot: format split détecté, ts='+ts+' > localTs='+localTs+' → lecture chunks');
+docRef.collection('chunks').get().then(function(chunksSnap){
+var payload={_ts:ts};
+chunksSnap.forEach(function(doc){
+var d=doc.data();
+if(d.v)payload[doc.id]=d.v;
+});
+if(Object.keys(payload).length>1){/* _ts + au moins 1 clé */
+fbApplyRemote(payload);localStorage.setItem('cdc_fb_ts',String(ts));
+}else{
+console.log('[Firebase] onSnapshot: chunks vides ou incomplets, pas appliqué');
+}
+}).catch(function(e){
+console.error('[Firebase] onSnapshot: erreur lecture chunks:',e);
+});
+}
 }else if(_firstServerSnap&&!fromCache){
-/* Premier appareil à se connecter : aucun document distant n'existe encore
-   côté serveur (on l'a confirmé, ce n'est pas juste un cache vide). On sème
-   immédiatement le cloud avec les données locales de cet appareil. */
+/* Premier appareil à se connecter : aucun document distant n'existe
+   encore côté serveur. On sème immédiatement le cloud. */
 fbPush(true);
 toast('Cloud initialisé avec les données de cet appareil','info');
 }
@@ -436,9 +447,11 @@ setTimeout(function(){_fbPushQueued=false;if(!FB.importing)fbPush();},1500);
 }
 
 /* Helper : extrait les données du document Firestore, en
-   supportant les deux formats :
-   - NOUVEAU : {json: "...(single string)...", _ts: number}
-   - ANCIEN  : {data: {cdc_folders: "...", cdc_data: "...", ...}}
+   supportant les anciens formats (lecture seule, backward compat) :
+   - v2 : {json: "...(single string)...", _ts: number}
+   - v1  : {data: {cdc_folders: "...", cdc_data: "...", ...}}
+   Le format v3 (split/chunks) n'est PAS extrait ici — il est
+   géré directement dans fbStartSync() et fbReadFullRemote().
    Retourne le map payload (clés = FB_KEYS + _ts) ou null. */
 function fbExtractRemote(docData){
 if(!docData)return null;
@@ -458,25 +471,27 @@ return 0;
 
 function fbDoPush(){
 FB.pushing=true;
-var payload={};
-FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
-payload._ts=Date.now();
-/* Log détaillé : nombre de clés poussées + taille de chaque valeur */
-var keysPushed=Object.keys(payload).filter(function(k){return k!='_ts';});
-console.log('[Firebase] Push: '+keysPushed.length+' clés poussées, _ts:',payload._ts);
-keysPushed.forEach(function(k){console.log('[Firebase]  '+k+' = '+payload[k].length+' chars');});
-/* Format NOUVEAU : on encode TOUT le payload en une seule string
-   JSON et on la stocke dans le champ "json" du document Firestore.
-   Plus aucun map nested → impossible d'avoir l'erreur
-   "invalid nested entity". Le champ _ts est dupliqué au niveau
-   top du document pour que le listener puisse le lire sans
-   parser toute la string. */
-var jsonStr=JSON.stringify(payload);
-console.log('[Firebase] Push json size:',jsonStr.length,'bytes, _ts:',payload._ts);
-return FB.db.collection('crm_data').doc(FB.uid).set({json:jsonStr,_ts:payload._ts}).then(function(){
-localStorage.setItem('cdc_fb_ts',String(payload._ts));
+var ts=Date.now();
+var docRef=FB.db.collection('crm_data').doc(FB.uid);
+var batch=FB.db.batch();
+/* Document principal : uniquement le timestamp.
+   Les données sont dans la sous-collection "chunks",
+   une clé par document → chaque chunk < 1 MiB (limite Firestore). */
+batch.set(docRef,{_ts:ts});
+var keysCount=0;
+FB_KEYS.forEach(function(k){
+var v=localStorage.getItem(k);
+if(v&&v!=='undefined'&&v!=='[object Object]'){
+batch.set(docRef.collection('chunks').doc(k),{v:v});
+keysCount++;
+console.log('[Firebase] Push chunk: '+k+' = '+v.length+' chars');
+}
+});
+console.log('[Firebase] Push batch: '+keysCount+' chunks, _ts:'+ts);
+return batch.commit().then(function(){
+localStorage.setItem('cdc_fb_ts',String(ts));
 FB.connected=true;fbShowStatus();
-console.log('[Firebase] Push OK, ts='+payload._ts);
+console.log('[Firebase] Push OK (split format), ts='+ts);
 return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
@@ -487,20 +502,50 @@ return false;
 }).finally(function(){FB.pushing=false;});
 }
 
-/* Vérifie directement sur le serveur (et non via le listener local, qui peut
-   être en retard) si une version distante plus récente que ce que cet
-   appareil a reçue existe déjà. Retourne les données distantes s'il y a un
-   conflit potentiel, sinon null. */
-function fbCheckRemoteConflict(alwaysReturn){
-return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists){
+/* Helper : lit toutes les données cloud (ancien ou nouveau format)
+   et retourne un map payload (clés = FB_KEYS + _ts) ou null.
+   Utilise {source:'server'} pour ignorer le cache local. */
+function fbReadFullRemote(){
+var docRef=FB.db.collection('crm_data').doc(FB.uid);
+return docRef.get({source:'server'}).then(function(snap){
+if(!snap.exists)return null;
 var docData=snap.data();
+/* Format ancien (json unique ou data nested) */
 var remote=fbExtractRemote(docData);
+if(remote){
+var ts=fbExtractTs(docData);
+remote._ts=ts;
+return remote;
+}
+/* Format SPLIT v3 : données dans la sous-collection "chunks" */
+var ts=docData._ts||0;
+if(!ts)return null;
+return docRef.collection('chunks').get({source:'server'}).then(function(chunksSnap){
+var payload={_ts:ts};
+chunksSnap.forEach(function(doc){
+var d=doc.data();
+if(d.v)payload[doc.id]=d.v;
+});
+return(Object.keys(payload).length>1)?payload:null;
+});
+}).catch(function(e){
+console.error('[Firebase] fbReadFullRemote erreur:',e);
+return null;
+});
+}
+
+/* Vérifie directement sur le serveur si une version distante plus
+   récente que ce que cet appareil a reçue existe déjà. Retourne
+   les données distantes s'il y a un conflit potentiel, sinon null.
+   Si alwaysReturn=true, retourne toujours les données cloud
+   (même si les timestamps correspondent). */
+function fbCheckRemoteConflict(alwaysReturn){
+return fbReadFullRemote().then(function(remote){
 if(!remote)return null;
 if(alwaysReturn)return remote;
-var ts=fbExtractTs(docData);var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+var ts=remote._ts||0;
+var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
-}
 return null;
 }).catch(function(){return null;});
 }
@@ -531,18 +576,11 @@ return false;
    quand un appareil a fait un import et poussé la nouvelle base. */
 function fbPullCloud(){
 if(!fbIsReady()){toast('Non connecté au cloud','err');return;}
-FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists){
-var docData=snap.data();
-var remote=fbExtractRemote(docData);
+fbReadFullRemote().then(function(remote){
 if(remote){
-var ts=fbExtractTs(docData);
-fbApplyRemote(remote);
-localStorage.setItem('cdc_fb_ts',String(ts));
+var ts=remote._ts||0;
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
 toast('Données cloud récupérées — base à jour','info');
-}else{
-toast('Aucune donnée utile cloud trouvée','err');
-}
 }else{
 toast('Aucune donnée cloud trouvée','err');
 }
@@ -616,21 +654,23 @@ return lignes.join('<br>');
 function fbDiagCheck(){
 if(!fbIsReady()){alert('DIAGNOSTIC\n\nPas prêt : non connecté à Firebase sur cet appareil.');return;}
 var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
+fbReadFullRemote().then(function(remote){
 var lignes=['--- DIAGNOSTIC CLOUD ---',''];
 lignes.push('UID : '+FB.uid);
 lignes.push('Email : '+(FB.userEmail||'—'));
-lignes.push('Document distant existe : '+(snap.exists?'OUI':'NON'));
-var remote=(snap.exists&&snap.data().data)?snap.data().data:null;
-var rts=remote?(remote._ts||0):0;
 if(remote){
+var rts=remote._ts||0;
 lignes.push('Horodatage distant : '+(rts?new Date(rts).toLocaleString('fr-FR'):'aucun')+' (brut '+rts+')');
-lignes.push('Nombre de clés stockées côté cloud : '+Object.keys(remote).filter(function(k){return k!=='_ts';}).length);
+var chunkKeys=Object.keys(remote).filter(function(k){return k!=='_ts';});
+lignes.push('Nombre de chunks cloud : '+chunkKeys.length);
+chunkKeys.forEach(function(k){lignes.push('  '+k+' = '+(remote[k]||'').length+' chars');});
+}else{
+lignes.push('Aucune donnée cloud trouvée');
 }
 lignes.push('');
 lignes.push('Horodatage local connu : '+(localTs?new Date(localTs).toLocaleString('fr-FR'):'aucun')+' (brut '+localTs+')');
 lignes.push('');
-lignes.push(remote&&rts===localTs?'✅ SYNCHRONISÉ avec le cloud':'⚠️ DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
+lignes.push(remote&&(remote._ts||0)===localTs?'✅ SYNCHRONISÉ avec le cloud':'⚠️ DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
 alert(lignes.join('\n'));
 }).catch(function(e){
 alert('ERREUR lors de la vérification cloud :\n\n'+(e.code||'')+'\n'+(e.message||e));
@@ -3544,20 +3584,17 @@ var _doReload=function(){FB.importing=false;setTimeout(()=>location.reload(),120
 var _importDone=function(ok){
   FB.importing=false;
   if(ok){
-    /* Vérification post-push : lire le document Firestore pour
+    /* Vérification post-push : lire les chunks Firestore pour
        confirmer que les données importées sont réellement
-       écrites dans le cloud. */
-    FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-      if(snap.exists){
-        var docData=snap.data();
-        var remote=fbExtractRemote(docData);
-        if(remote){
-          console.log('[Firebase] Vérification post-import: cloud _ts='+fbExtractTs(docData)+' vs local _ts='+localStorage.getItem('cdc_fb_ts'));
-          toast('Import synchronisé et vérifié sur le cloud','info');
-        }else{
-          console.error('[Firebase] Vérification post-import: document vide ou invalide');
-          toast('Import poussé mais vérification échouée — vérifiez sur un autre navigateur','err');
-        }
+       écrites dans le cloud (format split v3). */
+    fbReadFullRemote().then(function(remote){
+      if(remote){
+        var chunkKeys=Object.keys(remote).filter(function(k){return k!='_ts';});
+        console.log('[Firebase] Vérification post-import: '+chunkKeys.length+' chunks dans le cloud, _ts='+remote._ts+' vs local _ts='+localStorage.getItem('cdc_fb_ts'));
+        toast('Import synchronisé et vérifié sur le cloud','info');
+      }else{
+        console.error('[Firebase] Vérification post-import: aucun chunk trouvé');
+        toast('Import poussé mais vérification échouée — vérifiez sur un autre navigateur','err');
       }
       _doReload();
     }).catch(function(){
