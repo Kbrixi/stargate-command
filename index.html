@@ -336,7 +336,7 @@ let GMAIL={
 };
 
 /* ===== FIREBASE CLOUD SYNC ===== */
-const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
+const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false};
 const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
@@ -361,7 +361,7 @@ FB.db=firebase.firestore();
 try{FB.db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
 FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){/* offline ok */});
 FB.auth.onAuthStateChanged(function(user){
-if(user&&FB.uid!==user.uid){fbOnSignedIn(user);}
+if(user){FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;localStorage.setItem('cdc_fb_uid',FB.uid);fbStartSync();}
 });
 setTimeout(function(){fbHandleRedirectResult();},500);
 }catch(e){toast('Firebase init erreur: '+e.message,'err');}
@@ -371,43 +371,46 @@ function fbStartSync(){
 if(!fbIsReady())return;
 var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
-/* _firstServerSnap reste vrai tant qu'aucun instantané confirmé par le
-   serveur n'a été reçu (avec un filet de sécurité de 3s pour ne pas bloquer
-   l'usage hors-ligne, où seul le cache est disponible). */
-var _firstServerSnap=true;
-var _safety=setTimeout(function(){_firstServerSnap=false;},3000);
-FB.listener=docRef.onSnapshot(function(snap){
-var fromCache=!!(snap.metadata&&snap.metadata.fromCache);
-var docData=snap.exists?snap.data():null;
-var remote=fbExtractRemote(docData);
-var ts=fbExtractTs(docData);
-if(remote){
-var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-/* Juste après un rechargement (ex: après un import), le tout premier
-   instantané peut venir uniquement du cache local du navigateur — et ce
-   cache peut encore contenir une version périmée de cet appareil, plus
-   ancienne que ce qu'il vient tout juste de pousser. On ignore donc les
-   instantanés cache-only tant qu'aucune confirmation serveur n'est arrivée
-   (ou que les 3s de filet de sécurité ne se sont pas écoulées). */
-if(fromCache&&_firstServerSnap)return;
-/* On n'écrase jamais des données locales par une version distante
-   plus ancienne ou identique. Seule une version cloud strictement
-   plus récente (ts > localTs) peut remplacer les données locales,
-   quel que soit l'appareil source — ce qui permet à un autre
-   appareil plus actif de "réparer" un appareil resté coincé,
-   mais empêche le serveur d'écraser un import fraîchement poussé
-   avec une version périmée encore en transit. */
-if(ts>localTs){
-fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
-}
-}else if(_firstServerSnap&&!fromCache){
-/* Premier appareil à se connecter : aucun document distant n'existe encore
-   côté serveur (on l'a confirmé, ce n'est pas juste un cache vide). On sème
+var _firstSnap=true;
+var _pendingCacheSnap=null;
+/* Filet de sécurité hors-ligne : si aucune confirmation serveur n'arrive
+   rapidement (pas de réseau), on finit par appliquer quand même la version
+   en cache plutôt que de rester bloqué indéfiniment. */
+var _cacheFallbackTimer=setTimeout(function(){
+if(_firstSnap&&_pendingCacheSnap){_firstSnap=false;fbApplySnapshot(_pendingCacheSnap);}
+},3000);
+function fbApplySnapshot(snap){
+if(snap.exists&&snap.data().data){
+var remote=snap.data().data;
+var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+/* On applique le distant s'il diffère du local connu — mais on ne force
+   JAMAIS l'écrasement par une version distante strictement plus ancienne
+   que ce que l'appareil connaît déjà (ça a causé une perte de données :
+   un push tout juste effectué se faisait écraser par une version en cache
+   périmée reçue juste après un rechargement de page). */
+if(ts!==localTs&&!(localTs&&ts<localTs)){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
+}else if(_firstSnap){
+/* Premier appareil à se connecter : aucun document distant n'existe encore.
+   Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
+   tant qu'aucune modification manuelle n'était faite, ce qui donnait
+   l'impression trompeuse que la synchronisation ne marchait pas. On sème
    immédiatement le cloud avec les données locales de cet appareil. */
 fbPush(true);
 toast('Cloud initialisé avec les données de cet appareil','info');
 }
-if(!fromCache){_firstServerSnap=false;clearTimeout(_safety);}
+}
+FB.listener=docRef.onSnapshot(function(snap){
+if(_firstSnap&&snap.metadata.fromCache){
+/* Instantané servi depuis le cache local, pas encore confirmé par le
+   serveur : on attend la version serveur (ou le filet de sécurité
+   ci-dessus si hors-ligne) plutôt que de risquer d'appliquer une donnée
+   périmée. */
+_pendingCacheSnap=snap;
+return;
+}
+clearTimeout(_cacheFallbackTimer);
+fbApplySnapshot(snap);
+_firstSnap=false;
 FB.connected=true;fbShowStatus();
 },function(err){FB.connected=false;fbShowStatus();});
 }
@@ -435,41 +438,12 @@ _fbPushQueued=true;
 setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
 }
 
-/* Helper : extrait les données du document Firestore, en
-   supportant les deux formats :
-   - NOUVEAU : {json: "...(single string)...", _ts: number}
-   - ANCIEN  : {data: {cdc_folders: "...", cdc_data: "...", ...}}
-   Retourne le map payload (clés = FB_KEYS + _ts) ou null. */
-function fbExtractRemote(docData){
-if(!docData)return null;
-if(docData.json){try{return JSON.parse(docData.json);}catch(e){return null;}}
-if(docData.data)return docData.data;
-return null;
-}
-/* Helper : extrait le timestamp du document Firestore.
-   Nouveau format : docData._ts (au niveau top)
-   Ancien format  : docData.data._ts (nested) */
-function fbExtractTs(docData){
-if(!docData)return 0;
-if(docData._ts)return docData._ts;
-if(docData.data&&docData.data._ts)return docData.data._ts;
-return 0;
-}
-
 function fbDoPush(){
 FB.pushing=true;
 var payload={};
-FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
+FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
 payload._ts=Date.now();
-/* Format NOUVEAU : on encode TOUT le payload en une seule string
-   JSON et on la stocke dans le champ "json" du document Firestore.
-   Plus aucun map nested → impossible d'avoir l'erreur
-   "invalid nested entity". Le champ _ts est dupliqué au niveau
-   top du document pour que le listener puisse le lire sans
-   parser toute la string. */
-var jsonStr=JSON.stringify(payload);
-console.log('[Firebase] Push json size:',jsonStr.length,'bytes, _ts:',payload._ts);
-return FB.db.collection('crm_data').doc(FB.uid).set({json:jsonStr,_ts:payload._ts}).then(function(){
+return FB.db.collection('crm_data').doc(FB.uid).set({data:payload},{merge:true}).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
 console.log('[Firebase] Push OK, ts='+payload._ts);
@@ -487,14 +461,11 @@ return false;
    être en retard) si une version distante plus récente que ce que cet
    appareil a reçue existe déjà. Retourne les données distantes s'il y a un
    conflit potentiel, sinon null. */
-function fbCheckRemoteConflict(alwaysReturn){
+function fbCheckRemoteConflict(){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists){
-var docData=snap.data();
-var remote=fbExtractRemote(docData);
-if(!remote)return null;
-if(alwaysReturn)return remote;
-var ts=fbExtractTs(docData);var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+if(snap.exists&&snap.data().data){
+var remote=snap.data().data;
+var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
 }
 return null;
@@ -517,66 +488,6 @@ fbApplyRemote(remote);
 localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
 toast('Données distantes récupérées, rien envoyé depuis cet appareil','info');
 return false;
-});
-}
-
-/* Pull unidirectionnel SÛR (bouton "Récupérer cloud") : récupère les
-   données cloud et les applique localement, sans jamais pousser quoi que
-   ce soit vers le cloud. Aucun dialogue de confirmation, aucun risque
-   d'écraser le cloud. C'est le bouton à utiliser sur un autre navigateur
-   quand un appareil a fait un import et poussé la nouvelle base. */
-function fbPullCloud(){
-if(!fbIsReady()){toast('Non connecté au cloud','err');return;}
-FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists){
-var docData=snap.data();
-var remote=fbExtractRemote(docData);
-if(remote){
-var ts=fbExtractTs(docData);
-fbApplyRemote(remote);
-localStorage.setItem('cdc_fb_ts',String(ts));
-toast('Données cloud récupérées — base à jour','info');
-}else{
-toast('Aucune donnée utile cloud trouvée','err');
-}
-}else{
-toast('Aucune donnée cloud trouvée','err');
-}
-}).catch(function(e){
-toast('Erreur réseau : '+e.message,'err');
-});
-}
-
-/* Force sync explicite (bouton "Forcer sync") : vérifie TOUJOURS
-   s'il existe des données cloud, même si les timestamps correspondent,
-   et demande confirmation avant d'écraser. */
-function fbForceSyncDialog(){
-if(!fbIsReady()||FB.pushing){toast('Sync déjà en cours ou non connecté','err');return;}
-fbCheckRemoteConflict(true).then(function(remote){
-if(!remote){
-fbDoPush().then(function(ok){
-if(ok)toast('Cloud synchronisé avec cet appareil','info');
-else toast('Erreur de synchronisation','err');
-});
-}else{
-/* Le timestamp peut venir du remote (ancien format) ou du docData
-   (nouveau format). On lit le ts directement du remote pour rester
-   simple — il est toujours présent dans le payload. */
-var ts=remote._ts||0;
-var when=new Date(ts).toLocaleString('fr-FR');
-var ecraser=confirm('Des données cloud existent (version du '+when+').\n\nOK = Écraser le cloud avec les données de CET appareil\nAnnuler = Récupérer les données du cloud (recommandé)');
-if(ecraser){
-fbDoPush().then(function(ok){
-if(ok)toast('Cloud écrasé avec les données de cet appareil','info');
-});
-}else{
-fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
-toast('Données du cloud récupérées','info');
-}
-}
-}).catch(function(){
-/* Erreur réseau : on pousse quand même */
-fbDoPush();
 });
 }
 
@@ -650,41 +561,34 @@ svLog=function(){_origSvLog();if(fbIsReady())fbQueuePush();};
 svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
-function fbOnSignedIn(user){
-var wasExplicit=FB.signingIn;FB.signingIn=false;
-FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;
-localStorage.setItem('cdc_fb_uid',FB.uid);
-fbStartSync();
-if(wasExplicit){
-toast('Connecté en tant que '+FB.userEmail,'info');
-openSettingsM();
-}else{
-fbShowStatus();
-}
-}
-
 function fbGoogleSignIn(){
 if(!FB.auth){toast('Configure Firebase d\'abord','err');return;}
 var provider=new firebase.auth.GoogleAuthProvider();
 provider.addScope('email');
-/* signInWithPopup : recommandation officielle Firebase pour les apps qui ne
-   sont pas hébergées sur Firebase Hosting (firebase.google.com/docs/auth/web/redirect-best-practices).
-   Comme authDomain (stargate-command-fd9fa.firebaseapp.com) est un domaine
-   différent de celui qui héberge l'app (kbrixi.github.io), signInWithRedirect
-   nécessite un accès de stockage "cross-domain" que Chrome/Brave/Safari
-   bloquent désormais par défaut, sans erreur visible (c'est le blocage qu'on
-   vient d'identifier). signInWithPopup relaie le résultat par postMessage
-   entre la popup et la fenêtre d'origine, ce qui évite ce blocage précis.
-   onAuthStateChanged (indépendant de cette promesse) sert de filet de
-   sécurité si jamais la promesse ci-dessous ne se résout pas malgré tout. */
-FB.signingIn=true;
+/* signInWithPopup reste sur la même page (pas de navigation complète vers
+   accounts.google.com puis retour), ce qui évite un bug connu de Safari
+   iOS/mobile où le stockage web est inaccessible pendant l'aller-retour de
+   signInWithRedirect, provoquant "operation-not-supported-in-this-environment"
+   même hors navigation privée. On retente en redirect uniquement si le popup
+   est bloqué ou non supporté. */
 FB.auth.signInWithPopup(provider).then(function(result){
-if(result&&result.user)fbOnSignedIn(result.user);
+if(result&&result.user){
+FB.uid=result.user.uid;FB.userEmail=result.user.email||result.user.displayName||result.user.uid;
+localStorage.setItem('cdc_fb_uid',FB.uid);
+fbStartSync();
+toast('Connecté en tant que '+FB.userEmail,'info');
+openSettingsM();
+}
 }).catch(function(e){
-FB.signingIn=false;
 if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
-console.error('[Firebase] signInWithPopup erreur:',e.code,e.message);
-toast('Erreur connexion Google: '+e.code+' — '+e.message,'err');
+if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
+FB.auth.signInWithRedirect(provider).catch(function(e2){
+if(e2.code==='auth/redirect-cancelled-by-user')return;
+toast('Erreur connexion Google: '+e2.message,'err');
+});
+return;
+}
+toast('Erreur connexion Google: '+e.message,'err');
 });
 }
 
@@ -701,25 +605,17 @@ openSettingsM();
 
 function fbHandleRedirectResult(){
 if(!FB.auth)return;
-var wasPending=sessionStorage.getItem('cdc_fb_redirect_pending')==='1';
 FB.auth.getRedirectResult().then(function(result){
 if(result&&result.user){
-sessionStorage.removeItem('cdc_fb_redirect_pending');
-fbOnSignedIn(result.user);
-}else if(wasPending){
-/* On attendait un retour de connexion (le drapeau a été posé juste avant le
-   départ vers Google) mais aucun utilisateur n'est revenu, sans erreur non
-   plus. Cela signifie que Firebase n'a pas retrouvé l'opération de connexion
-   en attente au retour (state perdu entre le départ et le retour). */
-sessionStorage.removeItem('cdc_fb_redirect_pending');
-console.error('[Firebase] getRedirectResult() sans utilisateur ni erreur alors qu\'une redirection était en attente.');
-toast('Connexion Google incomplète : le retour de redirection n\'a pas été reconnu (state perdu). Voir console.','err');
+FB.uid=result.user.uid;FB.userEmail=result.user.email||result.user.displayName||result.user.uid;
+localStorage.setItem('cdc_fb_uid',FB.uid);
+fbStartSync();
+toast('Connecté en tant que '+FB.userEmail,'info');
+openSettingsM();
 }
 }).catch(function(e){
-sessionStorage.removeItem('cdc_fb_redirect_pending');
 if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/redirect-cancelled-by-user'){
-console.error('[Firebase] getRedirectResult() erreur:',e.code,e.message);
-toast('Erreur connexion: '+e.code+' — '+e.message,'err');
+toast('Erreur connexion: '+e.message,'err');
 }
 });
 }
@@ -3519,34 +3415,13 @@ toast('Données importées !');
 clsM();
 var _doReload=function(){setTimeout(()=>location.reload(),800);};
 if(typeof fbPush==='function'&&fbIsReady()){
-/* Après un import, on vérifie TOUJOURS s'il existe des données cloud,
-   même si les timestamps correspondent — car l'import a remplacé tout
-   le contenu local, pas juste un champ. On demande confirmation avant
-   d'écraser le cloud avec les données importées. */
-fbCheckRemoteConflict(true).then(function(remote){
-if(!remote){
-/* Cloud vide ou inaccessible : on pousse directement */
-fbPush(true).then(function(ok){
+toast('Synchronisation cloud en cours...','info');
+/* Filet de sécurité : si le push cloud traîne (réseau lent/coupé), on ne bloque pas le rechargement indéfiniment */
+var _safety=setTimeout(_doReload,8000);
+fbPush().then(function(ok){
+clearTimeout(_safety);
 if(ok)toast('Import synchronisé sur le cloud','info');
 _doReload();
-});
-}else{
-var when=new Date(remote._ts||0).toLocaleString('fr-FR');
-var ecraser=confirm('Le cloud contient des données (version du '+when+').\n\nOK = Écraser le cloud avec vos données importées\nAnnuler = Récupérer les données du cloud (vos données importées seront perdues)');
-if(ecraser){
-fbPush(true).then(function(ok){
-if(ok)toast('Import synchronisé sur le cloud','info');
-_doReload();
-});
-}else{
-fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
-toast('Données du cloud récupérées','info');
-_doReload();
-}
-}
-}).catch(function(){
-/* Erreur réseau : on pousse quand même (force) */
-fbPush(true).then(function(){_doReload();});
 });
 }else{
 _doReload();
@@ -3634,8 +3509,7 @@ var html=`<div class="pt-4 border-t border-bdr mt-4">
 <div class="flex flex-wrap gap-2">
 <button onclick="fbConnectFromSettings()" class="h-9 px-4 rounded-xl bg-inf hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp">Enregistrer</button>
 ${isConnected?'<button onclick="fbGoogleSignOut()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp">Déconnecter Google</button>':'<button onclick="fbQuickGoogleSignIn()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-brands fa-google mr-1"></i>Se connecter avec Google</button>'}
-${isConnected?'<button onclick="fbPullCloud()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>Récupérer cloud</button>':''}
-${isConnected?'<button onclick="fbForceSyncDialog()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
+${isConnected?'<button onclick="fbPush()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
 ${isConnected?'<button onclick="fbDiagCheck()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp"><i class="fa-solid fa-stethoscope mr-1"></i>Diagnostic cloud</button>':''}
 </div>
 <p class="text-[.65rem] text-mut mt-2">Remplis apiKey + projectId, clique Enregistrer, puis connecte-toi avec Google. Même compte Google = même données sur tous les appareils.</p>
