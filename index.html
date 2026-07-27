@@ -378,9 +378,11 @@ var _firstServerSnap=true;
 var _safety=setTimeout(function(){_firstServerSnap=false;},3000);
 FB.listener=docRef.onSnapshot(function(snap){
 var fromCache=!!(snap.metadata&&snap.metadata.fromCache);
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
-var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+var docData=snap.exists?snap.data():null;
+var remote=fbExtractRemote(docData);
+var ts=fbExtractTs(docData);
+if(remote){
+var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 /* Juste après un rechargement (ex: après un import), le tout premier
    instantané peut venir uniquement du cache local du navigateur — et ce
    cache peut encore contenir une version périmée de cet appareil, plus
@@ -433,17 +435,41 @@ _fbPushQueued=true;
 setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
 }
 
+/* Helper : extrait les données du document Firestore, en
+   supportant les deux formats :
+   - NOUVEAU : {json: "...(single string)...", _ts: number}
+   - ANCIEN  : {data: {cdc_folders: "...", cdc_data: "...", ...}}
+   Retourne le map payload (clés = FB_KEYS + _ts) ou null. */
+function fbExtractRemote(docData){
+if(!docData)return null;
+if(docData.json){try{return JSON.parse(docData.json);}catch(e){return null;}}
+if(docData.data)return docData.data;
+return null;
+}
+/* Helper : extrait le timestamp du document Firestore.
+   Nouveau format : docData._ts (au niveau top)
+   Ancien format  : docData.data._ts (nested) */
+function fbExtractTs(docData){
+if(!docData)return 0;
+if(docData._ts)return docData._ts;
+if(docData.data&&docData.data._ts)return docData.data._ts;
+return 0;
+}
+
 function fbDoPush(){
 FB.pushing=true;
 var payload={};
 FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
 payload._ts=Date.now();
-/* On utilise set() sans {merge:true} pour remplacer le document
-   en entier, pas fusionner. {merge:true} provoque l'erreur
-   "invalid nested entity" quand le cloud contient déjà un champ
-   de type différent (ex: un objet nested vs une string). */
-console.log('[Firebase] Push payload keys:',Object.keys(payload).join(', '),'_ts:',payload._ts);
-return FB.db.collection('crm_data').doc(FB.uid).set({data:payload}).then(function(){
+/* Format NOUVEAU : on encode TOUT le payload en une seule string
+   JSON et on la stocke dans le champ "json" du document Firestore.
+   Plus aucun map nested → impossible d'avoir l'erreur
+   "invalid nested entity". Le champ _ts est dupliqué au niveau
+   top du document pour que le listener puisse le lire sans
+   parser toute la string. */
+var jsonStr=JSON.stringify(payload);
+console.log('[Firebase] Push json size:',jsonStr.length,'bytes, _ts:',payload._ts);
+return FB.db.collection('crm_data').doc(FB.uid).set({json:jsonStr,_ts:payload._ts}).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
 console.log('[Firebase] Push OK, ts='+payload._ts);
@@ -451,7 +477,7 @@ return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
 var msg=(e.code||'')+': '+(e.message||e);
-console.error('[Firebase] Push ERREUR:',msg,payload);
+console.error('[Firebase] Push ERREUR:',msg);
 toast('Sync erreur: '+msg,'err');
 return false;
 }).finally(function(){FB.pushing=false;});
@@ -463,10 +489,12 @@ return false;
    conflit potentiel, sinon null. */
 function fbCheckRemoteConflict(alwaysReturn){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
+if(snap.exists){
+var docData=snap.data();
+var remote=fbExtractRemote(docData);
+if(!remote)return null;
 if(alwaysReturn)return remote;
-var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+var ts=fbExtractTs(docData);var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
 }
 return null;
@@ -500,12 +528,17 @@ return false;
 function fbPullCloud(){
 if(!fbIsReady()){toast('Non connecté au cloud','err');return;}
 FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
-var ts=remote._ts||0;
+if(snap.exists){
+var docData=snap.data();
+var remote=fbExtractRemote(docData);
+if(remote){
+var ts=fbExtractTs(docData);
 fbApplyRemote(remote);
 localStorage.setItem('cdc_fb_ts',String(ts));
 toast('Données cloud récupérées — base à jour','info');
+}else{
+toast('Aucune donnée utile cloud trouvée','err');
+}
 }else{
 toast('Aucune donnée cloud trouvée','err');
 }
@@ -526,14 +559,18 @@ if(ok)toast('Cloud synchronisé avec cet appareil','info');
 else toast('Erreur de synchronisation','err');
 });
 }else{
-var when=new Date(remote._ts||0).toLocaleString('fr-FR');
+/* Le timestamp peut venir du remote (ancien format) ou du docData
+   (nouveau format). On lit le ts directement du remote pour rester
+   simple — il est toujours présent dans le payload. */
+var ts=remote._ts||0;
+var when=new Date(ts).toLocaleString('fr-FR');
 var ecraser=confirm('Des données cloud existent (version du '+when+').\n\nOK = Écraser le cloud avec les données de CET appareil\nAnnuler = Récupérer les données du cloud (recommandé)');
 if(ecraser){
 fbDoPush().then(function(ok){
 if(ok)toast('Cloud écrasé avec les données de cet appareil','info');
 });
 }else{
-fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
 toast('Données du cloud récupérées','info');
 }
 }
