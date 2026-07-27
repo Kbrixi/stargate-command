@@ -361,7 +361,6 @@ FB.db=firebase.firestore();
 try{FB.db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
 FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){/* offline ok */});
 FB.auth.onAuthStateChanged(function(user){
-alert('DEBUG onAuthStateChanged: user='+(user?user.uid:'null'));
 if(user&&FB.uid!==user.uid){fbOnSignedIn(user);}
 });
 setTimeout(function(){fbHandleRedirectResult();},500);
@@ -372,27 +371,39 @@ function fbStartSync(){
 if(!fbIsReady())return;
 var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
-var _firstSnap=true;
+/* _firstServerSnap reste vrai tant qu'aucun instantané confirmé par le
+   serveur n'a été reçu (avec un filet de sécurité de 3s pour ne pas bloquer
+   l'usage hors-ligne, où seul le cache est disponible). */
+var _firstServerSnap=true;
+var _safety=setTimeout(function(){_firstServerSnap=false;},3000);
 FB.listener=docRef.onSnapshot(function(snap){
+var fromCache=!!(snap.metadata&&snap.metadata.fromCache);
 if(snap.exists&&snap.data().data){
 var remote=snap.data().data;
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-/* != plutôt que > : évite qu'un appareil reste bloqué pour toujours si sa
-   valeur locale s'est un jour retrouvée plus grande que celle du cloud
-   (horloge décalée, ancien test, etc.). Et on force l'application au tout
-   premier événement du listener pour réparer immédiatement un appareil déjà
-   coincé, sans attendre une nouvelle modification ailleurs. */
-if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
-}else if(_firstSnap){
-/* Premier appareil à se connecter : aucun document distant n'existe encore.
-   Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
-   tant qu'aucune modification manuelle n'était faite, ce qui donnait
-   l'impression trompeuse que la synchronisation ne marchait pas. On sème
+/* Juste après un rechargement (ex: après un import), le tout premier
+   instantané peut venir uniquement du cache local du navigateur — et ce
+   cache peut encore contenir une version périmée de cet appareil, plus
+   ancienne que ce qu'il vient tout juste de pousser. On ignore donc les
+   instantanés cache-only tant qu'aucune confirmation serveur n'est arrivée
+   (ou que les 3s de filet de sécurité ne se sont pas écoulées). */
+if(fromCache&&_firstServerSnap)return;
+/* On n'écrase jamais des données locales par une version distante
+   strictement plus ancienne. Une version confirmée par le serveur peut
+   toujours "réparer" un appareil resté coincé (utile en cas d'horloge
+   décalée ou de vieux test), mais uniquement si elle vient bien du serveur —
+   jamais sur la seule foi d'un instantané de cache. */
+if(ts>localTs||(!fromCache&&ts!==localTs)){
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
+}
+}else if(_firstServerSnap&&!fromCache){
+/* Premier appareil à se connecter : aucun document distant n'existe encore
+   côté serveur (on l'a confirmé, ce n'est pas juste un cache vide). On sème
    immédiatement le cloud avec les données locales de cet appareil. */
 fbPush(true);
 toast('Cloud initialisé avec les données de cet appareil','info');
 }
-_firstSnap=false;
+if(!fromCache){_firstServerSnap=false;clearTimeout(_safety);}
 FB.connected=true;fbShowStatus();
 },function(err){FB.connected=false;fbShowStatus();});
 }
@@ -544,7 +555,6 @@ svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
 function fbOnSignedIn(user){
-alert('DEBUG: fbOnSignedIn() appelé pour uid='+user.uid);
 var wasExplicit=FB.signingIn;FB.signingIn=false;
 FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;
 localStorage.setItem('cdc_fb_uid',FB.uid);
@@ -558,7 +568,6 @@ fbShowStatus();
 }
 
 function fbGoogleSignIn(){
-alert('DEBUG: fbGoogleSignIn() appelé, FB.auth existe = '+!!FB.auth);
 if(!FB.auth){toast('Configure Firebase d\'abord','err');return;}
 var provider=new firebase.auth.GoogleAuthProvider();
 provider.addScope('email');
@@ -573,13 +582,10 @@ provider.addScope('email');
    onAuthStateChanged (indépendant de cette promesse) sert de filet de
    sécurité si jamais la promesse ci-dessous ne se résout pas malgré tout. */
 FB.signingIn=true;
-alert('DEBUG: sur le point d\'appeler signInWithPopup...');
 FB.auth.signInWithPopup(provider).then(function(result){
-alert('DEBUG: signInWithPopup .then() — user='+(result&&result.user?result.user.uid:'AUCUN'));
 if(result&&result.user)fbOnSignedIn(result.user);
 }).catch(function(e){
 FB.signingIn=false;
-alert('DEBUG: signInWithPopup .catch() — code='+e.code+' message='+e.message);
 if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
 console.error('[Firebase] signInWithPopup erreur:',e.code,e.message);
 toast('Erreur connexion Google: '+e.code+' — '+e.message,'err');
