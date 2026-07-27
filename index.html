@@ -436,9 +436,14 @@ setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
 function fbDoPush(){
 FB.pushing=true;
 var payload={};
-FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
+FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
 payload._ts=Date.now();
-return FB.db.collection('crm_data').doc(FB.uid).set({data:payload},{merge:true}).then(function(){
+/* On utilise set() sans {merge:true} pour remplacer le document
+   en entier, pas fusionner. {merge:true} provoque l'erreur
+   "invalid nested entity" quand le cloud contient déjà un champ
+   de type différent (ex: un objet nested vs une string). */
+console.log('[Firebase] Push payload keys:',Object.keys(payload).join(', '),'_ts:',payload._ts);
+return FB.db.collection('crm_data').doc(FB.uid).set({data:payload}).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
 console.log('[Firebase] Push OK, ts='+payload._ts);
@@ -446,7 +451,7 @@ return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
 var msg=(e.code||'')+': '+(e.message||e);
-console.error('[Firebase] Push ERREUR:',msg);
+console.error('[Firebase] Push ERREUR:',msg,payload);
 toast('Sync erreur: '+msg,'err');
 return false;
 }).finally(function(){FB.pushing=false;});
