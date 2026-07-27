@@ -2474,20 +2474,45 @@ return name||from||'?';
 function gmailDateLabel(dateStr){
 try{const d=new Date(dateStr);return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return'';}
 }
-function gmailExtractBody(payload){
-if(!payload)return'';
-function decode(data){try{return decodeURIComponent(escape(atob(data.replace(/-/g,'+').replace(/_/g,'/'))));}catch(e){try{return atob(data.replace(/-/g,'+').replace(/_/g,'/'));}catch(e2){return'';}}}
-function stripHtml(html){return html.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/p>/gi,'\n\n').replace(/<[^>]+>/g,'');}
-if(payload.mimeType==='text/plain'&&payload.body&&payload.body.data)return decode(payload.body.data);
-if(payload.mimeType==='text/html'&&payload.body&&payload.body.data)return stripHtml(decode(payload.body.data));
-if(payload.parts){
-const plain=payload.parts.find(p=>p.mimeType==='text/plain');
-if(plain&&plain.body&&plain.body.data)return decode(plain.body.data);
-const html=payload.parts.find(p=>p.mimeType==='text/html');
-if(html&&html.body&&html.body.data)return stripHtml(decode(html.body.data));
-for(const p of payload.parts){const r=gmailExtractBody(p);if(r)return r;}
+function gmailDecodeB64(data){try{return decodeURIComponent(escape(atob(data.replace(/-/g,'+').replace(/_/g,'/'))));}catch(e){try{return atob(data.replace(/-/g,'+').replace(/_/g,'/'));}catch(e2){return'';}}}
+/* Parcourt récursivement l'arbre MIME (multipart/mixed peut contenir un
+   multipart/alternative, lui-même contenant text/plain + text/html, à
+   n'importe quel niveau) et renvoie le premier texte brut et le premier
+   HTML trouvés. L'ancienne version ne regardait qu'un seul niveau de
+   profondeur, ce qui ratait le corps de nombreux emails avec pièces jointes. */
+function gmailWalkParts(payload,acc){
+if(!payload)return acc;
+if(payload.mimeType==='text/plain'&&!acc.text&&payload.body&&payload.body.data)acc.text=gmailDecodeB64(payload.body.data);
+if(payload.mimeType==='text/html'&&!acc.html&&payload.body&&payload.body.data)acc.html=gmailDecodeB64(payload.body.data);
+if(payload.parts)payload.parts.forEach(p=>gmailWalkParts(p,acc));
+return acc;
 }
-return'';
+function gmailExtractParts(payload){return gmailWalkParts(payload,{text:null,html:null});}
+/* Décode les entités HTML (&nbsp;, &amp;, &rsquo;...) via un <textarea> :
+   le navigateur les interprète comme du texte à afficher, jamais comme du
+   HTML actif (aucun risque d'exécution). Sans ça, ces entités restaient
+   affichées telles quelles dans le texte brut, rendant l'email illisible. */
+function gmailDecodeEntities(str){
+const ta=document.createElement('textarea');
+ta.innerHTML=str;
+return ta.value;
+}
+/* Repli texte brut à partir du HTML quand aucune partie text/plain n'existe :
+   dépouille les balises tout en préservant les sauts de paragraphe, décode
+   les entités, puis compresse les lignes vides en excès. */
+function gmailPlainTextFromHtml(html){
+let t=html.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/(p|div|tr|table|h[1-6])>/gi,'\n').replace(/<[^>]+>/g,'');
+t=gmailDecodeEntities(t);
+return t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+/* Neutralise scripts et gestionnaires d'événements avant d'injecter le HTML
+   d'un email dans l'iframe sandboxée. L'attribut sandbox de l'iframe bloque
+   déjà toute exécution JS ; ceci est une protection en profondeur. */
+function gmailSanitizeHtml(html){
+return html.replace(/<script[\s\S]*?<\/script>/gi,'')
+.replace(/ on[a-z]+\s*=\s*"[^"]*"/gi,'')
+.replace(/ on[a-z]+\s*=\s*'[^']*'/gi,'')
+.replace(/javascript:/gi,'');
 }
 async function gmailOpenMessage(id){
 if(!gcalHasValidToken())return;
@@ -2498,7 +2523,8 @@ if(!r.ok)throw new Error('HTTP '+r.status);
 const m=await r.json();
 const h=(m.payload&&m.payload.headers)||[];
 const get=n=>{const x=h.find(x=>x.name===n);return x?x.value:'';};
-const body=gmailExtractBody(m.payload);
+const parts=gmailExtractParts(m.payload);
+const plainBody=parts.text?gmailDecodeEntities(parts.text).replace(/\n{3,}/g,'\n\n').trim():(parts.html?gmailPlainTextFromHtml(parts.html):'');
 const subject=get('Subject')||'(Sans objet)';
 const from=get('From');
 const to=get('To');
@@ -2507,11 +2533,15 @@ const wasUnread=(m.labelIds||[]).includes('UNREAD');
 GMAIL._openMsg={id:m.id,threadId:m.threadId,from:from,subject:subject,messageIdHeader:get('Message-ID')};
 const availLabels=GMAIL.labels.filter(l=>!(m.labelIds||[]).includes(l.id));
 const appliedLabels=GMAIL.labels.filter(l=>(m.labelIds||[]).includes(l.id));
+/* Un email HTML se met en page correctement dans une iframe sandboxée
+   (isolée du CSS de l'app, sans exécution de script) ; un email texte brut
+   reste affiché tel quel avec un simple retour à la ligne. */
+const bodyHtml=parts.html?`<iframe class="w-full rounded-xl border-0" style="height:420px;background:#fff" sandbox="allow-same-origin allow-popups" srcdoc="${escHtml('<!DOCTYPE html><html><head><meta charset=\"utf-8\"><base target=\"_blank\"><style>html,body{margin:0;padding:16px;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}a{color:#1a56db}</style></head><body>'+gmailSanitizeHtml(parts.html)+'</body></html>')}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-1"><h2 class="font-disp font-bold text-lg">${escHtml(subject)}</h2></div>
 <div class="text-xs text-mut mb-4">De : ${escHtml(from)}<br>À : ${escHtml(to)}<br>${escHtml(date)}</div>
 ${appliedLabels.length?`<div class="flex flex-wrap gap-1.5 mb-4">${appliedLabels.map(l=>`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf flex items-center gap-1">${escHtml(l.name)}<i onclick="gmailApplyLabel('${id}','${l.id}',false);clsM();gmailOpenMessage('${id}')" class="fa-solid fa-xmark cursor-pointer hover:text-acc"></i></span>`).join('')}</div>`:''}
-<div class="bg-sAlt rounded-xl p-4 mb-5 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(body)||'<span class="italic text-mut">(Corps vide)</span>'}</div>
+<div class="mb-5">${bodyHtml}</div>
 ${availLabels.length?`<div class="mb-5"><select onchange="if(this.value){gmailApplyLabel('${id}',this.value,true);clsM();gmailOpenMessage('${id}');}" class="fi text-xs"><option value="">+ Ajouter un libellé...</option>${availLabels.map(l=>`<option value="${l.id}">${escHtml(l.name)}</option>`).join('')}</select></div>`:''}
 <div class="flex flex-wrap justify-end gap-2">
 <button onclick="clsM();gmailTrash('${id}')" class="h-10 px-4 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp mr-auto">Supprimer</button>
