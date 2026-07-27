@@ -336,7 +336,7 @@ let GMAIL={
 };
 
 /* ===== FIREBASE CLOUD SYNC ===== */
-const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
+const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false,importing:false};
 const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
@@ -430,9 +430,9 @@ toast('Données synchronisées depuis le cloud','info');
 
 var _fbPushQueued=false;
 function fbQueuePush(){
-if(_fbPushQueued)return;
+if(_fbPushQueued||FB.importing)return;
 _fbPushQueued=true;
-setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
+setTimeout(function(){_fbPushQueued=false;if(!FB.importing)fbPush();},1500);
 }
 
 /* Helper : extrait les données du document Firestore, en
@@ -461,6 +461,10 @@ FB.pushing=true;
 var payload={};
 FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
 payload._ts=Date.now();
+/* Log détaillé : nombre de clés poussées + taille de chaque valeur */
+var keysPushed=Object.keys(payload).filter(function(k){return k!='_ts';});
+console.log('[Firebase] Push: '+keysPushed.length+' clés poussées, _ts:',payload._ts);
+keysPushed.forEach(function(k){console.log('[Firebase]  '+k+' = '+payload[k].length+' chars');});
 /* Format NOUVEAU : on encode TOUT le payload en une seule string
    JSON et on la stocke dans le champ "json" du document Firestore.
    Plus aucun map nested → impossible d'avoir l'erreur
@@ -566,8 +570,10 @@ var ts=remote._ts||0;
 var when=new Date(ts).toLocaleString('fr-FR');
 var ecraser=confirm('Des données cloud existent (version du '+when+').\n\nOK = Écraser le cloud avec les données de CET appareil\nAnnuler = Récupérer les données du cloud (recommandé)');
 if(ecraser){
+console.log('[Firebase] Force sync: écraser le cloud');
 fbDoPush().then(function(ok){
 if(ok)toast('Cloud écrasé avec les données de cet appareil','info');
+else toast('Erreur de synchronisation','err');
 });
 }else{
 fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
@@ -3514,11 +3520,16 @@ FOLDERS=imp.folders;D=imp.data;CL=imp.completedLog||[];if(imp.settings)SET=imp.s
 }else{
 toast('Fichier incomplet','err');return;
 }
-/* CRITICAL : déconnecter le listener cloud AVANT de sauver les
-   données importées. Sinon, le onSnapshot peut recevoir une
-   version cloud plus ancienne et écraser l'import via
-   fbApplyRemote() avant que le push soit terminé. Le listener
-   sera reconnecté au rechargement (fbStartSync). */
+/* CRITICAL : Bloquer fbQueuePush() pendant l'import pour éviter
+   qu'un push non-forcé soit schedule par les sv*() surchargées,
+   ce qui afficherait un 2e dialogue confirm() et risquerait
+   d'écraser l'import avec les anciennes données cloud. */
+FB.importing=true;
+/* Déconnecter le listener cloud AVANT de sauver les données
+   importées. Sinon, le onSnapshot peut recevoir une version
+   cloud plus ancienne et écraser l'import via fbApplyRemote()
+   avant que le push soit terminé. Le listener sera reconnecté
+   au rechargement (fbStartSync). */
 if(FB.listener){try{FB.listener();}catch(e){}FB.listener=null;}
 svFolders();svData();svLog();svSettings();
 /* Caler cdc_fb_ts sur NOW pour que le listener (au rechargement)
@@ -3529,7 +3540,36 @@ svFolders();svData();svLog();svSettings();
 localStorage.setItem('cdc_fb_ts',String(Date.now()));
 toast('Données importées !');
 clsM();
-var _doReload=function(){setTimeout(()=>location.reload(),800);};
+var _doReload=function(){FB.importing=false;setTimeout(()=>location.reload(),1200);};
+var _importDone=function(ok){
+  FB.importing=false;
+  if(ok){
+    /* Vérification post-push : lire le document Firestore pour
+       confirmer que les données importées sont réellement
+       écrites dans le cloud. */
+    FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
+      if(snap.exists){
+        var docData=snap.data();
+        var remote=fbExtractRemote(docData);
+        if(remote){
+          console.log('[Firebase] Vérification post-import: cloud _ts='+fbExtractTs(docData)+' vs local _ts='+localStorage.getItem('cdc_fb_ts'));
+          toast('Import synchronisé et vérifié sur le cloud','info');
+        }else{
+          console.error('[Firebase] Vérification post-import: document vide ou invalide');
+          toast('Import poussé mais vérification échouée — vérifiez sur un autre navigateur','err');
+        }
+      }
+      _doReload();
+    }).catch(function(){
+      /* Vérification échouée (réseau), mais le push a réussi → on recharge */
+      toast('Import synchronisé sur le cloud','info');
+      _doReload();
+    });
+  }else{
+    toast('Échec de la synchronisation cloud — données locales OK','err');
+    _doReload();
+  }
+};
 if(typeof fbPush==='function'&&fbIsReady()){
 /* Après un import, on vérifie TOUJOURS s'il existe des données cloud,
    même si les timestamps correspondent — car l'import a remplacé tout
@@ -3538,20 +3578,15 @@ if(typeof fbPush==='function'&&fbIsReady()){
 fbCheckRemoteConflict(true).then(function(remote){
 if(!remote){
 /* Cloud vide ou inaccessible : on pousse directement */
-fbPush(true).then(function(ok){
-if(ok)toast('Import synchronisé sur le cloud','info');
-_doReload();
-});
+fbPush(true).then(function(ok){_importDone(ok);});
 }else{
 var ts=remote._ts||0;
 var when=new Date(ts).toLocaleString('fr-FR');
 var ecraser=confirm('Le cloud contient des données (version du '+when+').\n\nOK = Écraser le cloud avec vos données importées\nAnnuler = Récupérer les données du cloud (vos données importées seront perdues)');
 if(ecraser){
-fbPush(true).then(function(ok){
-if(ok)toast('Import synchronisé sur le cloud','info');
-_doReload();
-});
+fbPush(true).then(function(ok){_importDone(ok);});
 }else{
+FB.importing=false;
 fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
 toast('Données du cloud récupérées','info');
 _doReload();
@@ -3559,12 +3594,13 @@ _doReload();
 }
 }).catch(function(){
 /* Erreur réseau : on pousse quand même (force) */
-fbPush(true).then(function(){_doReload();});
+fbPush(true).then(function(ok){_importDone(ok||true);});
 });
 }else{
+FB.importing=false;
 _doReload();
 }
-}catch(err){toast('Erreur : '+err.message,'err');}
+}catch(err){FB.importing=false;toast('Erreur : '+err.message,'err');}
 };
 reader.readAsText(file);
 }
