@@ -336,7 +336,7 @@ let GMAIL={
 };
 
 /* ===== FIREBASE CLOUD SYNC ===== */
-const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false};
+const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
 const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
@@ -361,7 +361,8 @@ FB.db=firebase.firestore();
 try{FB.db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
 FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){/* offline ok */});
 FB.auth.onAuthStateChanged(function(user){
-if(user){FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;localStorage.setItem('cdc_fb_uid',FB.uid);fbStartSync();}
+alert('DEBUG onAuthStateChanged: user='+(user?user.uid:'null'));
+if(user&&FB.uid!==user.uid){fbOnSignedIn(user);}
 });
 setTimeout(function(){fbHandleRedirectResult();},500);
 }catch(e){toast('Firebase init erreur: '+e.message,'err');}
@@ -542,13 +543,46 @@ svLog=function(){_origSvLog();if(fbIsReady())fbQueuePush();};
 svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
+function fbOnSignedIn(user){
+alert('DEBUG: fbOnSignedIn() appelé pour uid='+user.uid);
+var wasExplicit=FB.signingIn;FB.signingIn=false;
+FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;
+localStorage.setItem('cdc_fb_uid',FB.uid);
+fbStartSync();
+if(wasExplicit){
+toast('Connecté en tant que '+FB.userEmail,'info');
+openSettingsM();
+}else{
+fbShowStatus();
+}
+}
+
 function fbGoogleSignIn(){
+alert('DEBUG: fbGoogleSignIn() appelé, FB.auth existe = '+!!FB.auth);
 if(!FB.auth){toast('Configure Firebase d\'abord','err');return;}
 var provider=new firebase.auth.GoogleAuthProvider();
 provider.addScope('email');
-FB.auth.signInWithRedirect(provider).catch(function(e){
-if(e.code==='auth/popup-closed-by-user'||e.code==='auth/redirect-cancelled-by-user')return;
-toast('Erreur connexion Google: '+e.message,'err');
+/* signInWithPopup : recommandation officielle Firebase pour les apps qui ne
+   sont pas hébergées sur Firebase Hosting (firebase.google.com/docs/auth/web/redirect-best-practices).
+   Comme authDomain (stargate-command-fd9fa.firebaseapp.com) est un domaine
+   différent de celui qui héberge l'app (kbrixi.github.io), signInWithRedirect
+   nécessite un accès de stockage "cross-domain" que Chrome/Brave/Safari
+   bloquent désormais par défaut, sans erreur visible (c'est le blocage qu'on
+   vient d'identifier). signInWithPopup relaie le résultat par postMessage
+   entre la popup et la fenêtre d'origine, ce qui évite ce blocage précis.
+   onAuthStateChanged (indépendant de cette promesse) sert de filet de
+   sécurité si jamais la promesse ci-dessous ne se résout pas malgré tout. */
+FB.signingIn=true;
+alert('DEBUG: sur le point d\'appeler signInWithPopup...');
+FB.auth.signInWithPopup(provider).then(function(result){
+alert('DEBUG: signInWithPopup .then() — user='+(result&&result.user?result.user.uid:'AUCUN'));
+if(result&&result.user)fbOnSignedIn(result.user);
+}).catch(function(e){
+FB.signingIn=false;
+alert('DEBUG: signInWithPopup .catch() — code='+e.code+' message='+e.message);
+if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
+console.error('[Firebase] signInWithPopup erreur:',e.code,e.message);
+toast('Erreur connexion Google: '+e.code+' — '+e.message,'err');
 });
 }
 
@@ -565,17 +599,25 @@ openSettingsM();
 
 function fbHandleRedirectResult(){
 if(!FB.auth)return;
+var wasPending=sessionStorage.getItem('cdc_fb_redirect_pending')==='1';
 FB.auth.getRedirectResult().then(function(result){
 if(result&&result.user){
-FB.uid=result.user.uid;FB.userEmail=result.user.email||result.user.displayName||result.user.uid;
-localStorage.setItem('cdc_fb_uid',FB.uid);
-fbStartSync();
-toast('Connecté en tant que '+FB.userEmail,'info');
-openSettingsM();
+sessionStorage.removeItem('cdc_fb_redirect_pending');
+fbOnSignedIn(result.user);
+}else if(wasPending){
+/* On attendait un retour de connexion (le drapeau a été posé juste avant le
+   départ vers Google) mais aucun utilisateur n'est revenu, sans erreur non
+   plus. Cela signifie que Firebase n'a pas retrouvé l'opération de connexion
+   en attente au retour (state perdu entre le départ et le retour). */
+sessionStorage.removeItem('cdc_fb_redirect_pending');
+console.error('[Firebase] getRedirectResult() sans utilisateur ni erreur alors qu\'une redirection était en attente.');
+toast('Connexion Google incomplète : le retour de redirection n\'a pas été reconnu (state perdu). Voir console.','err');
 }
 }).catch(function(e){
+sessionStorage.removeItem('cdc_fb_redirect_pending');
 if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/redirect-cancelled-by-user'){
-toast('Erreur connexion: '+e.message,'err');
+console.error('[Firebase] getRedirectResult() erreur:',e.code,e.message);
+toast('Erreur connexion: '+e.code+' — '+e.message,'err');
 }
 });
 }
