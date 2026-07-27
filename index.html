@@ -487,6 +487,28 @@ return false;
 });
 }
 
+/* Pull unidirectionnel SÛR (bouton "Récupérer cloud") : récupère les
+   données cloud et les applique localement, sans jamais pousser quoi que
+   ce soit vers le cloud. Aucun dialogue de confirmation, aucun risque
+   d'écraser le cloud. C'est le bouton à utiliser sur un autre navigateur
+   quand un appareil a fait un import et poussé la nouvelle base. */
+function fbPullCloud(){
+if(!fbIsReady()){toast('Non connecté au cloud','err');return;}
+FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
+if(snap.exists&&snap.data().data){
+var remote=snap.data().data;
+var ts=remote._ts||0;
+fbApplyRemote(remote);
+localStorage.setItem('cdc_fb_ts',String(ts));
+toast('Données cloud récupérées — base à jour','info');
+}else{
+toast('Aucune donnée cloud trouvée','err');
+}
+}).catch(function(e){
+toast('Erreur réseau : '+e.message,'err');
+});
+}
+
 /* Force sync explicite (bouton "Forcer sync") : vérifie TOUJOURS
    s'il existe des données cloud, même si les timestamps correspondent,
    et demande confirmation avant d'écraser. */
@@ -3570,6 +3592,7 @@ var html=`<div class="pt-4 border-t border-bdr mt-4">
 <div class="flex flex-wrap gap-2">
 <button onclick="fbConnectFromSettings()" class="h-9 px-4 rounded-xl bg-inf hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp">Enregistrer</button>
 ${isConnected?'<button onclick="fbGoogleSignOut()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp">Déconnecter Google</button>':'<button onclick="fbQuickGoogleSignIn()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-brands fa-google mr-1"></i>Se connecter avec Google</button>'}
+${isConnected?'<button onclick="fbPullCloud()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>Récupérer cloud</button>':''}
 ${isConnected?'<button onclick="fbForceSyncDialog()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
 ${isConnected?'<button onclick="fbDiagCheck()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp"><i class="fa-solid fa-stethoscope mr-1"></i>Diagnostic cloud</button>':''}
 </div>
