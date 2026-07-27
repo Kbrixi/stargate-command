@@ -389,11 +389,13 @@ var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0'
    (ou que les 3s de filet de sécurité ne se sont pas écoulées). */
 if(fromCache&&_firstServerSnap)return;
 /* On n'écrase jamais des données locales par une version distante
-   strictement plus ancienne. Une version confirmée par le serveur peut
-   toujours "réparer" un appareil resté coincé (utile en cas d'horloge
-   décalée ou de vieux test), mais uniquement si elle vient bien du serveur —
-   jamais sur la seule foi d'un instantané de cache. */
-if(ts>localTs||(!fromCache&&ts!==localTs)){
+   plus ancienne ou identique. Seule une version cloud strictement
+   plus récente (ts > localTs) peut remplacer les données locales,
+   quel que soit l'appareil source — ce qui permet à un autre
+   appareil plus actif de "réparer" un appareil resté coincé,
+   mais empêche le serveur d'écraser un import fraîchement poussé
+   avec une version périmée encore en transit. */
+if(ts>localTs){
 fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
 }
 }else if(_firstServerSnap&&!fromCache){
@@ -454,10 +456,11 @@ return false;
    être en retard) si une version distante plus récente que ce que cet
    appareil a reçue existe déjà. Retourne les données distantes s'il y a un
    conflit potentiel, sinon null. */
-function fbCheckRemoteConflict(){
+function fbCheckRemoteConflict(alwaysReturn){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
 if(snap.exists&&snap.data().data){
 var remote=snap.data().data;
+if(alwaysReturn)return remote;
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
 }
@@ -481,6 +484,35 @@ fbApplyRemote(remote);
 localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
 toast('Données distantes récupérées, rien envoyé depuis cet appareil','info');
 return false;
+});
+}
+
+/* Force sync explicite (bouton "Forcer sync") : vérifie TOUJOURS
+   s'il existe des données cloud, même si les timestamps correspondent,
+   et demande confirmation avant d'écraser. */
+function fbForceSyncDialog(){
+if(!fbIsReady()||FB.pushing){toast('Sync déjà en cours ou non connecté','err');return;}
+fbCheckRemoteConflict(true).then(function(remote){
+if(!remote){
+fbDoPush().then(function(ok){
+if(ok)toast('Cloud synchronisé avec cet appareil','info');
+else toast('Erreur de synchronisation','err');
+});
+}else{
+var when=new Date(remote._ts||0).toLocaleString('fr-FR');
+var ecraser=confirm('Des données cloud existent (version du '+when+').\n\nOK = Écraser le cloud avec les données de CET appareil\nAnnuler = Récupérer les données du cloud (recommandé)');
+if(ecraser){
+fbDoPush().then(function(ok){
+if(ok)toast('Cloud écrasé avec les données de cet appareil','info');
+});
+}else{
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
+toast('Données du cloud récupérées','info');
+}
+}
+}).catch(function(){
+/* Erreur réseau : on pousse quand même */
+fbDoPush();
 });
 }
 
@@ -3423,13 +3455,34 @@ toast('Données importées !');
 clsM();
 var _doReload=function(){setTimeout(()=>location.reload(),800);};
 if(typeof fbPush==='function'&&fbIsReady()){
-toast('Synchronisation cloud en cours...','info');
-/* Filet de sécurité : si le push cloud traîne (réseau lent/coupé), on ne bloque pas le rechargement indéfiniment */
-var _safety=setTimeout(_doReload,8000);
-fbPush().then(function(ok){
-clearTimeout(_safety);
+/* Après un import, on vérifie TOUJOURS s'il existe des données cloud,
+   même si les timestamps correspondent — car l'import a remplacé tout
+   le contenu local, pas juste un champ. On demande confirmation avant
+   d'écraser le cloud avec les données importées. */
+fbCheckRemoteConflict(true).then(function(remote){
+if(!remote){
+/* Cloud vide ou inaccessible : on pousse directement */
+fbPush(true).then(function(ok){
 if(ok)toast('Import synchronisé sur le cloud','info');
 _doReload();
+});
+}else{
+var when=new Date(remote._ts||0).toLocaleString('fr-FR');
+var ecraser=confirm('Le cloud contient des données (version du '+when+').\n\nOK = Écraser le cloud avec vos données importées\nAnnuler = Récupérer les données du cloud (vos données importées seront perdues)');
+if(ecraser){
+fbPush(true).then(function(ok){
+if(ok)toast('Import synchronisé sur le cloud','info');
+_doReload();
+});
+}else{
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
+toast('Données du cloud récupérées','info');
+_doReload();
+}
+}
+}).catch(function(){
+/* Erreur réseau : on pousse quand même (force) */
+fbPush(true).then(function(){_doReload();});
 });
 }else{
 _doReload();
@@ -3517,7 +3570,7 @@ var html=`<div class="pt-4 border-t border-bdr mt-4">
 <div class="flex flex-wrap gap-2">
 <button onclick="fbConnectFromSettings()" class="h-9 px-4 rounded-xl bg-inf hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp">Enregistrer</button>
 ${isConnected?'<button onclick="fbGoogleSignOut()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp">Déconnecter Google</button>':'<button onclick="fbQuickGoogleSignIn()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-brands fa-google mr-1"></i>Se connecter avec Google</button>'}
-${isConnected?'<button onclick="fbPush()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
+${isConnected?'<button onclick="fbForceSyncDialog()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
 ${isConnected?'<button onclick="fbDiagCheck()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp"><i class="fa-solid fa-stethoscope mr-1"></i>Diagnostic cloud</button>':''}
 </div>
 <p class="text-[.65rem] text-mut mt-2">Remplis apiKey + projectId, clique Enregistrer, puis connecte-toi avec Google. Même compte Google = même données sur tous les appareils.</p>
