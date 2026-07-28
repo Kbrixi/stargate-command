@@ -1428,10 +1428,12 @@ else if(S.v==='tasks'){const b=document.querySelector('#SN .ni[data-v="tasks"]')
 else if(S.v==='marketing'){const b=document.querySelector('#SN .ni[data-v="marketing"]');if(b)b.classList.add('act');}
 else if(S.v==='gcal'){const b=document.querySelector('#SN .ni[data-v="gcal"]');if(b)b.classList.add('act');}
 else if(S.v==='gmail'){const b=document.querySelector('#SN .ni[data-v="gmail"]');if(b)b.classList.add('act');}
+else if(S.v==='notes'){const b=document.querySelector('#SN .ni[data-v="notes"]');if(b)b.classList.add('act');}
 document.getElementById('sCC').textContent=FOLDERS.reduce((n,f)=>n+(D[f.key]?.contacts||[]).length,0);
 document.getElementById('sTC').textContent=FOLDERS.reduce((n,f)=>n+(D[f.key]?.tasks||[]).filter(t=>!t.completed).length,0);
 const gc=document.getElementById('sGC');if(gc)gc.className='ml-auto w-1.5 h-1.5 rounded-full '+(GCAL.connected?'bg-ok':'bg-mut/40');
 const gm=document.getElementById('sGM');if(gm)gm.textContent=GMAIL.messages.filter(m=>m.unread).length;
+const sn=document.getElementById('sNC');if(sn)sn.textContent=ND.notes.filter(n=>!n.isArchived&&!n.isTrashed).length;
 }
 
 let chartInstances={};
@@ -1449,6 +1451,7 @@ else if(S.v==='tasks')rTasks();
 else if(S.v==='marketing')rMarketing();
 else if(S.v==='gcal')rAgenda();
 else if(S.v==='gmail')rGmail();
+else if(S.v==='notes'){if(NS.isEditorOpen&&NS.selectedNoteId)rNoteEditor();else rNotes();}
 else{S.v='dash';rDash();}
 }
 
