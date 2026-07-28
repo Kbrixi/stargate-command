@@ -4408,7 +4408,7 @@ function nHideSlash() {
 
 /* ── Note CRUD ─────────────────────────────────────────────── */
 function nCreateNote() {
-  const id = typeof gid==='function' ? gid() : 'n'+Date.now();
+  const id = 'n'+Date.now();
   const note = {
     id, title:'', content:'', categoryId: null, tagIds:[],
     isPinned:false, isFavorite:false, color:'#ff9c00',
@@ -4488,7 +4488,7 @@ function nCreateQuickNote() {
   const title = (document.getElementById('qnTitle')||{}).value || '';
   const content = (document.getElementById('qnContent')||{}).value || '';
   if(!title.trim()&&!content.trim()) return;
-  const id = typeof gid==='function' ? gid() : 'n'+Date.now();
+  const id = 'n'+Date.now();
   ND.notes.unshift({
     id, title:title.trim(), content:content.trim(), categoryId:null, tagIds:[],
     isPinned:false, isFavorite:false, color:'#ff9c00',
@@ -4546,7 +4546,7 @@ function nAddCat() {
   const color = (document.getElementById('newCatColor')||{}).value||'#ff9c00';
   const icon = (document.getElementById('newCatIcon')||{}).value||'fa-folder';
   if(!name.trim()) return;
-  const id = typeof gid==='function' ? gid() : 'nc'+Date.now();
+  const id = 'nc'+Date.now();
   ND.categories.push({id, name:name.trim(), color, icon});
   svNotesData();
   if(typeof toast==='function') toast('Catégorie ajoutée','fa-check');
@@ -4597,7 +4597,7 @@ function nAddTag() {
   const name = (document.getElementById('newTagName')||{}).value||'';
   const color = (document.getElementById('newTagColor')||{}).value||'#ff9c00';
   if(!name.trim()) return;
-  const id = typeof gid==='function' ? gid() : 'nt'+Date.now();
+  const id = 'nt'+Date.now();
   ND.tags.push({id, name:name.trim(), color});
   svNotesData();
   if(typeof toast==='function') toast('Tag ajouté','fa-check');
@@ -4619,9 +4619,9 @@ function nDeleteTag(id) {
 const _origNav = typeof nav==='function' ? nav : null;
 if (_origNav) {
   const _nav = nav;
-  nav = function(v) {
+  nav = function(v, folder) {
     if (v==='notes') { navNotes(); return; }
-    _nav(v);
+    _nav(v, folder);
   };
 }
 
@@ -4649,7 +4649,7 @@ function nDuplicateNote(id) {
   const n = ND.notes.find(x=>x.id===id);
   if(!n) return;
   const dup = Object.assign({}, n, {
-    id: typeof gid==='function'?gid():'n'+Date.now(),
+    id: 'n'+Date.now(),
     title: (n.title||'')+' (copie)',
     tagIds: (n.tagIds||[]).slice(),
     isPinned: false,
