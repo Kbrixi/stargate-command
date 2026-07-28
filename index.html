@@ -1,6 +1,3 @@
-<!-- ===== VERSION STABLE v10 — sauvegardée le 2026-07-27 =====
-Ne pas modifier les fonctionnalités validées de cette version sans
-demande explicite et validation préalable (cf. règle Cockpit de Chasse). -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -333,14 +330,16 @@ let GMAIL={
     labels:[],
     loading:false,
     query:'in:inbox',
-    filter:'all',
     nextPageToken:null,
     _loaded:false,
     _openMsg:null
 };
 
+/* ===== LZString (compression) — inline minified ===== */
+var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",n="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-$",e={};function t(r,o){if(!e[r]){e[r]={};for(var n=0;n<r.length;n++)e[r][r.charAt(n)]=n}return e[r][o]}var i={compressToBase64:function(r){if(null==r)return"";var n=i._compress(r,6,function(r){return o.charAt(r)});switch(n.length%4){default:case 0:return n;case 1:return n+"===";case 2:return n+"==";case 3:return n+"="}},decompressFromBase64:function(r){return null==r?"":""==r?null:i._decompress(r.length,32,function(n){return t(o,r.charAt(n))})},compressToUTF16:function(o){return null==o?"":i._compress(o,15,function(o){return r(o+32)})+" "},decompressFromUTF16:function(r){return null==r?"":""==r?null:i._decompress(r.length,16384,function(o){return r.charCodeAt(o)-32})},compressToUint8Array:function(r){for(var o=i.compress(r),n=new Uint8Array(2*o.length),e=0,t=o.length;e<t;e++){var s=o.charCodeAt(e);n[2*e]=s>>>8,n[2*e+1]=s%256}return n},decompressFromUint8Array:function(o){if(null==o)return i.decompress(o);for(var n=new Array(o.length/2),e=0,t=n.length;e<t;e++)n[e]=256*o[2*e]+o[2*e+1];var s=[];return n.forEach(function(o){s.push(r(o))}),i.decompress(s.join(""))},compressToEncodedURIComponent:function(r){return null==r?"":i._compress(r,6,function(r){return n.charAt(r)})},decompressFromEncodedURIComponent:function(r){return null==r?"":""==r?null:(r=r.replace(/ /g,"+"),i._decompress(r.length,32,function(o){return t(n,r.charAt(o))}))},compress:function(o){return i._compress(o,16,function(o){return r(o)})},_compress:function(r,o,n){if(null==r)return"";var e,t,i,s={},u={},a="",p="",c="",l=2,f=3,h=2,d=[],m=0,v=0;for(i=0;i<r.length;i+=1)if(a=r.charAt(i),Object.prototype.hasOwnProperty.call(s,a)||(s[a]=f++,u[a]=!0),p=c+a,Object.prototype.hasOwnProperty.call(s,p))c=p;else{if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++),s[p]=f++,c=String(a)}if(""!==c){if(Object.prototype.hasOwnProperty.call(u,c)){if(c.charCodeAt(0)<256){for(e=0;e<h;e++)m<<=1,v==o-1?(v=0,d.push(n(m)),m=0):v++;for(t=c.charCodeAt(0),e=0;e<8;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}else{for(t=1,e=0;e<h;e++)m=m<<1|t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t=0;for(t=c.charCodeAt(0),e=0;e<16;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1}0==--l&&(l=Math.pow(2,h),h++),delete u[c]}else for(t=s[c],e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;0==--l&&(l=Math.pow(2,h),h++)}for(t=2,e=0;e<h;e++)m=m<<1|1&t,v==o-1?(v=0,d.push(n(m)),m=0):v++,t>>=1;for(;;){if(m<<=1,v==o-1){d.push(n(m));break}v++}return d.join("")},decompress:function(r){return null==r?"":""==r?null:i._decompress(r.length,32768,function(o){return r.charCodeAt(o)})},_decompress:function(o,n,e){var t,i,s,u,a,p,c,l=[],f=4,h=4,d=3,m="",v=[],g={val:e(0),position:n,index:1};for(t=0;t<3;t+=1)l[t]=t;for(s=0,a=Math.pow(2,2),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;c=r(s);break;case 2:return""}for(l[3]=c,i=c,v.push(c);;){if(g.index>o)return"";for(s=0,a=Math.pow(2,d),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;switch(c=s){case 0:for(s=0,a=Math.pow(2,8),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 1:for(s=0,a=Math.pow(2,16),p=1;p!=a;)u=g.val&g.position,g.position>>=1,0==g.position&&(g.position=n,g.val=e(g.index++)),s|=(u>0?1:0)*p,p<<=1;l[h++]=r(s),c=h-1,f--;break;case 2:return v.join("")}if(0==f&&(f=Math.pow(2,d),d++),l[c])m=l[c];else{if(c!==h)return null;m=i+i.charAt(0)}v.push(m),l[h++]=i+m.charAt(0),i=m,0==--f&&(f=Math.pow(2,d),d++)}}};return i}();"function"==typeof define&&define.amd?define(function(){return LZString}):"undefined"!=typeof module&&null!=module?module.exports=LZString:"undefined"!=typeof angular&&null!=angular&&angular.module("LZString",[]).factory("LZString",function(){return LZString});
+
 /* ===== FIREBASE CLOUD SYNC ===== */
-const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
+const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false,importing:false};
 const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
@@ -365,7 +364,6 @@ FB.db=firebase.firestore();
 try{FB.db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
 FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){/* offline ok */});
 FB.auth.onAuthStateChanged(function(user){
-alert('DEBUG onAuthStateChanged: user='+(user?user.uid:'null'));
 if(user&&FB.uid!==user.uid){fbOnSignedIn(user);}
 });
 setTimeout(function(){fbHandleRedirectResult();},500);
@@ -376,27 +374,34 @@ function fbStartSync(){
 if(!fbIsReady())return;
 var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
-var _firstSnap=true;
+/* _firstServerSnap reste vrai tant qu'aucun instantané confirmé par le
+   serveur n'a été reçu (avec un filet de sécurité de 3s pour ne pas bloquer
+   l'usage hors-ligne, où seul le cache est disponible). */
+var _firstServerSnap=true;
+var _safety=setTimeout(function(){_firstServerSnap=false;},3000);
 FB.listener=docRef.onSnapshot(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
-var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-/* != plutôt que > : évite qu'un appareil reste bloqué pour toujours si sa
-   valeur locale s'est un jour retrouvée plus grande que celle du cloud
-   (horloge décalée, ancien test, etc.). Et on force l'application au tout
-   premier événement du listener pour réparer immédiatement un appareil déjà
-   coincé, sans attendre une nouvelle modification ailleurs. */
-if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
-}else if(_firstSnap){
-/* Premier appareil à se connecter : aucun document distant n'existe encore.
-   Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
-   tant qu'aucune modification manuelle n'était faite, ce qui donnait
-   l'impression trompeuse que la synchronisation ne marchait pas. On sème
-   immédiatement le cloud avec les données locales de cet appareil. */
+var fromCache=!!(snap.metadata&&snap.metadata.fromCache);
+var docData=snap.exists?snap.data():null;
+var remote=fbExtractRemote(docData);
+var ts=fbExtractTs(docData);
+if(remote){
+var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+/* Juste après un rechargement, le tout premier instantané peut venir
+   du cache local et contenir une version périmée. On l'ignore. */
+if(fromCache&&_firstServerSnap)return;
+/* On n'écrase jamais des données locales par une version distante
+   plus ancienne ou identique. Seule une version cloud strictement
+   plus récente (ts > localTs) peut remplacer les données locales. */
+if(ts>localTs){
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
+}
+}else if(_firstServerSnap&&!fromCache){
+/* Premier appareil à se connecter : aucun document distant n'existe
+   encore côté serveur. On sème immédiatement le cloud. */
 fbPush(true);
 toast('Cloud initialisé avec les données de cet appareil','info');
 }
-_firstSnap=false;
+if(!fromCache){_firstServerSnap=false;clearTimeout(_safety);}
 FB.connected=true;fbShowStatus();
 },function(err){FB.connected=false;fbShowStatus();});
 }
@@ -419,20 +424,50 @@ toast('Données synchronisées depuis le cloud','info');
 
 var _fbPushQueued=false;
 function fbQueuePush(){
-if(_fbPushQueued)return;
+if(_fbPushQueued||FB.importing)return;
 _fbPushQueued=true;
-setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
+setTimeout(function(){_fbPushQueued=false;if(!FB.importing)fbPush();},1500);
+}
+
+/* Helper : extrait les données du document Firestore, en
+   supportant tous les formats (backward compat) :
+   - v4 : {lz: "...(LZString Base64 compressé)...", _ts: number}
+   - v2 : {json: "...(single string)...", _ts: number}
+   - v1 : {data: {cdc_folders: "...", cdc_data: "...", ...}}
+   Retourne le map payload (clés = FB_KEYS + _ts) ou null. */
+function fbExtractRemote(docData){
+if(!docData)return null;
+if(docData.lz){try{return JSON.parse(LZString.decompressFromBase64(docData.lz));}catch(e){console.error('[Firebase] LZString decompress erreur:',e);return null;}}
+if(docData.json){try{return JSON.parse(docData.json);}catch(e){return null;}}
+if(docData.data)return docData.data;
+return null;
+}
+/* Helper : extrait le timestamp du document Firestore.
+   Nouveau format : docData._ts (au niveau top)
+   Ancien format  : docData.data._ts (nested) */
+function fbExtractTs(docData){
+if(!docData)return 0;
+if(docData._ts)return docData._ts;
+if(docData.data&&docData.data._ts)return docData.data._ts;
+return 0;
 }
 
 function fbDoPush(){
 FB.pushing=true;
 var payload={};
-FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
+FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v&&v!=='undefined'&&v!=='[object Object]')payload[k]=v;});
 payload._ts=Date.now();
-return FB.db.collection('crm_data').doc(FB.uid).set({data:payload},{merge:true}).then(function(){
+var jsonStr=JSON.stringify(payload);
+/* Compression LZString Base64 : réduit la taille du JSON
+   (typiquement 50-60%) pour rester sous la limite Firestore
+   de 1 MiB par document. compressToBase64 produit une chaîne
+   ASCII-safe compatible avec le stockage Firestore UTF-8. */
+var compressed=LZString.compressToBase64(jsonStr);
+console.log('[Firebase] Push: json original='+jsonStr.length+' bytes, compressé='+compressed.length+' bytes, ratio='+Math.round(compressed.length/jsonStr.length*100)+'%, _ts:'+payload._ts);
+return FB.db.collection('crm_data').doc(FB.uid).set({lz:compressed,_ts:payload._ts}).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
-console.log('[Firebase] Push OK, ts='+payload._ts);
+console.log('[Firebase] Push OK (compressé), ts='+payload._ts);
 return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
@@ -443,17 +478,39 @@ return false;
 }).finally(function(){FB.pushing=false;});
 }
 
-/* Vérifie directement sur le serveur (et non via le listener local, qui peut
-   être en retard) si une version distante plus récente que ce que cet
-   appareil a reçue existe déjà. Retourne les données distantes s'il y a un
-   conflit potentiel, sinon null. */
-function fbCheckRemoteConflict(){
-return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
-var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-if(ts&&ts!==localTs)return remote;
+/* Helper : lit toutes les données cloud (ancien ou nouveau format)
+   et retourne un map payload (clés = FB_KEYS + _ts) ou null.
+   Utilise {source:'server'} pour ignorer le cache local. */
+function fbReadFullRemote(){
+var docRef=FB.db.collection('crm_data').doc(FB.uid);
+return docRef.get({source:'server'}).then(function(snap){
+if(!snap.exists)return null;
+var docData=snap.data();
+var remote=fbExtractRemote(docData);
+if(remote){
+var ts=fbExtractTs(docData);
+remote._ts=ts;
+return remote;
 }
+return null;
+}).catch(function(e){
+console.error('[Firebase] fbReadFullRemote erreur:',e);
+return null;
+});
+}
+
+/* Vérifie directement sur le serveur si une version distante plus
+   récente que ce que cet appareil a reçue existe déjà. Retourne
+   les données distantes s'il y a un conflit potentiel, sinon null.
+   Si alwaysReturn=true, retourne toujours les données cloud
+   (même si les timestamps correspondent). */
+function fbCheckRemoteConflict(alwaysReturn){
+return fbReadFullRemote().then(function(remote){
+if(!remote)return null;
+if(alwaysReturn)return remote;
+var ts=remote._ts||0;
+var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+if(ts&&ts!==localTs)return remote;
 return null;
 }).catch(function(){return null;});
 }
@@ -474,6 +531,61 @@ fbApplyRemote(remote);
 localStorage.setItem('cdc_fb_ts',String(remote._ts||0));
 toast('Données distantes récupérées, rien envoyé depuis cet appareil','info');
 return false;
+});
+}
+
+/* Pull unidirectionnel SÛR (bouton "Récupérer cloud") : récupère les
+   données cloud et les applique localement, sans jamais pousser quoi que
+   ce soit vers le cloud. Aucun dialogue de confirmation, aucun risque
+   d'écraser le cloud. C'est le bouton à utiliser sur un autre navigateur
+   quand un appareil a fait un import et poussé la nouvelle base. */
+function fbPullCloud(){
+if(!fbIsReady()){toast('Non connecté au cloud','err');return;}
+fbReadFullRemote().then(function(remote){
+if(remote){
+var ts=remote._ts||0;
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
+toast('Données cloud récupérées — base à jour','info');
+}else{
+toast('Aucune donnée cloud trouvée','err');
+}
+}).catch(function(e){
+toast('Erreur réseau : '+e.message,'err');
+});
+}
+
+/* Force sync explicite (bouton "Forcer sync") : vérifie TOUJOURS
+   s'il existe des données cloud, même si les timestamps correspondent,
+   et demande confirmation avant d'écraser. */
+function fbForceSyncDialog(){
+if(!fbIsReady()||FB.pushing){toast('Sync déjà en cours ou non connecté','err');return;}
+fbCheckRemoteConflict(true).then(function(remote){
+if(!remote){
+fbDoPush().then(function(ok){
+if(ok)toast('Cloud synchronisé avec cet appareil','info');
+else toast('Erreur de synchronisation','err');
+});
+}else{
+/* Le timestamp peut venir du remote (ancien format) ou du docData
+   (nouveau format). On lit le ts directement du remote pour rester
+   simple — il est toujours présent dans le payload. */
+var ts=remote._ts||0;
+var when=new Date(ts).toLocaleString('fr-FR');
+var ecraser=confirm('Des données cloud existent (version du '+when+').\n\nOK = Écraser le cloud avec les données de CET appareil\nAnnuler = Récupérer les données du cloud (recommandé)');
+if(ecraser){
+console.log('[Firebase] Force sync: écraser le cloud');
+fbDoPush().then(function(ok){
+if(ok)toast('Cloud écrasé avec les données de cet appareil','info');
+else toast('Erreur de synchronisation','err');
+});
+}else{
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
+toast('Données du cloud récupérées','info');
+}
+}
+}).catch(function(){
+/* Erreur réseau : on pousse quand même */
+fbDoPush();
 });
 }
 
@@ -507,21 +619,23 @@ return lignes.join('<br>');
 function fbDiagCheck(){
 if(!fbIsReady()){alert('DIAGNOSTIC\n\nPas prêt : non connecté à Firebase sur cet appareil.');return;}
 var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
+fbReadFullRemote().then(function(remote){
 var lignes=['--- DIAGNOSTIC CLOUD ---',''];
 lignes.push('UID : '+FB.uid);
 lignes.push('Email : '+(FB.userEmail||'—'));
-lignes.push('Document distant existe : '+(snap.exists?'OUI':'NON'));
-var remote=(snap.exists&&snap.data().data)?snap.data().data:null;
-var rts=remote?(remote._ts||0):0;
 if(remote){
+var rts=remote._ts||0;
 lignes.push('Horodatage distant : '+(rts?new Date(rts).toLocaleString('fr-FR'):'aucun')+' (brut '+rts+')');
-lignes.push('Nombre de clés stockées côté cloud : '+Object.keys(remote).filter(function(k){return k!=='_ts';}).length);
+var dataKeys=Object.keys(remote).filter(function(k){return k!=='_ts';});
+lignes.push('Nombre de clés cloud : '+dataKeys.length);
+dataKeys.forEach(function(k){lignes.push('  '+k+' = '+(remote[k]||'').length+' chars');});
+}else{
+lignes.push('Aucune donnée cloud trouvée');
 }
 lignes.push('');
 lignes.push('Horodatage local connu : '+(localTs?new Date(localTs).toLocaleString('fr-FR'):'aucun')+' (brut '+localTs+')');
 lignes.push('');
-lignes.push(remote&&rts===localTs?'✅ SYNCHRONISÉ avec le cloud':'⚠️ DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
+lignes.push(remote&&(remote._ts||0)===localTs?'✅ SYNCHRONISÉ avec le cloud':'⚠️ DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
 alert(lignes.join('\n'));
 }).catch(function(e){
 alert('ERREUR lors de la vérification cloud :\n\n'+(e.code||'')+'\n'+(e.message||e));
@@ -548,7 +662,6 @@ svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
 function fbOnSignedIn(user){
-alert('DEBUG: fbOnSignedIn() appelé pour uid='+user.uid);
 var wasExplicit=FB.signingIn;FB.signingIn=false;
 FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;
 localStorage.setItem('cdc_fb_uid',FB.uid);
@@ -562,7 +675,6 @@ fbShowStatus();
 }
 
 function fbGoogleSignIn(){
-alert('DEBUG: fbGoogleSignIn() appelé, FB.auth existe = '+!!FB.auth);
 if(!FB.auth){toast('Configure Firebase d\'abord','err');return;}
 var provider=new firebase.auth.GoogleAuthProvider();
 provider.addScope('email');
@@ -577,13 +689,10 @@ provider.addScope('email');
    onAuthStateChanged (indépendant de cette promesse) sert de filet de
    sécurité si jamais la promesse ci-dessous ne se résout pas malgré tout. */
 FB.signingIn=true;
-alert('DEBUG: sur le point d\'appeler signInWithPopup...');
 FB.auth.signInWithPopup(provider).then(function(result){
-alert('DEBUG: signInWithPopup .then() — user='+(result&&result.user?result.user.uid:'AUCUN'));
 if(result&&result.user)fbOnSignedIn(result.user);
 }).catch(function(e){
 FB.signingIn=false;
-alert('DEBUG: signInWithPopup .catch() — code='+e.code+' message='+e.message);
 if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
 console.error('[Firebase] signInWithPopup erreur:',e.code,e.message);
 toast('Erreur connexion Google: '+e.code+' — '+e.message,'err');
@@ -2219,7 +2328,7 @@ function gcalDisconnect(){
         try{google.accounts.oauth2.revoke(GCAL.token,()=>{});}catch(e){}
     }
     GCAL.token=null;GCAL.tokenExpiry=0;GCAL.connected=false;GCAL.events=[];
-    GMAIL.messages=[];GMAIL.labels=[];GMAIL.nextPageToken=null;GMAIL._loaded=false;GMAIL.filter='all';
+    GMAIL.messages=[];GMAIL.labels=[];GMAIL.nextPageToken=null;GMAIL._loaded=false;
     ren();
     toast('Déconnecté de Google Agenda','info');
 }
@@ -2253,60 +2362,6 @@ function gcalEventDateLabel(ev){
     const dt=new Date(d);
     if(isAllDay)return dt.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
     return dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' · '+dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-}
-/* Regroupe les événements par jour (clé YYYY-MM-DD) en conservant l'ordre
-   chronologique déjà fourni par l'API (orderBy=startTime). */
-function gcalGroupEventsByDay(events){
-    const groups=[];const byKey={};
-    events.forEach(ev=>{
-        const isAllDay=!!ev.start?.date;
-        const key=isAllDay?ev.start.date:localDateStr(new Date(ev.start.dateTime));
-        if(!byKey[key]){byKey[key]={key,events:[]};groups.push(byKey[key]);}
-        byKey[key].events.push(ev);
-    });
-    return groups;
-}
-function gcalDayLabel(key){
-    if(key===todayStr())return"Aujourd'hui";
-    if(key===localDateStr(new Date(Date.now()+86400000)))return'Demain';
-    const d=new Date(key+'T00:00:00');
-    const label=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    return label.charAt(0).toUpperCase()+label.slice(1);
-}
-/* Un événement est "en cours" s'il a des horaires précis (pas toute la journée)
-   et que l'instant présent tombe entre son début et sa fin. */
-function gcalEventIsNow(ev){
-    if(!ev.start?.dateTime||!ev.end?.dateTime)return false;
-    const now=Date.now();
-    return now>=new Date(ev.start.dateTime).getTime()&&now<new Date(ev.end.dateTime).getTime();
-}
-function gcalEventRow(ev){
-    const isAllDay=!!ev.start?.date;
-    const isNow=gcalEventIsNow(ev);
-    const startLabel=isAllDay?'':new Date(ev.start.dateTime).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    const endLabel=isAllDay?'':(ev.end?.dateTime?new Date(ev.end.dateTime).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'');
-    const attendeesCount=(ev.attendees||[]).filter(a=>!a.self).length;
-    return`<div onclick="gcalOpenEventModalById('${ev.id}')" class="group flex items-stretch gap-3 px-5 py-3.5 hover:bg-sHov/50 transition-colors cursor-pointer">
-<div class="w-14 shrink-0 flex flex-col items-center justify-center text-center gap-0.5">
-${isAllDay?`<i class="fa-solid fa-sun text-mut text-xs"></i><span class="text-[.6rem] uppercase tracking-wide text-mut">Journée</span>`:`<span class="text-sm font-disp font-semibold ${isNow?'text-acc':'text-txt'}">${startLabel}</span>${endLabel?`<span class="text-[.6rem] text-mut">${endLabel}</span>`:''}`}
-</div>
-<div class="w-[3px] rounded-full ${isNow?'bg-acc':'bg-bdr'} shrink-0"></div>
-<div class="flex-1 min-w-0 py-0.5">
-<div class="flex items-center gap-2"><span class="text-sm font-medium truncate">${escHtml(ev.summary||'(Sans titre)')}</span>${isNow?`<span class="text-[.6rem] px-2 py-0.5 rounded-full bg-accS text-acc font-disp font-semibold uppercase tracking-wide shrink-0">En cours</span>`:''}</div>
-${ev.location?`<div class="text-xs text-mut truncate mt-1"><i class="fa-solid fa-location-dot mr-1.5"></i>${escHtml(ev.location)}</div>`:''}
-${attendeesCount?`<div class="text-[.7rem] text-mut mt-1"><i class="fa-solid fa-user-group mr-1.5"></i>${attendeesCount} invité${attendeesCount>1?'s':''}</div>`:''}
-</div>
-<a href="${ev.htmlLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-mut hover:text-inf shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity" data-tip="Ouvrir dans Google Agenda"><i class="fa-solid fa-arrow-up-right-from-square text-[.6rem]"></i></a>
-</div>`;
-}
-function gcalEventsListHtml(){
-    if(GCAL.loading&&!GCAL.events.length)return'<div class="text-center py-16 text-mut"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 block opacity-50"></i><p class="text-sm">Chargement des événements...</p></div>';
-    if(!GCAL.events.length)return'<div class="text-center py-16 text-mut"><i class="fa-regular fa-calendar text-3xl mb-3 block opacity-30"></i><p class="text-sm">Aucun événement à venir</p></div>';
-    const groups=gcalGroupEventsByDay(GCAL.events);
-    return groups.map(g=>`<div>
-<div class="flex items-center gap-3 px-5 pt-4 pb-2 bg-surface"><span class="font-disp text-xs uppercase tracking-widest ${g.key===todayStr()?'text-acc':'text-mut'}">${gcalDayLabel(g.key)}</span><span class="flex-1 h-px bg-bdr"></span><span class="text-[.65rem] text-mut">${g.events.length} évènement${g.events.length>1?'s':''}</span></div>
-<div class="flex flex-col divide-y divide-bdr/50">${g.events.map(ev=>gcalEventRow(ev)).join('')}</div>
-</div>`).join('');
 }
 
 // Crée ou met à jour l'événement Google Agenda lié à une tâche du Cockpit
@@ -2443,29 +2498,6 @@ const m=GMAIL.messages.find(x=>x.id===id);
 const ok=await gmailModify(id,add?{addLabelIds:[labelId]}:{removeLabelIds:[labelId]});
 if(ok&&m){m.labelIds=add?m.labelIds.concat(labelId):m.labelIds.filter(l=>l!==labelId);toast(add?'Libellé ajouté':'Libellé retiré');}
 }
-const GMAIL_AVATAR_COLORS=[{bg:'bg-accS',tx:'text-acc'},{bg:'bg-infS',tx:'text-inf'},{bg:'bg-okS',tx:'text-ok'},{bg:'bg-warnS',tx:'text-warn'}];
-function gmailAvatarStyle(name){
-let h=0;for(let i=0;i<name.length;i++)h=(h*31+name.charCodeAt(i))>>>0;
-return GMAIL_AVATAR_COLORS[h%GMAIL_AVATAR_COLORS.length];
-}
-function gmailDayKey(dateStr){try{return localDateStr(new Date(dateStr));}catch(e){return'?';}}
-function gmailDayLabel(key){
-if(key===todayStr())return"Aujourd'hui";
-if(key===localDateStr(new Date(Date.now()-86400000)))return'Hier';
-const d=new Date(key+'T00:00:00');
-if(isNaN(d))return'Date inconnue';
-const label=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-return label.charAt(0).toUpperCase()+label.slice(1);
-}
-function gmailGroupByDay(messages){
-const groups=[];const byKey={};
-messages.forEach(m=>{
-const key=gmailDayKey(m.date);
-if(!byKey[key]){byKey[key]={key,messages:[]};groups.push(byKey[key]);}
-byKey[key].messages.push(m);
-});
-return groups;
-}
 function gmailFromName(from){
 const m=/^"?([^"<]*)"?\s*<?/.exec(from||'');
 const name=(m&&m[1]||'').trim();
@@ -2474,45 +2506,20 @@ return name||from||'?';
 function gmailDateLabel(dateStr){
 try{const d=new Date(dateStr);return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return'';}
 }
-function gmailDecodeB64(data){try{return decodeURIComponent(escape(atob(data.replace(/-/g,'+').replace(/_/g,'/'))));}catch(e){try{return atob(data.replace(/-/g,'+').replace(/_/g,'/'));}catch(e2){return'';}}}
-/* Parcourt récursivement l'arbre MIME (multipart/mixed peut contenir un
-   multipart/alternative, lui-même contenant text/plain + text/html, à
-   n'importe quel niveau) et renvoie le premier texte brut et le premier
-   HTML trouvés. L'ancienne version ne regardait qu'un seul niveau de
-   profondeur, ce qui ratait le corps de nombreux emails avec pièces jointes. */
-function gmailWalkParts(payload,acc){
-if(!payload)return acc;
-if(payload.mimeType==='text/plain'&&!acc.text&&payload.body&&payload.body.data)acc.text=gmailDecodeB64(payload.body.data);
-if(payload.mimeType==='text/html'&&!acc.html&&payload.body&&payload.body.data)acc.html=gmailDecodeB64(payload.body.data);
-if(payload.parts)payload.parts.forEach(p=>gmailWalkParts(p,acc));
-return acc;
+function gmailExtractBody(payload){
+if(!payload)return'';
+function decode(data){try{return decodeURIComponent(escape(atob(data.replace(/-/g,'+').replace(/_/g,'/'))));}catch(e){try{return atob(data.replace(/-/g,'+').replace(/_/g,'/'));}catch(e2){return'';}}}
+function stripHtml(html){return html.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/p>/gi,'\n\n').replace(/<[^>]+>/g,'');}
+if(payload.mimeType==='text/plain'&&payload.body&&payload.body.data)return decode(payload.body.data);
+if(payload.mimeType==='text/html'&&payload.body&&payload.body.data)return stripHtml(decode(payload.body.data));
+if(payload.parts){
+const plain=payload.parts.find(p=>p.mimeType==='text/plain');
+if(plain&&plain.body&&plain.body.data)return decode(plain.body.data);
+const html=payload.parts.find(p=>p.mimeType==='text/html');
+if(html&&html.body&&html.body.data)return stripHtml(decode(html.body.data));
+for(const p of payload.parts){const r=gmailExtractBody(p);if(r)return r;}
 }
-function gmailExtractParts(payload){return gmailWalkParts(payload,{text:null,html:null});}
-/* Décode les entités HTML (&nbsp;, &amp;, &rsquo;...) via un <textarea> :
-   le navigateur les interprète comme du texte à afficher, jamais comme du
-   HTML actif (aucun risque d'exécution). Sans ça, ces entités restaient
-   affichées telles quelles dans le texte brut, rendant l'email illisible. */
-function gmailDecodeEntities(str){
-const ta=document.createElement('textarea');
-ta.innerHTML=str;
-return ta.value;
-}
-/* Repli texte brut à partir du HTML quand aucune partie text/plain n'existe :
-   dépouille les balises tout en préservant les sauts de paragraphe, décode
-   les entités, puis compresse les lignes vides en excès. */
-function gmailPlainTextFromHtml(html){
-let t=html.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/(p|div|tr|table|h[1-6])>/gi,'\n').replace(/<[^>]+>/g,'');
-t=gmailDecodeEntities(t);
-return t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
-}
-/* Neutralise scripts et gestionnaires d'événements avant d'injecter le HTML
-   d'un email dans l'iframe sandboxée. L'attribut sandbox de l'iframe bloque
-   déjà toute exécution JS ; ceci est une protection en profondeur. */
-function gmailSanitizeHtml(html){
-return html.replace(/<script[\s\S]*?<\/script>/gi,'')
-.replace(/ on[a-z]+\s*=\s*"[^"]*"/gi,'')
-.replace(/ on[a-z]+\s*=\s*'[^']*'/gi,'')
-.replace(/javascript:/gi,'');
+return'';
 }
 async function gmailOpenMessage(id){
 if(!gcalHasValidToken())return;
@@ -2523,8 +2530,7 @@ if(!r.ok)throw new Error('HTTP '+r.status);
 const m=await r.json();
 const h=(m.payload&&m.payload.headers)||[];
 const get=n=>{const x=h.find(x=>x.name===n);return x?x.value:'';};
-const parts=gmailExtractParts(m.payload);
-const plainBody=parts.text?gmailDecodeEntities(parts.text).replace(/\n{3,}/g,'\n\n').trim():(parts.html?gmailPlainTextFromHtml(parts.html):'');
+const body=gmailExtractBody(m.payload);
 const subject=get('Subject')||'(Sans objet)';
 const from=get('From');
 const to=get('To');
@@ -2533,15 +2539,11 @@ const wasUnread=(m.labelIds||[]).includes('UNREAD');
 GMAIL._openMsg={id:m.id,threadId:m.threadId,from:from,subject:subject,messageIdHeader:get('Message-ID')};
 const availLabels=GMAIL.labels.filter(l=>!(m.labelIds||[]).includes(l.id));
 const appliedLabels=GMAIL.labels.filter(l=>(m.labelIds||[]).includes(l.id));
-/* Un email HTML se met en page correctement dans une iframe sandboxée
-   (isolée du CSS de l'app, sans exécution de script) ; un email texte brut
-   reste affiché tel quel avec un simple retour à la ligne. */
-const bodyHtml=parts.html?`<iframe class="w-full rounded-xl border-0" style="height:420px;background:#fff" sandbox="allow-same-origin allow-popups" srcdoc="${escHtml('<!DOCTYPE html><html><head><meta charset=\"utf-8\"><base target=\"_blank\"><style>html,body{margin:0;padding:16px;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}img{max-width:100%;height:auto}a{color:#1a56db}</style></head><body>'+gmailSanitizeHtml(parts.html)+'</body></html>')}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-1"><h2 class="font-disp font-bold text-lg">${escHtml(subject)}</h2></div>
 <div class="text-xs text-mut mb-4">De : ${escHtml(from)}<br>À : ${escHtml(to)}<br>${escHtml(date)}</div>
 ${appliedLabels.length?`<div class="flex flex-wrap gap-1.5 mb-4">${appliedLabels.map(l=>`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf flex items-center gap-1">${escHtml(l.name)}<i onclick="gmailApplyLabel('${id}','${l.id}',false);clsM();gmailOpenMessage('${id}')" class="fa-solid fa-xmark cursor-pointer hover:text-acc"></i></span>`).join('')}</div>`:''}
-<div class="mb-5">${bodyHtml}</div>
+<div class="bg-sAlt rounded-xl p-4 mb-5 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(body)||'<span class="italic text-mut">(Corps vide)</span>'}</div>
 ${availLabels.length?`<div class="mb-5"><select onchange="if(this.value){gmailApplyLabel('${id}',this.value,true);clsM();gmailOpenMessage('${id}');}" class="fi text-xs"><option value="">+ Ajouter un libellé...</option>${availLabels.map(l=>`<option value="${l.id}">${escHtml(l.name)}</option>`).join('')}</select></div>`:''}
 <div class="flex flex-wrap justify-end gap-2">
 <button onclick="clsM();gmailTrash('${id}')" class="h-10 px-4 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp mr-auto">Supprimer</button>
@@ -2600,13 +2602,11 @@ gmailFetchMessages(true);
 }
 function gmailRow(m){
 const name=gmailFromName(m.from);
-const av=gmailAvatarStyle(name);
-let timeOnly='';try{timeOnly=new Date(m.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){}
-return `<div onclick="gmailOpenMessage('${m.id}')" class="flex items-center gap-3 px-5 py-3.5 hover:bg-sHov/50 transition-colors cursor-pointer">
-<div class="relative shrink-0"><div class="w-9 h-9 rounded-lg ${av.bg} ${av.tx} flex items-center justify-center font-bold text-xs">${escHtml(name.slice(0,1).toUpperCase())}</div>${m.unread?'<span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-acc border-2 border-surface"></span>':''}</div>
+return `<div onclick="gmailOpenMessage('${m.id}')" class="flex items-center gap-3 px-5 py-3.5 hover:bg-sHov/50 transition-colors cursor-pointer ${m.unread?'bg-infS/10':''}">
+<div class="w-9 h-9 rounded-lg ${m.unread?'bg-infS text-inf':'bg-sAlt text-mut'} flex items-center justify-center shrink-0 font-bold text-xs">${escHtml(name.slice(0,1).toUpperCase())}</div>
 <div class="flex-1 min-w-0">
-<div class="flex items-center gap-2"><span class="text-sm ${m.unread?'font-semibold text-txt':'font-medium text-mut'} truncate">${escHtml(name)}</span><span class="text-[.65rem] text-mut ml-auto shrink-0">${timeOnly}</span></div>
-<div class="text-xs ${m.unread?'text-txt font-medium':'text-mut'} truncate">${escHtml(m.subject)}</div>
+<div class="flex items-center gap-2"><span class="text-sm ${m.unread?'font-semibold':'font-medium'} truncate">${escHtml(name)}</span><span class="text-[.65rem] text-mut ml-auto shrink-0">${gmailDateLabel(m.date)}</span></div>
+<div class="text-xs ${m.unread?'text-txt':'text-mut'} truncate">${escHtml(m.subject)}</div>
 <div class="text-[.7rem] text-mut truncate">${escHtml(m.snippet)}</div>
 </div>
 <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
@@ -2615,16 +2615,6 @@ return `<div onclick="gmailOpenMessage('${m.id}')" class="flex items-center gap-
 <button onclick="gmailTrash('${m.id}')" class="h-8 w-8 rounded-lg bg-surface border border-bdr text-mut hover:text-acc transition-colors bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-xs"></i></button>
 </div>
 </div>`;
-}
-function gmailMessagesListHtml(){
-if(GMAIL.loading&&!GMAIL.messages.length)return'<div class="text-center py-16 text-mut"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 block opacity-50"></i><p class="text-sm">Chargement des emails...</p></div>';
-const filtered=GMAIL.filter==='unread'?GMAIL.messages.filter(m=>m.unread):GMAIL.messages;
-if(!filtered.length)return GMAIL.filter==='unread'?'<div class="text-center py-16 text-mut"><i class="fa-solid fa-envelope-circle-check text-3xl mb-3 block opacity-30"></i><p class="text-sm">Aucun email non lu</p></div>':'<div class="text-center py-16 text-mut"><i class="fa-regular fa-envelope text-3xl mb-3 block opacity-30"></i><p class="text-sm">Aucun email</p></div>';
-const groups=gmailGroupByDay(filtered);
-return groups.map(g=>`<div>
-<div class="flex items-center gap-3 px-5 pt-4 pb-2 bg-surface"><span class="font-disp text-xs uppercase tracking-widest ${g.key===todayStr()?'text-acc':'text-mut'}">${gmailDayLabel(g.key)}</span><span class="flex-1 h-px bg-bdr"></span><span class="text-[.65rem] text-mut">${g.messages.length}</span></div>
-<div class="flex flex-col divide-y divide-bdr/50">${g.messages.map(m=>gmailRow(m)).join('')}</div>
-</div>`).join('');
 }
 function rGmail(){
 const el=document.getElementById('PC');
@@ -2652,12 +2642,8 @@ el.innerHTML=`<div class="max-w-4xl mx-auto">
 <input id="gmQuery" class="fi text-sm flex-1" placeholder="Rechercher (ex: in:inbox is:unread from:...)" value="${escHtml(GMAIL.query)}">
 <button type="submit" class="h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:bg-sHov transition-colors bp"><i class="fa-solid fa-magnifying-glass"></i></button>
 </form>
-<div class="flex items-center gap-2 mb-4 af d1">
-<button onclick="GMAIL.filter='all';rGmail()" class="h-8 px-3.5 rounded-full text-xs font-disp uppercase tracking-wide transition-colors ${GMAIL.filter==='all'?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">Tous</button>
-<button onclick="GMAIL.filter='unread';rGmail()" class="h-8 px-3.5 rounded-full text-xs font-disp uppercase tracking-wide transition-colors flex items-center gap-1.5 ${GMAIL.filter==='unread'?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">Non lus${unreadCount?`<span class="text-[.65rem] ${GMAIL.filter==='unread'?'text-black/70':'text-mut'}">${unreadCount}</span>`:''}</button>
-</div>
 <div class="bg-surface border border-bdr rounded-xl overflow-hidden af d2">
-${gmailMessagesListHtml()}
+${GMAIL.loading&&!GMAIL.messages.length?'<div class="text-center py-16 text-mut"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 block opacity-50"></i><p class="text-sm">Chargement des emails...</p></div>':GMAIL.messages.length?`<div class="flex flex-col divide-y divide-bdr/50">${GMAIL.messages.map(m=>gmailRow(m)).join('')}</div>`:'<div class="text-center py-16 text-mut"><i class="fa-regular fa-envelope text-3xl mb-3 block opacity-30"></i><p class="text-sm">Aucun email</p></div>'}
 </div>
 ${GMAIL.nextPageToken?`<div class="text-center mt-4 af d3"><button onclick="gmailFetchMessages(false)" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp" ${GMAIL.loading?'disabled':''}>Charger plus</button></div>`:''}
 </div>`;
@@ -2805,7 +2791,7 @@ return;
 }
 el.innerHTML=`<div class="max-w-4xl mx-auto"><div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 af"><div><h1 class="font-disp text-3xl font-bold tracking-tight">Agenda Google</h1><p class="text-mut text-sm mt-1">${GCAL.connected?`${GCAL.events.length} événement${GCAL.events.length>1?'s':''} sur les 30 prochains jours`:'Non connecté'}</p></div>
 <div class="flex items-center gap-2">${GCAL.connected?`<button onclick="gcalOpenEventModal(null)" class="h-9 px-3.5 rounded-lg bg-acc hover:bg-accH text-black flex items-center gap-2 transition-colors bp text-xs font-semibold"><i class="fa-solid fa-calendar-plus"></i>Nouvel événement</button><button onclick="nav('gmail')" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-inf hover:border-inf/40 transition-all bp text-xs font-medium"><i class="fa-solid fa-envelope"></i>Gmail</button><button onclick="gcalFetchEvents()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium" ${GCAL.loading?'disabled':''}><i class="fa-solid fa-arrows-rotate ${GCAL.loading?'fa-spin':''}"></i>Actualiser</button><button onclick="gcalDisconnect()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-acc hover:border-acc/40 transition-all bp text-xs font-medium"><i class="fa-solid fa-plug-circle-xmark"></i>Déconnecter</button>`:`<button onclick="gcalConnect()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-brands fa-google"></i>Connecter Google Agenda</button>`}<button onclick="forgetGCalClientId()" class="w-9 h-9 rounded-lg bg-sAlt border border-bdr flex items-center justify-center text-mut hover:text-acc transition-all bp" data-tip="Oublier la configuration"><i class="fa-solid fa-gear text-xs"></i></button></div></div>
-${GCAL.connected?`<div class="bg-surface border border-bdr rounded-xl overflow-hidden af d2">${gcalEventsListHtml()}</div>
+${GCAL.connected?`<div class="bg-surface border border-bdr rounded-xl overflow-hidden af d2">${GCAL.loading&&!GCAL.events.length?'<div class="text-center py-16 text-mut"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 block opacity-50"></i><p class="text-sm">Chargement des événements...</p></div>':GCAL.events.length?`<div class="flex flex-col divide-y divide-bdr/50">${GCAL.events.map(ev=>`<div onclick="gcalOpenEventModalById('${ev.id}')" class="flex items-center gap-4 px-5 py-3.5 hover:bg-sHov/50 transition-colors cursor-pointer"><div class="w-9 h-9 rounded-lg bg-infS flex items-center justify-center shrink-0"><i class="fa-solid fa-calendar-day text-inf text-xs"></i></div><div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">${escHtml(ev.summary||'(Sans titre)')}</div><div class="text-[.65rem] text-mut">${gcalEventDateLabel(ev)}</div></div><a href="${ev.htmlLink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="text-mut hover:text-inf shrink-0" data-tip="Ouvrir dans Google Agenda"><i class="fa-solid fa-arrow-up-right-from-square text-[.6rem]"></i></a></div>`).join('')}</div>`:'<div class="text-center py-16 text-mut"><i class="fa-regular fa-calendar text-3xl mb-3 block opacity-30"></i><p class="text-sm">Aucun événement à venir</p></div>'}</div>
 <p class="text-[.65rem] text-mut mt-4 af d3"><i class="fa-solid fa-circle-info mr-1"></i>Clique sur un événement pour le modifier ou le supprimer. Pour synchroniser une tâche du Cockpit avec Google Agenda, ouvre-la et coche "Synchroniser avec Google Agenda".</p>`:`<div class="bg-surface border border-bdr rounded-xl p-10 text-center af d2"><i class="fa-brands fa-google text-3xl text-mut mb-3 block opacity-40"></i><p class="text-sm text-mut mb-4">Clique sur "Connecter Google Agenda" pour afficher tes événements et synchroniser tes tâches.</p></div>`}
 </div>`;
 }
@@ -3539,23 +3525,84 @@ FOLDERS=imp.folders;D=imp.data;CL=imp.completedLog||[];if(imp.settings)SET=imp.s
 }else{
 toast('Fichier incomplet','err');return;
 }
+/* CRITICAL : Bloquer fbQueuePush() pendant l'import pour éviter
+   qu'un push non-forcé soit schedule par les sv*() surchargées,
+   ce qui afficherait un 2e dialogue confirm() et risquerait
+   d'écraser l'import avec les anciennes données cloud. */
+FB.importing=true;
+/* Déconnecter le listener cloud AVANT de sauver les données
+   importées. Sinon, le onSnapshot peut recevoir une version
+   cloud plus ancienne et écraser l'import via fbApplyRemote()
+   avant que le push soit terminé. Le listener sera reconnecté
+   au rechargement (fbStartSync). */
+if(FB.listener){try{FB.listener();}catch(e){}FB.listener=null;}
 svFolders();svData();svLog();svSettings();
+/* Caler cdc_fb_ts sur NOW pour que le listener (au rechargement)
+   ne puisse JAMAIS écraser l'import avec une version cloud plus
+   ancienne, même si le push échoue. Date.now() est toujours >
+   au dernier timestamp cloud. fbDoPush() le remplacera ensuite
+   par le timestamp exact du push si le push réussit. */
+localStorage.setItem('cdc_fb_ts',String(Date.now()));
 toast('Données importées !');
 clsM();
-var _doReload=function(){setTimeout(()=>location.reload(),800);};
+var _doReload=function(){FB.importing=false;setTimeout(()=>location.reload(),1200);};
+var _importDone=function(ok){
+  FB.importing=false;
+  if(ok){
+    /* Vérification post-push : lire le document Firestore pour
+       confirmer que les données importées sont réellement
+       écrites dans le cloud (format compressé LZString). */
+    fbReadFullRemote().then(function(remote){
+      if(remote){
+        var dataKeys=Object.keys(remote).filter(function(k){return k!='_ts';});
+        console.log('[Firebase] Vérification post-import: '+dataKeys.length+' clés cloud, _ts='+remote._ts+' vs local _ts='+localStorage.getItem('cdc_fb_ts'));
+        toast('Import synchronisé et vérifié sur le cloud','info');
+      }else{
+        console.error('[Firebase] Vérification post-import: aucun chunk trouvé');
+        toast('Import poussé mais vérification échouée — vérifiez sur un autre navigateur','err');
+      }
+      _doReload();
+    }).catch(function(){
+      /* Vérification échouée (réseau), mais le push a réussi → on recharge */
+      toast('Import synchronisé sur le cloud','info');
+      _doReload();
+    });
+  }else{
+    toast('Échec de la synchronisation cloud — données locales OK','err');
+    _doReload();
+  }
+};
 if(typeof fbPush==='function'&&fbIsReady()){
-toast('Synchronisation cloud en cours...','info');
-/* Filet de sécurité : si le push cloud traîne (réseau lent/coupé), on ne bloque pas le rechargement indéfiniment */
-var _safety=setTimeout(_doReload,8000);
-fbPush().then(function(ok){
-clearTimeout(_safety);
-if(ok)toast('Import synchronisé sur le cloud','info');
-_doReload();
-});
+/* Après un import, on vérifie TOUJOURS s'il existe des données cloud,
+   même si les timestamps correspondent — car l'import a remplacé tout
+   le contenu local, pas juste un champ. On demande confirmation avant
+   d'écraser le cloud avec les données importées. */
+fbCheckRemoteConflict(true).then(function(remote){
+if(!remote){
+/* Cloud vide ou inaccessible : on pousse directement */
+fbPush(true).then(function(ok){_importDone(ok);});
 }else{
+var ts=remote._ts||0;
+var when=new Date(ts).toLocaleString('fr-FR');
+var ecraser=confirm('Le cloud contient des données (version du '+when+').\n\nOK = Écraser le cloud avec vos données importées\nAnnuler = Récupérer les données du cloud (vos données importées seront perdues)');
+if(ecraser){
+fbPush(true).then(function(ok){_importDone(ok);});
+}else{
+FB.importing=false;
+fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));
+toast('Données du cloud récupérées','info');
 _doReload();
 }
-}catch(err){toast('Erreur : '+err.message,'err');}
+}
+}).catch(function(){
+/* Erreur réseau : on pousse quand même (force) */
+fbPush(true).then(function(ok){_importDone(ok||true);});
+});
+}else{
+FB.importing=false;
+_doReload();
+}
+}catch(err){FB.importing=false;toast('Erreur : '+err.message,'err');}
 };
 reader.readAsText(file);
 }
@@ -3638,7 +3685,8 @@ var html=`<div class="pt-4 border-t border-bdr mt-4">
 <div class="flex flex-wrap gap-2">
 <button onclick="fbConnectFromSettings()" class="h-9 px-4 rounded-xl bg-inf hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp">Enregistrer</button>
 ${isConnected?'<button onclick="fbGoogleSignOut()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp">Déconnecter Google</button>':'<button onclick="fbQuickGoogleSignIn()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-brands fa-google mr-1"></i>Se connecter avec Google</button>'}
-${isConnected?'<button onclick="fbPush()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
+${isConnected?'<button onclick="fbPullCloud()" class="h-9 px-4 rounded-xl bg-ok hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>Récupérer cloud</button>':''}
+${isConnected?'<button onclick="fbForceSyncDialog()" class="h-9 px-4 rounded-xl bg-warn hover:brightness-110 text-black text-xs font-disp font-bold uppercase tracking-wide transition-colors bp"><i class="fa-solid fa-arrows-rotate mr-1"></i>Forcer sync</button>':''}
 ${isConnected?'<button onclick="fbDiagCheck()" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp"><i class="fa-solid fa-stethoscope mr-1"></i>Diagnostic cloud</button>':''}
 </div>
 <p class="text-[.65rem] text-mut mt-2">Remplis apiKey + projectId, clique Enregistrer, puis connecte-toi avec Google. Même compte Google = même données sur tous les appareils.</p>
