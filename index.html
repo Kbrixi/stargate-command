@@ -440,13 +440,19 @@ if(!fbIsReady())return;
 var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
 var _firstSnap=true;
+/* Sauvegarder le timestamp local au démarrage pour détecter si nos
+   données locales sont déjà à jour par rapport au cloud */
+var _initLocalTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 FB.listener=docRef.onSnapshot(function(snap){
 /* Si on est en train d'importer, ne PAS écraser les données locales */
 if(_fbImporting){_firstSnap=false;FB.connected=true;fbShowStatus();return;}
 fbReadRemote(snap).then(function(remote){
 if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-if(ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
+/* N'appliquer les données distantes que si le timestamp est différent
+   ET plus récent que ce qu'on a localement. Cela empêche un snapshot
+   retardé d'écraser des données plus récentes. */
+if(ts!==localTs&&ts>localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
 }else if(_firstSnap){
 fbPush(true);
 if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
@@ -484,10 +490,15 @@ if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
 }
 
 var _fbPushQueued=false;
+var _fbPushTimer=null;
 function fbQueuePush(){
 if(_fbPushQueued)return;
 _fbPushQueued=true;
-setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
+_fbPushTimer=setTimeout(function(){_fbPushQueued=false;_fbPushTimer=null;fbPush();},1500);
+}
+function fbCancelQueuedPush(){
+if(_fbPushTimer){clearTimeout(_fbPushTimer);_fbPushTimer=null;}
+_fbPushQueued=false;
 }
 
 function fbDoPush(){
@@ -562,7 +573,7 @@ return fbReadRemote(snap);
 }).then(function(remote){
 if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-if(ts&&ts!==localTs)return remote;
+if(ts&&ts!==localTs&&ts>localTs)return remote;
 }
 return null;
 }).catch(function(){return null;});
@@ -3731,9 +3742,16 @@ toast('Fichier incomplet','err');return;
    par les anciennes données du cloud pendant que le push est en cours */
 _fbImporting=true;
 svFolders();svData();svLog();svSettings();if(typeof svNotesData==='function')svNotesData();
+/* Annuler tout fbQueuePush en attente APRÈS les sauvegardes
+   (car chaque sv*() appelle fbQueuePush) pour éviter qu'il pousse
+   les anciennes données après le push forcé */
+if(typeof fbCancelQueuedPush==='function')fbCancelQueuedPush();
 toast('Données importées !');
 clsM();
-var _doReload=function(){_fbImporting=false;setTimeout(()=>location.reload(),800);};
+/* IMPORTANT : on garde _fbImporting=true jusqu'au reload effectif
+   pour empêcher onSnapshot d'écraser les données pendant la fenêtre
+   de 800ms avant le reload */
+var _doReload=function(){setTimeout(()=>location.reload(),200);};
 if(typeof fbPush==='function'&&fbIsReady()){
 toast('Synchronisation cloud en cours...','info');
 /* Force push : on veut écraser le cloud avec les données importées,
@@ -3742,13 +3760,14 @@ var _safety=setTimeout(_doReload,12000);
 fbPush(true).then(function(ok){
 clearTimeout(_safety);
 if(ok)toast('Import synchronisé sur le cloud','info');
+else toast('Import local OK, mais le push cloud a échoué','err');
 _doReload();
 }).catch(function(){
 clearTimeout(_safety);
+toast('Import local OK, mais le push cloud a échoué','err');
 _doReload();
 });
 }else{
-_fbImporting=false;
 _doReload();
 }
 }catch(err){_fbImporting=false;toast('Erreur : '+err.message,'err');}
