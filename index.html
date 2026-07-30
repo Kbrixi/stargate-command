@@ -3017,6 +3017,15 @@ const f=fldr(folder);
 const project=getProject(folder,t.projectId);
 const st=taskStatus(t);
 const stCls={todo:'bg-sAlt text-mut',doing:'bg-infS text-inf',done:'bg-okS text-ok'}[st];
+
+/* Notes associées à cette tâche */
+const taskNotes=(typeof ND!=='undefined')?ND.notes.filter(n=>n.folderKey===folder&&n.taskId===tid&&!n.isTrashed):[];
+const taskNotesHtml=taskNotes.length===0?'<div class="text-xs text-mut italic">Aucune note associée</div>':taskNotes.map(n=>{const cat=ND.categories.find(c=>c.id===n.categoryId);return`<div class="flex items-start gap-3 p-2.5 rounded-lg bg-surface border border-bdr cursor-pointer hover:bg-sHov transition-colors" onclick="clsM();NS.selectedNoteId='${n.id}';S.v='notes';NS.isEditorOpen=true;rNoteEditor()"><div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style="background:${(n.color||'#ff9c00')+'22'}"><i class="fa-solid fa-note-sticky" style="color:${n.color||'#ff9c00'};font-size:0.65rem"></i></div><div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escH(n.title||'Sans titre')}</div><div class="text-[.65rem] text-mut truncate mt-0.5">${escH((n.excerpt||noteExcerpt(n.content)).slice(0,80))}</div></div>${cat?`<span class="text-[.55rem] px-1.5 py-0.5 rounded-full shrink-0" style="background:${cat.color}22;color:${cat.color}">${escH(cat.name)}</span>`:''}</div>`;}).join('');
+
+/* Événements Google Calendar liés */
+const gcalEv=t.gcalEventId&&GCAL.connected&&GCAL.events?GCAL.events.find(e=>e.id===t.gcalEventId):null;
+const gcalEvHtml=gcalEv?`<div class="flex items-start gap-3 p-2.5 rounded-lg bg-surface border border-bdr cursor-pointer hover:bg-sHov transition-colors" onclick="clsM();gcalOpenEventModalById('${gcalEv.id}')"><div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-infS"><i class="fa-brands fa-google text-inf" style="font-size:0.65rem"></i></div><div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escH(gcalEv.summary||'(Sans titre)')}</div><div class="text-[.65rem] text-mut mt-0.5"><i class="fa-solid fa-clock mr-1"></i>${gcalEv.start?.date?fmtFr(gcalEv.start.date):gcalEv.start?.dateTime?new Date(gcalEv.start.dateTime).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}${gcalEv.end?.dateTime?' — '+new Date(gcalEv.end.dateTime).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):''}</div>${gcalEv.location?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>${escH(gcalEv.location)}</div>`:''}</div></div>`:'<div class="text-xs text-mut italic">Aucun événement calendrier lié</div>';
+
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-4"><h2 class="font-disp font-bold text-lg">${escHtml(t.name)}</h2><span class="bdg ${stCls}">${STATUS_L[st]}</span></div>
 <div class="flex flex-wrap gap-2 mb-5">${prBadge(t.priority)}${t.dueDate?`<span class="text-[.7rem] px-2 py-1 rounded-full bg-sAlt text-mut"><i class="fa-solid fa-calendar mr-1"></i>${fmtFr(t.dueDate)}</span>`:''}${t.repeat&&t.repeat!=='none'?`<span class="text-[.7rem] px-2 py-1 rounded-full bg-infS text-inf"><i class="fa-solid fa-rotate mr-1"></i>${t.repeat}${t.repeatEnd?' jusqu au '+fmtFr(t.repeatEnd):''}</span>`:''}${t.reminderAt?`<span class="text-[.7rem] px-2 py-1 rounded-full ${!t.reminderDismissed&&new Date(t.reminderAt)<=new Date()?'bg-accS text-acc':'bg-warnS text-warn'}"><i class="fa-solid fa-bell mr-1"></i>${fmtReminderDt(new Date(t.reminderAt))}</span>`:''}${t.gcalEventId?`<span class="text-[.7rem] px-2 py-1 rounded-full bg-infS text-inf"><i class="fa-brands fa-google mr-1"></i>Synchronisée</span>`:''}</div>
@@ -3026,6 +3035,21 @@ ${t.description?`<div class="text-sm text-mut mb-5 whitespace-pre-wrap">${escHtm
 <div class="flex items-center gap-2 text-sm"><i class="fa-solid ${f?f.icon:'fa-folder'}" style="color:${f?f.color:'#ff9c00'}"></i><span class="cursor-pointer hover:text-acc" onclick="clsM();nav('folder','${folder}')">${f?escHtml(f.name):folder}</span>${project?`<i class="fa-solid fa-chevron-right text-[.6rem] text-mut"></i><span class="cursor-pointer hover:text-acc" onclick="clsM();openProject('${folder}',${project.id})">${escHtml(project.name)}</span>`:''}</div>
 </div>
 ${(t.contactIds&&t.contactIds.length)?`<div class="mb-5"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-2">Contacts liés</div><div class="flex flex-wrap gap-2">${t.contactIds.map(cid=>{const c=D[folder].contacts.find(x=>x.id===cid);if(!c)return'';return`<div class="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-sAlt border border-bdr cursor-pointer hover:bg-sHov transition-colors" onclick="clsM();openCM('${folder}',${project?project.id:'null'},${c.id})"><div class="w-6 h-6 rounded-full bg-infS text-inf flex items-center justify-center font-bold text-[.6rem] shrink-0">${(contactDisplayName(c)||'?').slice(0,1).toUpperCase()}</div><span class="text-xs font-medium">${escHtml(contactDisplayName(c))}</span></div>`;}).join('')}</div></div>`:''}
+
+<!-- Notes associées -->
+<div class="bg-sAlt rounded-xl p-4 mb-5">
+<div class="text-[.65rem] text-mut uppercase tracking-wide mb-2 flex items-center gap-2"><i class="fa-solid fa-note-sticky text-[#ff9966]"></i>Notes associées (${taskNotes.length})</div>
+<div class="flex flex-col gap-2 mb-2">${taskNotesHtml}</div>
+<button onclick="clsM();nCreateLinkedNote('${folder}',${t.projectId||'null'},${tid})" class="w-full h-8 rounded-lg bg-surface border border-bdr text-xs font-medium text-mut hover:text-txt hover:border-sHov transition-colors bp"><i class="fa-solid fa-plus text-[.6rem] mr-1"></i>Ajouter une note</button>
+</div>
+
+<!-- Événements calendrier -->
+<div class="bg-sAlt rounded-xl p-4 mb-5">
+<div class="text-[.65rem] text-mut uppercase tracking-wide mb-2 flex items-center gap-2"><i class="fa-solid fa-calendar-days text-inf"></i>Événements calendrier</div>
+<div class="flex flex-col gap-2 mb-2">${gcalEvHtml}</div>
+${!t.gcalEventId&&t.dueDate?`<button onclick="clsM();addToGCal('${folder}',${t.id})" class="w-full h-8 rounded-lg bg-surface border border-bdr text-xs font-medium text-mut hover:text-txt hover:border-sHov transition-colors bp"><i class="fa-solid fa-calendar-plus text-[.6rem] mr-1 text-inf"></i>Synchroniser avec Google Agenda</button>`:''}
+</div>
+
 <div class="bg-sAlt rounded-xl p-4 mb-5">
 <div class="text-[.65rem] text-mut uppercase tracking-wide mb-3">Commentaires (${(t.comments||[]).length})</div>
 <div class="flex flex-col gap-2 mb-3 max-h-56 overflow-y-auto">
