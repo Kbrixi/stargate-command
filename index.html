@@ -420,17 +420,16 @@ if(snap.exists){
     /* Ancien format : objet imbriqué (rétrocompatibilité) */
     remote=d.data;ts=d.data._ts||0;
   }
-}
-var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-if(remote&&ts&&(_firstSnap||ts!==localTs)){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
+  var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+  if(remote&&ts&&(_firstSnap||ts!==localTs)){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
 }else if(_firstSnap){
-/* Premier appareil à se connecter : aucun document distant n'existe encore.
-   Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
-   tant qu'aucune modification manuelle n'était faite, ce qui donnait
-   l'impression trompeuse que la synchronisation ne marchait pas. On sème
-   immédiatement le cloud avec les données locales de cet appareil. */
-fbPush(true);
-if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
+  /* Premier appareil à se connecter : aucun document distant n'existe encore.
+     Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
+     tant qu'aucune modification manuelle n'était faite, ce qui donnait
+     l'impression trompeuse que la synchronisation ne marchait pas. On sème
+     immédiatement le cloud avec les données locales de cet appareil. */
+  fbPush(true);
+  if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
 }
 _firstSnap=false;
 FB.connected=true;fbShowStatus();
@@ -438,12 +437,17 @@ FB.connected=true;fbShowStatus();
 }
 
 function fbApplyRemote(remote){
+/* Protection : ne pas écraser les données locales si le remote est vide
+   ou ne contient pas les clés essentielles. Cela évite qu'une sync
+   avec un document cloud vide ou corrompu ne supprime les dossiers. */
+var hasEssentialKeys=FB_KEYS.some(function(k){return remote[k]!==undefined&&remote[k]!==null;});
+if(!hasEssentialKeys){console.warn('[Firebase] Remote data empty — skipping apply');return;}
 FB_KEYS.forEach(function(k){
 if(remote[k]!==undefined&&remote[k]!==null){
 try{
 var parsed=(typeof remote[k]==='string')?JSON.parse(remote[k]):remote[k];
 localStorage.setItem(k,JSON.stringify(parsed));
-}catch(e){}
+}catch(e){console.warn('[Firebase] Failed to apply key:',k,e);}
 }
 });
 /* Recharger les variables en mémoire */
