@@ -388,7 +388,7 @@ FB.db=firebase.firestore();
 try{FB.db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
 FB.db.enablePersistence({synchronizeTabs:true}).catch(function(){/* offline ok */});
 FB.auth.onAuthStateChanged(function(user){
-alert('DEBUG onAuthStateChanged: user='+(user?user.uid:'null'));
+/* DEBUG supprimé : alert('DEBUG onAuthStateChanged: user='+(user?user.uid:'null')); */
 if(user&&FB.uid!==user.uid){fbOnSignedIn(user);}
 });
 setTimeout(function(){fbHandleRedirectResult();},500);
@@ -417,7 +417,7 @@ if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_
    l'impression trompeuse que la synchronisation ne marchait pas. On sème
    immédiatement le cloud avec les données locales de cet appareil. */
 fbPush(true);
-toast('Cloud initialisé avec les données de cet appareil','info');
+if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
 }
 _firstSnap=false;
 FB.connected=true;fbShowStatus();
@@ -436,8 +436,22 @@ localStorage.setItem(k,JSON.stringify(parsed));
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
-ren();
-toast('Données synchronisées depuis le cloud','info');
+/* Recharger aussi les notes si le remote contient des données notes */
+var newND=ldNotes();
+if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}
+/* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur
+   pour ne pas perdre le focus et interrompre la saisie. On diffère le render. */
+if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
+  /* Mise à jour silencieuse : on ne re-render que la sidebar/nav,
+     pas l'éditeur. Le render complet sera fait quand l'utilisateur
+     quittera l'éditeur. */
+  updateNavActive();
+  /* Ne pas afficher de toast de sync pendant l'édition */
+  NS._pendingSyncRender=true;
+}else{
+  ren();
+  toast('Données synchronisées depuis le cloud','info');
+}
 }
 
 var _fbPushQueued=false;
@@ -571,7 +585,7 @@ svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
 function fbOnSignedIn(user){
-alert('DEBUG: fbOnSignedIn() appelé pour uid='+user.uid);
+/* DEBUG supprimé */
 var wasExplicit=FB.signingIn;FB.signingIn=false;
 FB.uid=user.uid;FB.userEmail=user.email||user.displayName||user.uid;
 localStorage.setItem('cdc_fb_uid',FB.uid);
@@ -585,7 +599,7 @@ fbShowStatus();
 }
 
 function fbGoogleSignIn(){
-alert('DEBUG: fbGoogleSignIn() appelé, FB.auth existe = '+!!FB.auth);
+/* DEBUG supprimé */
 if(!FB.auth){toast('Configure Firebase d\'abord','err');return;}
 var provider=new firebase.auth.GoogleAuthProvider();
 provider.addScope('email');
@@ -600,13 +614,13 @@ provider.addScope('email');
    onAuthStateChanged (indépendant de cette promesse) sert de filet de
    sécurité si jamais la promesse ci-dessous ne se résout pas malgré tout. */
 FB.signingIn=true;
-alert('DEBUG: sur le point d\'appeler signInWithPopup...');
+/* DEBUG supprimé */
 FB.auth.signInWithPopup(provider).then(function(result){
-alert('DEBUG: signInWithPopup .then() — user='+(result&&result.user?result.user.uid:'AUCUN'));
+/* DEBUG supprimé */
 if(result&&result.user)fbOnSignedIn(result.user);
 }).catch(function(e){
 FB.signingIn=false;
-alert('DEBUG: signInWithPopup .catch() — code='+e.code+' message='+e.message);
+/* DEBUG supprimé */
 if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
 console.error('[Firebase] signInWithPopup erreur:',e.code,e.message);
 toast('Erreur connexion Google: '+e.code+' — '+e.message,'err');
@@ -3992,7 +4006,9 @@ function navNotes() {
   NS.view = 'list';
   NS.isEditorOpen = false;
   NS.selectedNoteId = null;
-  rNotes();
+  /* Si un render complet était en attente (sync Firebase pendant l'édition), l'exécuter maintenant */
+  if(NS._pendingSyncRender){NS._pendingSyncRender=false;ren();}
+  else rNotes();
 }
 
 /* ── Notes List View ───────────────────────────────────────── */
@@ -4392,7 +4408,7 @@ function nUpdateContent(id, value) {
 
 function nAutoSave() {
   clearTimeout(NS._saveTimer);
-  NS._saveTimer = setTimeout(()=>{ svNotesData(); if(typeof toast==='function') toast('Note sauvegardée','fa-check'); }, 800);
+  NS._saveTimer = setTimeout(()=>{ svNotesData(); /* Auto-save silencieux : pas de toast pour ne pas interrompre la saisie */ }, 800);
 }
 
 /* ── Markdown insertion ────────────────────────────────────── */
@@ -4807,6 +4823,8 @@ if (_origNav) {
   const _nav = nav;
   nav = function(v, folder) {
     if (v==='notes') { navNotes(); return; }
+    /* Si on quitte l'éditeur de notes pour une autre vue, traiter le render en attente */
+    if(typeof NS!=='undefined'&&NS._pendingSyncRender){NS._pendingSyncRender=false;}
     _nav(v, folder);
   };
 }
