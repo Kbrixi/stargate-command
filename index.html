@@ -364,7 +364,7 @@ let GMAIL={
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -395,14 +395,41 @@ setTimeout(function(){fbHandleRedirectResult();},500);
 }catch(e){toast('Firebase init erreur: '+e.message,'err');}
 }
 
+/* Flag pour empêcher onSnapshot d'écraser les données locales pendant un import */
+var _fbImporting=false;
+
+function fbParseRemote(snap){
+/* Lit les 3 formats possibles du document distant :
+   1. Chunked : {json:"", json_chunks:N, json_0:"...", json_1:"..."}
+   2. Simple  : {json:"stringified_json"}
+   3. Ancien  : {data:{cdc_data:"...", ...}}
+   Retourne l'objet {cdc_data:"...", ...} ou null. */
+if(!snap.exists)return null;
+var d=snap.data();
+/* Format chunked */
+if(d.json_chunks&&d.json_chunks>0){
+var parts=[];for(var i=0;i<d.json_chunks;i++){if(d['json_'+i])parts.push(d['json_'+i]);}
+try{return JSON.parse(parts.join(''));}catch(e){console.error('[Firebase] Chunked parse error:',e);return null;}
+}
+/* Format simple */
+if(d.json&&typeof d.json==='string'&&d.json.length>2){
+try{return JSON.parse(d.json);}catch(e){console.error('[Firebase] JSON parse error:',e);return null;}
+}
+/* Ancien format */
+if(d.data)return d.data;
+return null;
+}
+
 function fbStartSync(){
 if(!fbIsReady())return;
 var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
 var _firstSnap=true;
 FB.listener=docRef.onSnapshot(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
+/* Si on est en train d'importer, ne PAS écraser les données locales */
+if(_fbImporting){_firstSnap=false;FB.connected=true;fbShowStatus();return;}
+var remote=fbParseRemote(snap);
+if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
 }else if(_firstSnap){
@@ -415,6 +442,8 @@ FB.connected=true;fbShowStatus();
 }
 
 function fbApplyRemote(remote){
+/* Si on est en train d'importer, ne PAS écraser les données locales */
+if(_fbImporting)return;
 FB_KEYS.forEach(function(k){
 if(remote[k]!==undefined&&remote[k]!==null){
 try{
@@ -425,6 +454,8 @@ localStorage.setItem(k,JSON.stringify(parsed));
 });
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
+/* Recharger aussi les notes si le module existe */
+if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}}
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
 /* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur
    pour ne pas perdre le focus et interrompre la saisie. On diffère le render. */
@@ -449,16 +480,30 @@ FB.pushing=true;
 var payload={};
 FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
 payload._ts=Date.now();
-return FB.db.collection('crm_data').doc(FB.uid).set({data:payload},{merge:true}).then(function(){
+var payloadStr=JSON.stringify(payload);
+/* Firestore limite un document à ~1 MiB. On utilise le format {json: string}
+   au lieu de {data: objet_imbriqué} pour éviter l'erreur "invalid nested entity".
+   Si le payload dépasse 900k chars, on le découpe en chunks. */
+var docData;
+if(payloadStr.length>900000){
+var chunkSize=900000;var chunks=[];
+for(var i=0;i<payloadStr.length;i+=chunkSize){chunks.push(payloadStr.substring(i,i+chunkSize));}
+docData={json:'',json_chunks:chunks.length};
+for(var j=0;j<chunks.length;j++){docData['json_'+j]=chunks[j];}
+}else{
+docData={json:payloadStr};
+}
+return FB.db.collection('crm_data').doc(FB.uid).set(docData).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
-console.log('[Firebase] Push OK, ts='+payload._ts);
+console.log('[Firebase] Push OK, ts='+payload._ts+' ('+payloadStr.length+' chars, '+(docData.json_chunks?'chunked':'simple')+')');
 return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
 var msg=(e.code||'')+': '+(e.message||e);
 console.error('[Firebase] Push ERREUR:',msg);
-toast('Sync erreur: '+msg,'err');
+/* Throttle les toasts d'erreur : max 1 par 30s */
+var now=Date.now();if(!FB._lastErrToast||now-FB._lastErrToast>30000){toast('Sync erreur: '+msg,'err');FB._lastErrToast=now;}
 return false;
 }).finally(function(){FB.pushing=false;});
 }
@@ -469,8 +514,8 @@ return false;
    conflit potentiel, sinon null. */
 function fbCheckRemoteConflict(){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(snap.exists&&snap.data().data){
-var remote=snap.data().data;
+var remote=fbParseRemote(snap);
+if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
 }
@@ -532,16 +577,21 @@ var lignes=['--- DIAGNOSTIC CLOUD ---',''];
 lignes.push('UID : '+FB.uid);
 lignes.push('Email : '+(FB.userEmail||'—'));
 lignes.push('Document distant existe : '+(snap.exists?'OUI':'NON'));
-var remote=(snap.exists&&snap.data().data)?snap.data().data:null;
+var remote=fbParseRemote(snap);
 var rts=remote?(remote._ts||0):0;
 if(remote){
 lignes.push('Horodatage distant : '+(rts?new Date(rts).toLocaleString('fr-FR'):'aucun')+' (brut '+rts+')');
 lignes.push('Nombre de clés stockées côté cloud : '+Object.keys(remote).filter(function(k){return k!=='_ts';}).length);
+/* Indiquer le format de stockage distant */
+var d=snap.data();
+if(d.json_chunks&&d.json_chunks>0)lignes.push('Format : chunked ('+d.json_chunks+' chunks)');
+else if(d.json&&typeof d.json==='string'&&d.json.length>2)lignes.push('Format : json simple');
+else if(d.data)lignes.push('Format : ancien (data imbriquée)');
 }
 lignes.push('');
 lignes.push('Horodatage local connu : '+(localTs?new Date(localTs).toLocaleString('fr-FR'):'aucun')+' (brut '+localTs+')');
 lignes.push('');
-lignes.push(remote&&rts===localTs?'✅ SYNCHRONISÉ avec le cloud':'⚠️ DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
+lignes.push(remote&&rts===localTs?'SYNCHRONISÉ avec le cloud':'DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
 alert(lignes.join('\n'));
 }).catch(function(e){
 alert('ERREUR lors de la vérification cloud :\n\n'+(e.code||'')+'\n'+(e.message||e));
@@ -3603,6 +3653,7 @@ openFoldersM();
 /* ===== IMPORT / EXPORT ===== */
 function expJSON(){
 const payload={folders:FOLDERS,data:D,completedLog:CL,settings:SET,exportedAt:new Date().toISOString()};
+if(typeof ND!=='undefined'){payload.notesData={notes:ND.notes,categories:ND.categories,tags:ND.tags};}
 const json=JSON.stringify(payload,null,2);
 const a=document.createElement('a');
 a.href='data:application/json,'+encodeURIComponent(json);
@@ -3626,26 +3677,35 @@ const imp=JSON.parse(e.target.result);
 if(!imp||typeof imp!=='object'){toast('Format invalide','err');return;}
 if(imp.folders&&imp.data){
 FOLDERS=imp.folders;D=imp.data;CL=imp.completedLog||[];if(imp.settings)SET=imp.settings;
+if(imp.notesData&&typeof ND!=='undefined'){ND.notes=imp.notesData.notes||ND.notes;ND.categories=imp.notesData.categories||ND.categories;ND.tags=imp.notesData.tags||ND.tags;}
 }else{
 toast('Fichier incomplet','err');return;
 }
-svFolders();svData();svLog();svSettings();
+/* Bloquer onSnapshot pour empêcher l'écrasement des données importées
+   par les anciennes données du cloud pendant que le push est en cours */
+_fbImporting=true;
+svFolders();svData();svLog();svSettings();if(typeof svNotesData==='function')svNotesData();
 toast('Données importées !');
 clsM();
-var _doReload=function(){setTimeout(()=>location.reload(),800);};
+var _doReload=function(){_fbImporting=false;setTimeout(()=>location.reload(),800);};
 if(typeof fbPush==='function'&&fbIsReady()){
 toast('Synchronisation cloud en cours...','info');
-/* Filet de sécurité : si le push cloud traîne (réseau lent/coupé), on ne bloque pas le rechargement indéfiniment */
-var _safety=setTimeout(_doReload,8000);
-fbPush().then(function(ok){
+/* Force push : on veut écraser le cloud avec les données importées,
+   pas demander confirmation de conflit */
+var _safety=setTimeout(_doReload,12000);
+fbPush(true).then(function(ok){
 clearTimeout(_safety);
 if(ok)toast('Import synchronisé sur le cloud','info');
 _doReload();
+}).catch(function(){
+clearTimeout(_safety);
+_doReload();
 });
 }else{
+_fbImporting=false;
 _doReload();
 }
-}catch(err){toast('Erreur : '+err.message,'err');}
+}catch(err){_fbImporting=false;toast('Erreur : '+err.message,'err');}
 };
 reader.readAsText(file);
 }
@@ -3913,6 +3973,7 @@ function svNotesData() {
     notes: ND.notes, categories: ND.categories, tags: ND.tags
   }));
   if (typeof svLog === 'function') svLog('notes_saved');
+  if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();
 }
 
 /* ── Defaults ──────────────────────────────────────────────── */
