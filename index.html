@@ -398,26 +398,41 @@ setTimeout(function(){fbHandleRedirectResult();},500);
 /* Flag pour empêcher onSnapshot d'écraser les données locales pendant un import */
 var _fbImporting=false;
 
-function fbParseRemote(snap){
-/* Lit les 3 formats possibles du document distant :
-   1. Chunked : {json:"", json_chunks:N, json_0:"...", json_1:"..."}
-   2. Simple  : {json:"stringified_json"}
-   3. Ancien  : {data:{cdc_data:"...", ...}}
-   Retourne l'objet {cdc_data:"...", ...} ou null. */
-if(!snap.exists)return null;
+/* Firestore limite un document à 1 MiB (1 048 576 octets). Quand les données
+   dépassent cette limite, on les répartit sur plusieurs documents Firestore :
+   - Document principal  crm_data/{uid}       : {_ts, _parts, json: chunk0}
+   - Documents annexes   crm_data/{uid}_p{i}  : {json: chunk_i}
+   La lecture recombine tous les chunks.                                       */
+
+var FB_CHUNK=800000; /* chars par chunk — laisse de la marge sous 1 MiB */
+
+function fbReadRemote(snap){
+/* Lit un snapshot du document principal et retourne (Promise) l'objet payload
+   ou null. Gère les 3 formats : multi-doc, simple, ancien.                  */
+if(!snap.exists)return Promise.resolve(null);
 var d=snap.data();
-/* Format chunked */
-if(d.json_chunks&&d.json_chunks>0){
-var parts=[];for(var i=0;i<d.json_chunks;i++){if(d['json_'+i])parts.push(d['json_'+i]);}
-try{return JSON.parse(parts.join(''));}catch(e){console.error('[Firebase] Chunked parse error:',e);return null;}
+/* Format multi-doc : le doc principal a _parts > 1 */
+if(d._parts&&d._parts>1){
+var base=d.json||'';
+var promises=[];
+for(var i=1;i<d._parts;i++){
+promises.push(FB.db.collection('crm_data').doc(FB.uid+'_p'+i).get());
 }
-/* Format simple */
+return Promise.all(promises).then(function(snaps){
+var parts=[base];
+for(var j=0;j<snaps.length;j++){
+if(snaps[j].exists&&snaps[j].data().json)parts.push(snaps[j].data().json);
+}
+try{return JSON.parse(parts.join(''));}catch(e){console.error('[Firebase] Multi-doc parse error:',e);return null;}
+});
+}
+/* Format simple : un seul doc avec json */
 if(d.json&&typeof d.json==='string'&&d.json.length>2){
-try{return JSON.parse(d.json);}catch(e){console.error('[Firebase] JSON parse error:',e);return null;}
+try{return Promise.resolve(JSON.parse(d.json));}catch(e){console.error('[Firebase] JSON parse error:',e);return Promise.resolve(null);}
 }
-/* Ancien format */
-if(d.data)return d.data;
-return null;
+/* Ancien format : {data:{...}} */
+if(d.data)return Promise.resolve(d.data);
+return Promise.resolve(null);
 }
 
 function fbStartSync(){
@@ -428,16 +443,17 @@ var _firstSnap=true;
 FB.listener=docRef.onSnapshot(function(snap){
 /* Si on est en train d'importer, ne PAS écraser les données locales */
 if(_fbImporting){_firstSnap=false;FB.connected=true;fbShowStatus();return;}
-var remote=fbParseRemote(snap);
+fbReadRemote(snap).then(function(remote){
 if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
+if(ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
 }else if(_firstSnap){
 fbPush(true);
 if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
 }
 _firstSnap=false;
 FB.connected=true;fbShowStatus();
+});
 },function(err){FB.connected=false;fbShowStatus();});
 }
 
@@ -457,8 +473,7 @@ FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=l
 /* Recharger aussi les notes si le module existe */
 if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}}
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
-/* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur
-   pour ne pas perdre le focus et interrompre la saisie. On diffère le render. */
+/* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur */
 if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
   updateNavActive();
   NS._pendingSyncRender=true;
@@ -481,28 +496,57 @@ var payload={};
 FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
 payload._ts=Date.now();
 var payloadStr=JSON.stringify(payload);
-/* Firestore limite un document à ~1 MiB. On utilise le format {json: string}
-   au lieu de {data: objet_imbriqué} pour éviter l'erreur "invalid nested entity".
-   Si le payload dépasse 900k chars, on le découpe en chunks. */
-var docData;
-if(payloadStr.length>900000){
-var chunkSize=900000;var chunks=[];
-for(var i=0;i<payloadStr.length;i+=chunkSize){chunks.push(payloadStr.substring(i,i+chunkSize));}
-docData={json:'',json_chunks:chunks.length};
-for(var j=0;j<chunks.length;j++){docData['json_'+j]=chunks[j];}
-}else{
-docData={json:payloadStr};
-}
-return FB.db.collection('crm_data').doc(FB.uid).set(docData).then(function(){
+
+/* Si le payload tient dans un seul document, on l'écrit directement */
+if(payloadStr.length<=FB_CHUNK){
+return FB.db.collection('crm_data').doc(FB.uid).set({json:payloadStr}).then(function(){
 localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
-console.log('[Firebase] Push OK, ts='+payload._ts+' ('+payloadStr.length+' chars, '+(docData.json_chunks?'chunked':'simple')+')');
+console.log('[Firebase] Push OK (single), ts='+payload._ts+' ('+payloadStr.length+' chars)');
 return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
 var msg=(e.code||'')+': '+(e.message||e);
 console.error('[Firebase] Push ERREUR:',msg);
-/* Throttle les toasts d'erreur : max 1 par 30s */
+var now=Date.now();if(!FB._lastErrToast||now-FB._lastErrToast>30000){toast('Sync erreur: '+msg,'err');FB._lastErrToast=now;}
+return false;
+}).finally(function(){FB.pushing=false;});
+}
+
+/* Sinon, on découpe en plusieurs documents Firestore.
+   Chaque chunk fait au max FB_CHUNK chars.
+   Les documents annexes sont écrits EN PREMIER, puis le doc principal
+   (pour que le listener onSnapshot ne lise les chunks que quand ils sont tous prêts). */
+var chunks=[];
+for(var i=0;i<payloadStr.length;i+=FB_CHUNK){chunks.push(payloadStr.substring(i,i+FB_CHUNK));}
+var numParts=chunks.length;
+
+/* Écrire les documents annexes d'abord (p1, p2, …) */
+var partPromises=[];
+for(var p=1;p<numParts;p++){
+partPromises.push(FB.db.collection('crm_data').doc(FB.uid+'_p'+p).set({json:chunks[p]}));
+}
+
+return Promise.all(partPromises).then(function(){
+/* Puis écrire le document principal (chunk 0 + métadonnées) */
+return FB.db.collection('crm_data').doc(FB.uid).set({json:chunks[0],_ts:payload._ts,_parts:numParts});
+}).then(function(){
+/* Supprimer les anciens documents annexes qui ne sont plus nécessaires */
+return FB.db.collection('crm_data').doc(FB.uid).get().then(function(){
+/* Nettoyer les anciens _pN si on en avait plus avant */
+for(var c=numParts;c<numParts+10;c++){
+FB.db.collection('crm_data').doc(FB.uid+'_p'+c).delete().catch(function(){});
+}
+});
+}).then(function(){
+localStorage.setItem('cdc_fb_ts',String(payload._ts));
+FB.connected=true;fbShowStatus();
+console.log('[Firebase] Push OK (multi-doc '+numParts+' parts), ts='+payload._ts+' ('+payloadStr.length+' chars)');
+return true;
+}).catch(function(e){
+FB.connected=false;fbShowStatus();
+var msg=(e.code||'')+': '+(e.message||e);
+console.error('[Firebase] Push ERREUR:',msg);
 var now=Date.now();if(!FB._lastErrToast||now-FB._lastErrToast>30000){toast('Sync erreur: '+msg,'err');FB._lastErrToast=now;}
 return false;
 }).finally(function(){FB.pushing=false;});
@@ -514,7 +558,8 @@ return false;
    conflit potentiel, sinon null. */
 function fbCheckRemoteConflict(){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-var remote=fbParseRemote(snap);
+return fbReadRemote(snap);
+}).then(function(remote){
 if(remote){
 var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
@@ -576,23 +621,24 @@ FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(sn
 var lignes=['--- DIAGNOSTIC CLOUD ---',''];
 lignes.push('UID : '+FB.uid);
 lignes.push('Email : '+(FB.userEmail||'—'));
-lignes.push('Document distant existe : '+(snap.exists?'OUI':'NON'));
-var remote=fbParseRemote(snap);
+lignes.push('Document principal existe : '+(snap.exists?'OUI':'NON'));
+var d=snap.exists?snap.data():{};
+/* Indiquer le format de stockage */
+if(d._parts&&d._parts>1)lignes.push('Format : multi-doc ('+d._parts+' parties)');
+else if(d.json&&typeof d.json==='string'&&d.json.length>2)lignes.push('Format : json simple');
+else if(d.data)lignes.push('Format : ancien (data imbriquée)');
+return fbReadRemote(snap).then(function(remote){
 var rts=remote?(remote._ts||0):0;
 if(remote){
 lignes.push('Horodatage distant : '+(rts?new Date(rts).toLocaleString('fr-FR'):'aucun')+' (brut '+rts+')');
 lignes.push('Nombre de clés stockées côté cloud : '+Object.keys(remote).filter(function(k){return k!=='_ts';}).length);
-/* Indiquer le format de stockage distant */
-var d=snap.data();
-if(d.json_chunks&&d.json_chunks>0)lignes.push('Format : chunked ('+d.json_chunks+' chunks)');
-else if(d.json&&typeof d.json==='string'&&d.json.length>2)lignes.push('Format : json simple');
-else if(d.data)lignes.push('Format : ancien (data imbriquée)');
 }
 lignes.push('');
 lignes.push('Horodatage local connu : '+(localTs?new Date(localTs).toLocaleString('fr-FR'):'aucun')+' (brut '+localTs+')');
 lignes.push('');
 lignes.push(remote&&rts===localTs?'SYNCHRONISÉ avec le cloud':'DÉCALAGE : cet appareil n\'a pas la dernière version du cloud (ou inversement)');
 alert(lignes.join('\n'));
+});
 }).catch(function(e){
 alert('ERREUR lors de la vérification cloud :\n\n'+(e.code||'')+'\n'+(e.message||e));
 });
