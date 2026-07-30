@@ -364,7 +364,7 @@ let GMAIL={
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -401,35 +401,13 @@ var docRef=FB.db.collection('crm_data').doc(FB.uid);
 if(FB.listener)FB.listener();
 var _firstSnap=true;
 FB.listener=docRef.onSnapshot(function(snap){
-/* Support des trois formats :
-   - nouveau chunked (json='', json_chunks=N, json_0, json_1, ...)
-   - nouveau simple (json=string)
-   - ancien (data=objet imbriqué) */
-var remote=null;
-var ts=0;
-if(snap.exists){
-  var d=snap.data();
-  if(d.json!==undefined&&d.json!==''&&d.json!==null){
-    /* Nouveau format simple : une seule chaîne JSON */
-    try{var parsed=JSON.parse(d.json);remote=parsed;ts=parsed._ts||0;}catch(e){}
-  }else if(d.json_chunks&&d.json_chunks>0){
-    /* Nouveau format chunked : reconstituer la chaîne */
-    var parts=[];for(var ci=0;ci<d.json_chunks;ci++){if(d['json_'+ci])parts.push(d['json_'+ci]);}
-    try{var parsed=JSON.parse(parts.join(''));remote=parsed;ts=parsed._ts||0;}catch(e){}
-  }else if(d.data){
-    /* Ancien format : objet imbriqué (rétrocompatibilité) */
-    remote=d.data;ts=d.data._ts||0;
-  }
-  var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
-  if(remote&&ts&&(_firstSnap||ts!==localTs)){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
+if(snap.exists&&snap.data().data){
+var remote=snap.data().data;
+var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+if(_firstSnap||ts!==localTs){fbApplyRemote(remote);localStorage.setItem('cdc_fb_ts',String(ts));}
 }else if(_firstSnap){
-  /* Premier appareil à se connecter : aucun document distant n'existe encore.
-     Sans ça, l'appareil restait "connecté" sans jamais rien envoyer au cloud
-     tant qu'aucune modification manuelle n'était faite, ce qui donnait
-     l'impression trompeuse que la synchronisation ne marchait pas. On sème
-     immédiatement le cloud avec les données locales de cet appareil. */
-  fbPush(true);
-  if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
+fbPush(true);
+if(!(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId))toast('Cloud initialisé avec les données de cet appareil','info');
 }
 _firstSnap=false;
 FB.connected=true;fbShowStatus();
@@ -437,33 +415,21 @@ FB.connected=true;fbShowStatus();
 }
 
 function fbApplyRemote(remote){
-/* Protection : ne pas écraser les données locales si le remote est vide
-   ou ne contient pas les clés essentielles. Cela évite qu'une sync
-   avec un document cloud vide ou corrompu ne supprime les dossiers. */
-var hasEssentialKeys=FB_KEYS.some(function(k){return remote[k]!==undefined&&remote[k]!==null;});
-if(!hasEssentialKeys){console.warn('[Firebase] Remote data empty — skipping apply');return;}
 FB_KEYS.forEach(function(k){
 if(remote[k]!==undefined&&remote[k]!==null){
 try{
 var parsed=(typeof remote[k]==='string')?JSON.parse(remote[k]):remote[k];
 localStorage.setItem(k,JSON.stringify(parsed));
-}catch(e){console.warn('[Firebase] Failed to apply key:',k,e);}
+}catch(e){}
 }
 });
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
-/* Recharger aussi les notes si le remote contient des données notes */
-var newND=ldNotes();
-if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}
 /* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur
    pour ne pas perdre le focus et interrompre la saisie. On diffère le render. */
 if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
-  /* Mise à jour silencieuse : on ne re-render que la sidebar/nav,
-     pas l'éditeur. Le render complet sera fait quand l'utilisateur
-     quittera l'éditeur. */
   updateNavActive();
-  /* Ne pas afficher de toast de sync pendant l'édition */
   NS._pendingSyncRender=true;
 }else{
   ren();
@@ -480,37 +446,19 @@ setTimeout(function(){_fbPushQueued=false;fbPush();},1500);
 
 function fbDoPush(){
 FB.pushing=true;
-/* Rassembler toutes les données localStorage dans un objet, puis le sérialiser
-   en une seule chaîne JSON. Firestore n'accepte pas les entités imbriquées
-   profondes, donc on stocke tout comme un champ string unique.
-   Si le JSON dépasse 900k caractères (limite Firestore ~1MB), on le découpe. */
-var payloadObj={};
-FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payloadObj[k]=v;});
-payloadObj._ts=Date.now();
-var payloadStr=JSON.stringify(payloadObj);
-var MAX_CHUNK=900000;
-var docData={};
-if(payloadStr.length<=MAX_CHUNK){
-  docData.json=payloadStr;
-}else{
-  /* Découper en chunks si trop volumineux */
-  var chunks=[];
-  for(var i=0;i<payloadStr.length;i+=MAX_CHUNK){chunks.push(payloadStr.substring(i,i+MAX_CHUNK));}
-  for(var c=0;c<chunks.length;c++){docData['json_'+c]=chunks[c];}
-  docData.json_chunks=chunks.length;
-  docData.json=''; /* marqueur pour indiquer le format chunked */
-}
-return FB.db.collection('crm_data').doc(FB.uid).set(docData,{merge:true}).then(function(){
-localStorage.setItem('cdc_fb_ts',String(payloadObj._ts));
+var payload={};
+FB_KEYS.forEach(function(k){var v=localStorage.getItem(k);if(v)payload[k]=v;});
+payload._ts=Date.now();
+return FB.db.collection('crm_data').doc(FB.uid).set({data:payload},{merge:true}).then(function(){
+localStorage.setItem('cdc_fb_ts',String(payload._ts));
 FB.connected=true;fbShowStatus();
-console.log('[Firebase] Push OK, ts='+payloadObj._ts+(docData.json_chunks?' ('+docData.json_chunks+' chunks)':''));
+console.log('[Firebase] Push OK, ts='+payload._ts);
 return true;
 }).catch(function(e){
 FB.connected=false;fbShowStatus();
 var msg=(e.code||'')+': '+(e.message||e);
 console.error('[Firebase] Push ERREUR:',msg);
-/* Ne pas spammer les toasts d'erreur : afficher au max 1 fois toutes les 30s */
-if(!FB._lastErrToast||Date.now()-FB._lastErrToast>30000){toast('Sync erreur: '+msg,'err');FB._lastErrToast=Date.now();}
+toast('Sync erreur: '+msg,'err');
 return false;
 }).finally(function(){FB.pushing=false;});
 }
@@ -521,21 +469,11 @@ return false;
    conflit potentiel, sinon null. */
 function fbCheckRemoteConflict(){
 return FB.db.collection('crm_data').doc(FB.uid).get({source:'server'}).then(function(snap){
-if(!snap.exists)return null;
-var d=snap.data();
-var remote=null;
-var ts=0;
-if(d.json!==undefined&&d.json!==''&&d.json!==null){
-  try{var parsed=JSON.parse(d.json);remote=parsed;ts=parsed._ts||0;}catch(e){return null;}
-}else if(d.json_chunks&&d.json_chunks>0){
-  var parts=[];for(var ci=0;ci<d.json_chunks;ci++){if(d['json_'+ci])parts.push(d['json_'+ci]);}
-  try{var parsed=JSON.parse(parts.join(''));remote=parsed;ts=parsed._ts||0;}catch(e){return null;}
-}else if(d.data){
-  remote=d.data;ts=d.data._ts||0;
-}
-if(!remote)return null;
-var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
+if(snap.exists&&snap.data().data){
+var remote=snap.data().data;
+var ts=remote._ts||0;var localTs=parseInt(localStorage.getItem('cdc_fb_ts')||'0');
 if(ts&&ts!==localTs)return remote;
+}
 return null;
 }).catch(function(){return null;});
 }
@@ -594,18 +532,8 @@ var lignes=['--- DIAGNOSTIC CLOUD ---',''];
 lignes.push('UID : '+FB.uid);
 lignes.push('Email : '+(FB.userEmail||'—'));
 lignes.push('Document distant existe : '+(snap.exists?'OUI':'NON'));
-var remote=null;var rts=0;
-if(snap.exists){
-  var d=snap.data();
-  if(d.json!==undefined&&d.json!==''&&d.json!==null){
-    try{remote=JSON.parse(d.json);rts=remote._ts||0;}catch(e){}
-  }else if(d.json_chunks&&d.json_chunks>0){
-    var parts=[];for(var ci=0;ci<d.json_chunks;ci++){if(d['json_'+ci])parts.push(d['json_'+ci]);}
-    try{remote=JSON.parse(parts.join(''));rts=remote._ts||0;}catch(e){}
-  }else if(d.data){
-    remote=d.data;rts=d.data._ts||0;
-  }
-}
+var remote=(snap.exists&&snap.data().data)?snap.data().data:null;
+var rts=remote?(remote._ts||0):0;
 if(remote){
 lignes.push('Horodatage distant : '+(rts?new Date(rts).toLocaleString('fr-FR'):'aucun')+' (brut '+rts+')');
 lignes.push('Nombre de clés stockées côté cloud : '+Object.keys(remote).filter(function(k){return k!=='_ts';}).length);
@@ -3985,7 +3913,6 @@ function svNotesData() {
     notes: ND.notes, categories: ND.categories, tags: ND.tags
   }));
   if (typeof svLog === 'function') svLog('notes_saved');
-  if (typeof fbIsReady === 'function' && fbIsReady()) fbQueuePush();
 }
 
 /* ── Defaults ──────────────────────────────────────────────── */
