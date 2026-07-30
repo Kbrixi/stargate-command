@@ -1762,6 +1762,19 @@ ${files.map(fl=>{const icon=getFileIcon(getFileType(fl.name));return`<div class=
 </div>
 <button onclick="openRM('${folder}',${pid})" class="w-full h-10 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt hover:border-sHov transition-colors bp"><i class="fa-solid fa-plus text-xs mr-1"></i>Ajouter une ressource</button>
 </div>
+
+<div class="bg-surface border border-bdr rounded-xl p-5">
+<h3 class="font-disp font-semibold text-sm mb-4 flex items-center gap-2"><i class="fa-solid fa-note-sticky text-[#ff9966]"></i>Notes (${(typeof ND!=='undefined'?ND.notes.filter(n=>n.folderKey===folder&&n.projectId===pid&&!n.isTrashed):[]).length})</h3>
+<div class="flex flex-col gap-2 mb-3">
+${typeof ND!=='undefined'&&ND.notes.filter(n=>n.folderKey===folder&&n.projectId===pid&&!n.isTrashed).length===0?'<div class="text-mut text-sm text-center py-4">Aucune note liée</div>':''}
+${typeof ND!=='undefined'?ND.notes.filter(n=>n.folderKey===folder&&n.projectId===pid&&!n.isTrashed).map(n=>{const cat=ND.categories.find(c=>c.id===n.categoryId);return`<div class="flex items-start gap-3 p-3 rounded-lg bg-sAlt cursor-pointer hover:bg-sHov transition-colors" onclick="NS.selectedNoteId='${n.id}';S.v='notes';NS.isEditorOpen=true;rNoteEditor()">
+<div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:${(n.color||'#ff9c00')+'22'}"><i class="fa-solid fa-note-sticky" style="color:${n.color||'#ff9c00'};font-size:0.75rem"></i></div>
+<div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">${escH(n.title||'Sans titre')}</div><div class="text-xs text-mut truncate mt-0.5">${escH((n.excerpt||noteExcerpt(n.content)).slice(0,80))}</div></div>
+${cat?`<span class="text-[.6rem] px-2 py-0.5 rounded-full shrink-0" style="background:${cat.color}22;color:${cat.color}">${escH(cat.name)}</span>`:''}
+</div>`;}).join(''):''}
+</div>
+<button onclick="nCreateLinkedNote('${folder}',${pid},null)" class="w-full h-10 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt hover:border-sHov transition-colors bp"><i class="fa-solid fa-plus text-xs mr-1"></i>Ajouter une note</button>
+</div>
 </div>
 
 <aside class="w-full lg:w-80 shrink-0 bg-surface border border-bdr rounded-xl p-5 lg:sticky lg:top-6">
@@ -3855,10 +3868,15 @@ const NS = {
   search: '',
   selectedCatId: null,
   selectedTagId: null,
+  selectedFolderKey: null,
+  selectedProjectId: null,
   selectedNoteId: null,
   isEditorOpen: false,
   listMode: 'list',    // 'list' | 'grid'
   showPreview: false,
+  sortBy: 'updatedAt', // 'updatedAt' | 'createdAt' | 'title' | 'wordCount'
+  sortOrder: 'desc',   // 'asc' | 'desc'
+  isFullscreen: false,
   _saveTimer: null,
   _slashRange: null
 };
@@ -3991,6 +4009,21 @@ function rNotes() {
   if (NS.search) { const q=NS.search.toLowerCase(); filtered=filtered.filter(n=>n.title.toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q)); }
   if (NS.selectedCatId) filtered=filtered.filter(n=>n.categoryId===NS.selectedCatId);
   if (NS.selectedTagId) filtered=filtered.filter(n=>(n.tagIds||[]).includes(NS.selectedTagId));
+  if (NS.selectedFolderKey) filtered=filtered.filter(n=>n.folderKey===NS.selectedFolderKey);
+  if (NS.selectedProjectId) filtered=filtered.filter(n=>n.projectId===NS.selectedProjectId);
+
+  // Sort
+  const sortKey = NS.sortBy||'updatedAt';
+  const sortDir = NS.sortOrder||'desc';
+  filtered.sort((a,b) => {
+    let va, vb;
+    if (sortKey==='title') { va=(a.title||'').toLowerCase(); vb=(b.title||'').toLowerCase(); }
+    else if (sortKey==='wordCount') { va=a.wordCount||0; vb=b.wordCount||0; }
+    else if (sortKey==='createdAt') { va=a.createdAt||0; vb=b.createdAt||0; }
+    else { va=a.updatedAt||0; vb=b.updatedAt||0; }
+    if (typeof va==='string') return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return sortDir==='asc'?va-vb:vb-va;
+  });
 
   const pinned = filtered.filter(n=>n.isPinned);
   const regular = filtered.filter(n=>!n.isPinned);
@@ -4016,6 +4049,9 @@ function rNotes() {
   function noteCard(n, idx) {
     const cat = ND.categories.find(c=>c.id===n.categoryId);
     const tags = (n.tagIds||[]).map(tid=>ND.tags.find(t=>t.id===tid)).filter(Boolean);
+    const f = n.folderKey?fldr(n.folderKey):null;
+    const p = n.folderKey&&n.projectId?getProject(n.folderKey,n.projectId):null;
+    const t_ = n.folderKey&&n.taskId?(D[n.folderKey]?.tasks||[]).find(x=>x.id===n.taskId):null;
     const barColor = n.color || (cat?cat.color:'#ff9c00');
     const menuId = 'nmenu_'+n.id;
     return `<div class="cl" style="position:relative;background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s" onclick="NS.selectedNoteId='${n.id}';NS.view='editor';NS.isEditorOpen=true;rNoteEditor()">
@@ -4031,6 +4067,9 @@ function rNotes() {
             <div style="font-size:0.8rem;color:#c9a97e;line-height:1.4;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(n.excerpt||noteExcerpt(n.content))}</div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               ${cat?`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:0.65rem;letter-spacing:0.05em;text-transform:uppercase;background:${cat.color}22;color:${cat.color}"><i class="fa-solid ${cat.icon}" style="font-size:0.6rem"></i>${escH(cat.name)}</span>`:''}
+              ${f?`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:0.65rem;letter-spacing:0.05em;text-transform:uppercase;background:${f.color}22;color:${f.color}"><i class="fa-solid fa-folder" style="font-size:0.55rem"></i>${escH(f.name)}</span>`:''}
+              ${p?`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:0.65rem;letter-spacing:0.05em;text-transform:uppercase;background:rgba(153,153,255,0.12);color:#9999ff"><i class="fa-solid fa-diagram-project" style="font-size:0.55rem"></i>${escH(p.name)}</span>`:''}
+              ${t_?`<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:0.65rem;letter-spacing:0.05em;text-transform:uppercase;background:rgba(255,204,102,0.12);color:#ffcc66"><i class="fa-solid fa-list-check" style="font-size:0.55rem"></i>${escH(t_.name)}</span>`:''}
               ${tags.map(t=>`<span style="padding:2px 6px;border-radius:8px;font-size:0.62rem;letter-spacing:0.04em;text-transform:uppercase;background:${t.color}22;color:${t.color}">${escH(t.name)}</span>`).join('')}
               <span style="font-size:0.68rem;color:#666;margin-left:auto">${timeAgo(n.updatedAt||n.createdAt)}</span>
             </div>
@@ -4101,6 +4140,13 @@ function rNotes() {
       ${filterChips}
       <span style="width:1px;height:18px;background:#2b2b2b;margin:0 4px"></span>
       <button onclick="NS.listMode=NS.listMode==='list'?'grid':'list';rNotes()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;font-size:0.72rem;cursor:pointer;border:1px solid #2b2b2b;background:transparent;color:#c9a97e;transition:all .2s"><i class="fa-solid ${NS.listMode==='list'?'fa-grip':'fa-list'}" style="font-size:0.7rem"></i></button>
+      <select onchange="NS.sortBy=this.value;rNotes()" style="padding:4px 8px;background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;color:#c9a97e;font-size:0.7rem;outline:none;cursor:pointer;letter-spacing:0.04em;text-transform:uppercase">
+        <option value="updatedAt" ${NS.sortBy==='updatedAt'?'selected':''}>Modifié</option>
+        <option value="createdAt" ${NS.sortBy==='createdAt'?'selected':''}>Créé</option>
+        <option value="title" ${NS.sortBy==='title'?'selected':''}>Titre</option>
+        <option value="wordCount" ${NS.sortBy==='wordCount'?'selected':''}>Mots</option>
+      </select>
+      <button onclick="NS.sortOrder=NS.sortOrder==='desc'?'asc':'desc';rNotes()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:12px;font-size:0.72rem;cursor:pointer;border:1px solid #2b2b2b;background:transparent;color:#c9a97e;transition:all .2s" title="${NS.sortOrder==='desc'?'Décroissant':'Croissant'}"><i class="fa-solid ${NS.sortOrder==='desc'?'fa-arrow-down-wide-short':'fa-arrow-up-short-wide'}" style="font-size:0.7rem"></i></button>
       <button onclick="openCategoryM()" title="Gérer catégories" style="padding:4px 8px;border-radius:12px;font-size:0.7rem;cursor:pointer;border:1px solid #2b2b2b;background:transparent;color:#c9a97e;transition:all .2s" onmouseover="this.style.borderColor='#ff9c00'" onmouseout="this.style.borderColor='#2b2b2b'"><i class="fa-solid fa-folder-plus"></i></button>
       <button onclick="openTagM()" title="Gérer tags" style="padding:4px 8px;border-radius:12px;font-size:0.7rem;cursor:pointer;border:1px solid #2b2b2b;background:transparent;color:#c9a97e;transition:all .2s" onmouseover="this.style.borderColor='#ff9c00'" onmouseout="this.style.borderColor='#2b2b2b'"><i class="fa-solid fa-tag"></i></button>
     </div>
@@ -4109,7 +4155,12 @@ function rNotes() {
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">${catChips}</div>
 
     <!-- Tag chips -->
-    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:18px">${tagChips}</div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px">${tagChips}</div>
+
+    <!-- Folder/Project filter chips -->
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:18px">
+      ${FOLDERS.map(f=>{const active_=NS.selectedFolderKey===f.key;const cnt=ND.notes.filter(n=>n.folderKey===f.key&&!n.isTrashed).length;return cnt?`<button onclick="NS.selectedFolderKey=NS.selectedFolderKey==='${f.key}'?null:'${f.key}';NS.selectedProjectId=null;rNotes()" style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;font-size:0.68rem;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;border:1px solid ${active_?f.color:'#2b2b2b'};background:${active_?f.color+'22':'transparent'};color:${active_?f.color:'#c9a97e'};transition:all .2s"><i class="fa-solid fa-folder" style="font-size:0.6rem"></i>${escH(f.name)}<span style="font-size:0.6rem;opacity:0.7">${cnt}</span></button>`:''}).join('')}
+    </div>
 
     <!-- Bulk actions for trash -->
     ${NS.filter==='trash'&&ND.notes.some(x=>x.isTrashed)?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:rgba(255,102,102,0.08);border:1px solid rgba(255,102,102,0.2);border-radius:10px"><i class="fa-solid fa-triangle-exclamation" style="color:#ff6666;font-size:0.8rem"></i><span style="font-size:0.78rem;color:#ff6666">${ND.notes.filter(x=>x.isTrashed).length} note(s) dans la corbeille</span><button onclick="if(confirm('Supprimer définitivement toutes les notes de la corbeille ?')){ND.notes=ND.notes.filter(x=>!x.isTrashed);svNotesData();rNotes();if(typeof toast==='function')toast('Corbeille vidée','fa-trash');}" style="margin-left:auto;padding:4px 10px;border-radius:6px;font-size:0.72rem;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;border:1px solid #ff6666;background:transparent;color:#ff6666;transition:all .2s" onmouseover="this.style.background='#ff6666';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='#ff6666'">Vider la corbeille</button></div>`:''}
@@ -4183,14 +4234,14 @@ function rNoteEditor() {
   }
 
   PC.innerHTML = `
-  <div style="display:flex;height:calc(100vh - 60px);overflow:hidden">
+  <div style="display:flex;height:${NS.isFullscreen?'100vh':'calc(100vh - 60px)'};overflow:hidden;${NS.isFullscreen?'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:#000':''}">
     <!-- Sidebar -->
-    <div id="nSidebar" style="width:220px;min-width:220px;background:#0a0a0a;border-right:1px solid #2b2b2b;padding:12px;overflow-y:auto;transition:all .2s">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div id="nSidebar" style="width:${NS.isFullscreen?'0px':'220px'};min-width:${NS.isFullscreen?'0px':'220px'};background:#0a0a0a;border-right:1px solid #2b2b2b;padding:${NS.isFullscreen?'0':'12px'};overflow-y:auto;transition:all .2s${NS.isFullscreen?';overflow:hidden':''}">
+      ${NS.isFullscreen?'':`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <span style="font-family:Antonio,sans-serif;font-size:0.85rem;color:#ff9c00;letter-spacing:0.06em;text-transform:uppercase">Notes</span>
         <button onclick="nToggleSidebar()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.8rem" title="Réduire"><i class="fa-solid fa-chevron-left"></i></button>
       </div>
-      ${sidebarHtml}
+      ${sidebarHtml}`}
     </div>
     <!-- Editor -->
     <div style="flex:1;overflow-y:auto;padding:20px 30px">
@@ -4201,6 +4252,10 @@ function rNoteEditor() {
           <button onclick="nTogglePin('${n.id}');rNoteEditor()" style="background:none;border:none;color:${n.isPinned?'#ff9c00':'#666'};cursor:pointer;font-size:0.9rem" title="${n.isPinned?'Désépingler':'Épingler'}"><i class="fa-solid fa-thumbtack"></i></button>
           <button onclick="nToggleFav('${n.id}');rNoteEditor()" style="background:none;border:none;color:${n.isFavorite?'#ffcc66':'#666'};cursor:pointer;font-size:0.9rem" title="${n.isFavorite?'Retirer des favoris':'Favori'}"><i class="fa-solid fa-star"></i></button>
           <button onclick="NS.showPreview=!NS.showPreview;rNoteEditor()" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;border:1px solid ${NS.showPreview?'#ff9c00':'#2b2b2b'};background:${NS.showPreview?'rgba(255,156,0,0.1)':'transparent'};color:${NS.showPreview?'#ff9c00':'#c9a97e'};transition:all .2s"><i class="fa-solid fa-eye" style="font-size:0.7rem"></i>${NS.showPreview?'Aperçu':'Éditer'}</button>
+          <button onclick="nCopyContent('${n.id}')" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.9rem" title="Copier le contenu"><i class="fa-solid fa-copy"></i></button>
+          <button onclick="nPrintNote('${n.id}')" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.9rem" title="Imprimer"><i class="fa-solid fa-print"></i></button>
+          <button onclick="NS.isFullscreen=!NS.isFullscreen;rNoteEditor()" style="background:none;border:none;color:${NS.isFullscreen?'#ff9c00':'#666'};cursor:pointer;font-size:0.9rem" title="${NS.isFullscreen?'Quitter plein écran':'Plein écran'}"><i class="fa-solid ${NS.isFullscreen?'fa-compress':'fa-expand'}"></i></button>
+          <button onclick="nDeleteConfirm('${n.id}')" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.9rem" title="Supprimer la note"><i class="fa-solid fa-trash-can"></i></button>
         </div>
       </div>
 
@@ -4229,6 +4284,29 @@ function rNoteEditor() {
           <span style="font-size:0.7rem;color:#666;letter-spacing:0.04em;text-transform:uppercase">Tags</span>
           ${tagCheckboxes}
         </div>
+        <span style="width:1px;height:18px;background:#2b2b2b;margin:0 4px"></span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.7rem;color:#666;letter-spacing:0.04em;text-transform:uppercase">Dossier</span>
+          <select id="nFolder" onchange="nUpdateField('${n.id}','folderKey',this.value);nOnFolderChange('${n.id}');rNoteEditor()" style="padding:4px 8px;background:#141414;border:1px solid #2b2b2b;border-radius:6px;color:#f2ead8;font-size:0.8rem;outline:none;cursor:pointer">
+            <option value="">—</option>
+            ${FOLDERS.map(f=>`<option value="${f.key}" ${n.folderKey===f.key?'selected':''}>${escH(f.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.7rem;color:#666;letter-spacing:0.04em;text-transform:uppercase">Projet</span>
+          <select id="nProject" onchange="nUpdateField('${n.id}','projectId',this.value?parseInt(this.value):null);nOnProjectChange('${n.id}');rNoteEditor()" style="padding:4px 8px;background:#141414;border:1px solid #2b2b2b;border-radius:6px;color:#f2ead8;font-size:0.8rem;outline:none;cursor:pointer;max-width:160px">
+            <option value="">—</option>
+            ${n.folderKey?(D[n.folderKey]?.projects||[]).map(p=>`<option value="${p.id}" ${n.projectId===p.id?'selected':''}>${escH(p.name)}</option>`).join(''):''}
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:0.7rem;color:#666;letter-spacing:0.04em;text-transform:uppercase">Tâche</span>
+          <select id="nTask" onchange="nUpdateField('${n.id}','taskId',this.value?parseInt(this.value):null);rNoteEditor()" style="padding:4px 8px;background:#141414;border:1px solid #2b2b2b;border-radius:6px;color:#f2ead8;font-size:0.8rem;outline:none;cursor:pointer;max-width:160px">
+            <option value="">—</option>
+            ${n.folderKey?(D[n.folderKey]?.tasks||[]).filter(t=>!n.projectId||t.projectId===n.projectId).map(t=>`<option value="${t.id}" ${n.taskId===t.id?'selected':''}>${escH(t.name)}</option>`).join(''):''}
+          </select>
+        </div>
+        <span style="width:1px;height:18px;background:#2b2b2b;margin:0 4px"></span>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:0.7rem;color:#666;letter-spacing:0.04em;text-transform:uppercase">Couleur</span>
           ${colorPicker}
@@ -4247,6 +4325,20 @@ function rNoteEditor() {
     ta.addEventListener('keydown', nSlashHandler);
     ta.addEventListener('input', nSlashInput);
   }
+
+  // Keyboard shortcuts for the editor
+  document.addEventListener('keydown', nEditorKeyHandler);
+}
+
+/* ── Editor keyboard shortcuts ─────────────────────────────── */
+function nEditorKeyHandler(e) {
+  if (S.v !== 'notes' || !NS.isEditorOpen) return;
+  const isMod = e.ctrlKey || e.metaKey;
+  if (isMod && e.key === 'p') { e.preventDefault(); nPrintNote(NS.selectedNoteId); }
+  if (isMod && e.shiftKey && e.key === 'Delete') { e.preventDefault(); nDeleteConfirm(NS.selectedNoteId); }
+  if (isMod && e.shiftKey && e.key === 'C') { e.preventDefault(); nCopyContent(NS.selectedNoteId); }
+  if (isMod && e.key === 'Backslash') { e.preventDefault(); NS.isFullscreen=!NS.isFullscreen; rNoteEditor(); }
+  if (e.key === 'Escape' && NS.isFullscreen) { NS.isFullscreen=false; rNoteEditor(); }
 }
 
 /* ── Sidebar toggle ────────────────────────────────────────── */
@@ -4269,6 +4361,21 @@ function nUpdateField(id, field, value) {
   n.wordCount = noteWC(n.content);
   n.excerpt = noteExcerpt(n.content);
   nAutoSave();
+}
+
+/* ── Folder/project cascade ───────────────────────────────── */
+function nOnFolderChange(id) {
+  const n = ND.notes.find(x=>x.id===id);
+  if (!n) return;
+  n.projectId = null;
+  n.taskId = null;
+  svNotesData();
+}
+function nOnProjectChange(id) {
+  const n = ND.notes.find(x=>x.id===id);
+  if (!n) return;
+  n.taskId = null;
+  svNotesData();
 }
 
 function nUpdateContent(id, value) {
@@ -4414,6 +4521,7 @@ function nCreateNote() {
   const id = 'n'+Date.now();
   const note = {
     id, title:'', content:'', categoryId: null, tagIds:[],
+    folderKey: null, projectId: null, taskId: null,
     isPinned:false, isFavorite:false, color:'#ff9c00',
     isArchived:false, isTrashed:false,
     wordCount:0, excerpt:'',
@@ -4425,6 +4533,28 @@ function nCreateNote() {
   NS.view = 'editor';
   NS.isEditorOpen = true;
   NS.showPreview = false;
+  rNoteEditor();
+  setTimeout(()=>{ const ti=document.getElementById('nTitle'); if(ti) ti.focus(); },100);
+}
+
+/* ── Create note linked to project/task ────────────────────── */
+function nCreateLinkedNote(folderKey, projectId, taskId) {
+  const id = 'n'+Date.now();
+  const note = {
+    id, title:'', content:'', categoryId: null, tagIds:[],
+    folderKey: folderKey||null, projectId: projectId||null, taskId: taskId||null,
+    isPinned:false, isFavorite:false, color:'#ff9c00',
+    isArchived:false, isTrashed:false,
+    wordCount:0, excerpt:'',
+    createdAt:Date.now(), updatedAt:Date.now()
+  };
+  ND.notes.unshift(note);
+  svNotesData();
+  NS.selectedNoteId = id;
+  NS.view = 'editor';
+  NS.isEditorOpen = true;
+  NS.showPreview = false;
+  S.v = 'notes';
   rNoteEditor();
   setTimeout(()=>{ const ti=document.getElementById('nTitle'); if(ti) ti.focus(); },100);
 }
@@ -4453,6 +4583,59 @@ function nDelete(id) {
   ND.notes = ND.notes.filter(x=>x.id!==id);
   svNotesData();
   if(typeof toast==='function') toast('Note supprimée','fa-trash');
+}
+
+/* ── Delete with confirmation ──────────────────────────────── */
+function nDeleteConfirm(id) {
+  const n = ND.notes.find(x=>x.id===id);
+  if(!n) return;
+  const title = n.title||'Sans titre';
+  if(typeof opM==='function'){
+    opM(`<div style="padding:24px;text-align:center">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;color:#ff6666;margin-bottom:12px;display:block"></i>
+      <h3 style="font-family:Antonio,sans-serif;font-size:1.2rem;color:#f2ead8;margin:0 0 8px">Supprimer cette note ?</h3>
+      <p style="color:#c9a97e;font-size:0.88rem;margin:0 0 6px">« ${escH(title)} »</p>
+      <p style="color:#666;font-size:0.78rem;margin:0 0 20px">Cette action est irréversible.</p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button onclick="typeof clsM==='function'?clsM():null" style="padding:8px 20px;border-radius:8px;font-size:0.82rem;cursor:pointer;border:1px solid #2b2b2b;background:transparent;color:#c9a97e">Annuler</button>
+        <button onclick="nDelete('${id}');if(typeof clsM==='function')clsM();NS.isFullscreen=false;navNotes()" style="padding:8px 20px;border-radius:8px;font-size:0.82rem;cursor:pointer;border:none;background:#ff6666;color:#000;font-weight:600">Supprimer</button>
+      </div>
+    </div>`);
+  } else if(confirm('Supprimer définitivement « '+title+' » ?')) {
+    nDelete(id); NS.isFullscreen=false; navNotes();
+  }
+}
+
+/* ── Copy content to clipboard ─────────────────────────────── */
+function nCopyContent(id) {
+  const n = ND.notes.find(x=>x.id===id);
+  if(!n) return;
+  const text = (n.title?'# '+n.title+'\n\n':'')+(n.content||'');
+  navigator.clipboard.writeText(text).then(()=>{
+    if(typeof toast==='function') toast('Contenu copié dans le presse-papier','fa-copy');
+  }).catch(()=>{
+    // Fallback
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    if(typeof toast==='function') toast('Contenu copié','fa-copy');
+  });
+}
+
+/* ── Print note ────────────────────────────────────────────── */
+function nPrintNote(id) {
+  const n = ND.notes.find(x=>x.id===id);
+  if(!n) return;
+  const cat = ND.categories.find(c=>c.id===n.categoryId);
+  const tags = (n.tagIds||[]).map(tid=>ND.tags.find(t=>t.id===tid)).filter(Boolean);
+  const w = window.open('','_blank','width=800,height=600');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escH(n.title||'Note')}</title>
+    <style>body{font-family:'Segoe UI',Jost,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#222;line-height:1.7}h1{font-size:1.6rem;margin-bottom:4px;border-bottom:2px solid #ff9c00;padding-bottom:8px}h2{font-size:1.3rem;margin-top:24px}h3{font-size:1.1rem}pre{background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto}code{background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:0.9em}blockquote{border-left:3px solid #ff9c00;margin-left:0;padding-left:16px;color:#555}.meta{color:#888;font-size:0.85rem;margin-top:4px}.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.tag{padding:2px 8px;border-radius:12px;font-size:0.75rem;background:#f0f0f0;color:#555}ul,ol{padding-left:24px}li{margin-bottom:4px}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <h1>${escH(n.title||'Sans titre')}</h1>
+    <div class="meta">${cat?'<span style="color:'+cat.color+'">'+escH(cat.name)+'</span> · ':''}Créée ${new Date(n.createdAt).toLocaleDateString('fr-FR')} · Modifiée ${new Date(n.updatedAt).toLocaleDateString('fr-FR')} · ${n.wordCount||0} mots</div>
+    ${tags.length?'<div class="tags">'+tags.map(t=>'<span class="tag" style="border-left:3px solid '+t.color+'">'+escH(t.name)+'</span>').join('')+'</div>':''}
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+    <div>${mdRender(n.content||'')}</div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
 }
 function nToggleTag(id, tagId) {
   const n = ND.notes.find(x=>x.id===id);
