@@ -2969,6 +2969,20 @@ function emptyElog(){return[];}
 function ldElog(){try{const s=localStorage.getItem('cdc_email_log');if(s)return JSON.parse(s);}catch(e){}return emptyElog();}
 function svElog(){localStorage.setItem('cdc_email_log',JSON.stringify(MK_ELOG));}
 let MK_ELOG=ldElog();
+
+/* ===== SAVED RECIPIENT GROUPS ===== */
+function ldGroups(){try{const s=localStorage.getItem('cdc_email_groups');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svGroups(){localStorage.setItem('cdc_email_groups',JSON.stringify(MK_GROUPS));}
+let MK_GROUPS=ldGroups();
+function mkNewGroupId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
+function mkSaveGroup(name,tags){
+  if(!name||!tags.length){toast('Nom et tags requis','err');return;}
+  const existing=MK_GROUPS.find(g=>g.name.toLowerCase()===name.toLowerCase());
+  if(existing){existing.tags=[...new Set(tags)];svGroups();toast('Groupe mis à jour','ok');}
+  else{MK_GROUPS.push({id:mkNewGroupId(),name,tags:[...new Set(tags)],createdAt:new Date().toISOString()});svGroups();toast('Groupe enregistré','ok');}
+}
+function mkDeleteGroup(gid){MK_GROUPS=MK_GROUPS.filter(g=>g.id!==gid);svGroups();toast('Groupe supprimé','info');if(window._mkCampSend)mkCampaignComposeModal();}
+function mkLoadGroupTags(gid){const g=MK_GROUPS.find(g=>g.id===gid);if(g){window._mkCampSend._selTags=[...g.tags];mkCampaignComposeModal();}}
 /* Each record: {id, emailItemId, contactId, contactEmail, contactName, folder, subject, sentAt, gmailMessageId, status:'sent'|'opened'|'replied'|'bounced', openedAt, repliedAt, tags:[]} */
 function elogNewId(){return Date.now()+Math.random().toString(36).slice(2,6);}
 function elogByEmailItem(eid){return MK_ELOG.filter(r=>r.emailItemId===eid);}
@@ -3138,26 +3152,46 @@ const emailContacts=selectedContacts.filter(c=>c.email);
 const isExisting=send.idx!=null;
 const existingLog=isExisting?elogByEmailItem(MK.emails[send.idx].name||send.idx):[];
 const existingSent=existingLog.length;
-opM(`<div class="p-6 max-h-[85vh] overflow-y-auto">
-<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">${isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'Nouvel envoi d\'email'}</h2><span class="bdg ${send.signature?'bg-okS text-ok':'bg-warnS text-warn'} text-[.6rem]"><i class="fa-solid fa-${send.signature?'check':'xmark'} mr-1"></i>${send.signature?'Signature Gmail chargée':'Pas de signature'}</span></div>
+const tagCats=getSuggestedTags();
+/* Group tags by category */
+const usedTags=allTags;
+const groupedTags=[];
+const catOrder=['Dossiers','Projets','Entreprises','Fonctions','Prospection'];
+catOrder.forEach(cl=>{const cat=tagCats.find(c=>c.label.includes(cl));if(cat){const matching=cat.tags.filter(t=>t&&usedTags.includes(t));if(matching.length)groupedTags.push({label:cat.label,icon:cat.icon,tags:matching});}});
+/* Remaining categories */
+['M\u00e9tier','Secteurs','Canaux'].forEach(cl=>{const cat=tagCats.find(c=>c.label.includes(cl));if(cat){const matching=cat.tags.filter(t=>t&&usedTags.includes(t));if(matching.length)groupedTags.push({label:cat.label,icon:cat.icon,tags:matching});}});
+/* Orphan tags */
+const knownTags=new Set();groupedTags.forEach(g=>g.tags.forEach(t=>knownTags.add(t)));
+const orphanTags=usedTags.filter(t=>!knownTags.has(t));
+if(orphanTags.length)groupedTags.push({label:'Autres tags',icon:'fa-tag',tags:orphanTags});
+/* Manual emails */
+const manualEmails=send._manualEmails||[];
+const totalRecipients=emailContacts.length+manualEmails.length;
+opM(`<div class="p-6 max-h-[88vh] overflow-y-auto">
+<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">${isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'\U0001f4e7 R\u00e9diger & Envoyer'}</h2><span class="bdg ${send.signature?'bg-okS text-ok':'bg-warnS text-warn'} text-[.6rem]"><i class="fa-solid fa-${send.signature?'check':'xmark'} mr-1"></i>${send.signature?'Signature Gmail':'Pas de signature'}</span></div>
 ${!isExisting?`<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkeSubject" class="fi" placeholder="Objet de l\'email" value="${escHtml(send.item.subject)}" oninput="window._mkCampSend.item.subject=this.value"></div>
 <div class="mb-4"><label class="text-xs text-mut block mb-1.5">Corps du message</label><div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div><textarea id="mkeBody" class="fi" rows="5" placeholder="Bonjour {{prenom}},\n\nVotre message..." oninput="window._mkCampSend.item.body=this.value">${escHtml(send.item.body)}</textarea></div>`:''}
-<div class="mb-4"><label class="text-xs text-mut block mb-2"><i class="fa-solid fa-tags mr-1"></i>Sélectionne les tags pour filtrer tes contacts</label>
-${allTags.length?`<div class="flex flex-wrap gap-1.5 mb-3">${allTags.map(t=>`<button type="button" onclick="mkToggleCampTag('${escHtml(t).replace(/'/g,"\\\'")}')" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium transition-all bp ${selTags.includes(t)?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">${escHtml(t)}</button>`).join('')}</div>
-<div class="flex gap-2 mb-3"><button onclick="mkSelectAllTags()" class="text-[.65rem] text-acc hover:underline">Tout sélectionner</button><button onclick="window._mkCampSend._selTags=[];mkCampaignComposeModal()" class="text-[.65rem] text-mut hover:underline">Réinitialiser</button></div>`:'<div class="text-xs text-mut text-center py-4">Aucun tag trouvé sur tes contacts.</div>'}
+<!-- DESTINATAIRES -->
+<div class="mb-4">
+<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-mut"><i class="fa-solid fa-users mr-1"></i>Destinataires <span class="text-ok font-bold ml-1">${totalRecipients}</span></label>
+<div class="flex gap-2"><button onclick="mkSaveCurrentSelectionAsGroup()" class="text-[.6rem] text-acc hover:underline bp" ${!selTags.length?'style="opacity:.4;pointer-events:none"':''}><i class="fa-solid fa-bookmark mr-0.5"></i>Sauver en groupe</button></div></div>
+${MK_GROUPS.length?`<div class="mb-3"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-layer-group mr-1"></i>Groupes enregistr\u00e9s</div><div class="flex flex-wrap gap-1.5">${MK_GROUPS.map(g=>`<button type="button" onclick="mkLoadGroupTags('${g.id}')" class="px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp flex items-center gap-1.5 ${g.tags.every(t=>selTags.includes(t))&&g.tags.length===selTags.length?'bg-infS border border-inf/40 text-inf':'bg-sAlt border border-bdr text-mut hover:text-txt'}"><i class="fa-solid fa-layer-group text-[.5rem]"></i>${escHtml(g.name)}<span class="opacity-60">(${g.tags.length})</span></button>`).join('')}</div></div>`:''}
+${groupedTags.length?`<div class="mb-3">${groupedTags.map(cat=>`<div class="mb-2"><div class="text-[.6rem] text-mut mb-1 flex items-center gap-1"><i class="fa-solid ${cat.icon} text-[.5rem]"></i>${cat.label}</div><div class="flex flex-wrap gap-1.5">${cat.tags.map(t=>`<button type="button" onclick="mkToggleCampTag('${escHtml(t).replace(/'/g,"\\\\'")}')" class="px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp ${selTags.includes(t)?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">${escHtml(t)}</button>`).join('')}</div></div>`).join('')}</div>`:'<div class="text-xs text-mut text-center py-3 bg-sAlt/30 rounded-xl mb-3"><i class="fa-solid fa-tag mr-1"></i>Aucun tag trouv\u00e9. Ajoute des tags \u00e0 tes contacts.</div>'}
+<div class="mt-3 pt-3 border-t border-bdr/50"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-at mr-1"></i>Ajouter un email manuellement</div><div class="flex gap-2"><input type="email" id="mkeManualEmail" class="fi text-xs flex-1" placeholder="prenom.nom@exemple.com" onkeydown="if(event.key==='Enter'){event.preventDefault();mkAddManualEmail();}"><button onclick="mkAddManualEmail()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-plus"></i></button></div>
+${manualEmails.length?`<div class="flex flex-wrap gap-1.5 mt-2">${manualEmails.map((e,i)=>`<span class="inline-flex items-center gap-1 text-[.6rem] px-2 py-0.5 rounded-full bg-okS text-ok"><span>${escHtml(e)}</span><button type="button" onclick="mkRemoveManualEmail(${i})" class="hover:text-red-400"><i class="fa-solid fa-xmark text-[.45rem]"></i></button></span>`).join('')}</div>`:''}</div>
 </div>
-${emailContacts.length?`<div class="mb-4"><div class="flex items-center justify-between mb-2"><span class="text-xs text-mut"><span class="font-semibold text-txt">${emailContacts.length}</span> contact${emailContacts.length>1?'s':''} avec email</span><div class="flex items-center gap-3"><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="individual" ${!send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=false;mkCampaignComposeModal()"><span>Individuel (personnalisé)</span></label><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="bcc" ${send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=true;mkCampaignComposeModal()"><span>BCC (destinataires cachés)</span></label></div></div>
-<div class="bg-sAlt/50 border border-bdr rounded-xl max-h-36 overflow-y-auto">${emailContacts.map(c=>`<div class="flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0"><div class="w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0">${escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))}</div><div class="flex-1 min-w-0"><span class="text-[.65rem] font-medium truncate block">${escHtml(contactDisplayName(c))}</span><span class="text-[.55rem] text-mut">${escHtml(c.email)}</span></div></div>`).join('')}</div></div>`:'<div class="text-xs text-mut text-center py-3 mb-4">Sélectionne au moins un tag pour voir les contacts</div>'}
-${send._bccMode&&emailContacts.length?'<div class="bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.65rem] text-inf flex items-start gap-2"><i class="fa-solid fa-eye-slash mt-0.5 shrink-0"></i><span>Mode BCC : un seul email envoyé, tous les destinataires en copie cachée. La personnalisation ({{prenom}}, etc.) ne sera pas appliquée.</span></div>':''}
-<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aperçu${emailContacts.length?' (premier contact)':''}</label>
-<div class="bg-black/40 border border-bdr rounded-xl p-3 max-h-32 overflow-y-auto text-xs whitespace-pre-wrap">${escHtml(emailContacts.length?(send._bccMode?send.item.body:mkPersonalizeBody(send.item.body,emailContacts[0])):send.item.body||'(pas de contenu)')}${send.signature?'\n\n---\n'+escHtml(send.signature):''}</div>
-</div>
-<div class="flex items-center gap-3 mb-4"><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="checkbox" id="mkeTest" ${send._testMode?'checked':''} onchange="window._mkCampSend._testMode=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Envoyer un test à mon adresse d\'abord</span></label>
-${existingSent?`<span class="text-[.6rem] text-mut"><i class="fa-solid fa-paper-plane mr-1"></i>${existingSent} déjà envoyé${existingSent>1?'s':''} pour cet email</span>`:''}</div>
+${emailContacts.length?`<div class="mb-4"><div class="flex items-center justify-between mb-2"><span class="text-xs text-mut"><span class="font-semibold text-txt">${emailContacts.length}</span> contact${emailContacts.length>1?'s':''} ${manualEmails.length?'+ '+manualEmails.length+' manuel'+(manualEmails.length>1?'s':''):''}</span><div class="flex items-center gap-3"><label class="flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="individual" ${!send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=false;mkCampaignComposeModal()"><span>Individuel</span></label><label class="flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="bcc" ${send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=true;mkCampaignComposeModal()"><span>BCC (cach\u00e9)</span></label></div></div>
+<div class="bg-sAlt/50 border border-bdr rounded-xl max-h-32 overflow-y-auto">${emailContacts.map(c=>`<div class="flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0"><div class="w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0">${escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))}</div><div class="flex-1 min-w-0"><span class="text-[.6rem] font-medium truncate block">${escHtml(contactDisplayName(c))}</span><span class="text-[.55rem] text-mut">${escHtml(c.email)}</span></div></div>`).join('')}</div></div>`:''}
+${send._bccMode&&totalRecipients?'<div class="bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.6rem] text-inf flex items-start gap-2"><i class="fa-solid fa-eye-slash mt-0.5 shrink-0"></i><span>Mode BCC : un seul email, tous en copie cach\u00e9e. Pas de personnalisation.</span></div>':''}
+<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aper\u00e7u${emailContacts.length?' (1er contact)':''}</label>
+<div class="bg-black/40 border border-bdr rounded-xl p-3 max-h-28 overflow-y-auto text-xs whitespace-pre-wrap">${escHtml(emailContacts.length?(send._bccMode?send.item.body:mkPersonalizeBody(send.item.body,emailContacts[0])):send.item.body||'(pas de contenu)')}${send.signature?'\n\n---\n'+escHtml(send.signature):''}</div></div>
+<div class="flex items-center gap-3 mb-4"><label class="flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none"><input type="checkbox" id="mkeTest" ${send._testMode?'checked':''} onchange="window._mkCampSend._testMode=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Tester sur mon adresse</span></label>
+${existingSent?`<span class="text-[.6rem] text-mut"><i class="fa-solid fa-paper-plane mr-1"></i>${existingSent} d\u00e9j\u00e0 envoy\u00e9${existingSent>1?'s':''}</span>`:''}</div>
 <div class="flex justify-between items-center"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>
 <div class="flex gap-2">
-${emailContacts.length?`<span class="text-xs text-mut self-center">${emailContacts.length} destinataire${emailContacts.length>1?'s':''}</span>`:''}
-<button onclick="mkExecuteEnhancedSend()" class="h-10 px-5 rounded-xl ${emailContacts.length?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut'} text-sm font-semibold transition-colors bp" ${!emailContacts.length?'disabled':''}><i class="fa-solid fa-paper-plane mr-1.5"></i>${send._testMode?'Tester':'Envoyer'}${emailContacts.length>1&&!send._testMode?' ('+emailContacts.length+')':''}</button>
+${!isExisting?`<button onclick="mkSaveDraftFromCompose()" class="h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp"><i class="fa-solid fa-floppy-disk mr-1.5 text-[.7rem]"></i>Sauver</button>`:''}
+${totalRecipients?`<span class="text-xs text-mut self-center">${totalRecipients} destinataire${totalRecipients>1?'s':''}</span>`:''}
+<button onclick="mkExecuteEnhancedSend()" class="h-10 px-5 rounded-xl ${totalRecipients?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut'} text-sm font-semibold transition-colors bp" ${!totalRecipients?'disabled':''}><i class="fa-solid fa-paper-plane mr-1.5"></i>${send._testMode?'Tester':'Envoyer'}${totalRecipients>1&&!send._testMode?' ('+totalRecipients+')':''}</button>
 </div></div>
 </div>`);
 }
@@ -3171,10 +3205,54 @@ function mkSelectAllTags(){
 window._mkCampSend._selTags=mkGetAllTags();
 mkCampaignComposeModal();
 }
+
+function mkAddManualEmail(){
+const inp=document.getElementById('mkeManualEmail');
+if(!inp)return;
+const email=inp.value.trim();
+if(!email||!email.includes('@')){toast('Email invalide','err');return;}
+if(!window._mkCampSend._manualEmails)window._mkCampSend._manualEmails=[];
+if(window._mkCampSend._manualEmails.includes(email)){toast('Email déjà ajouté','info');return;}
+window._mkCampSend._manualEmails.push(email);
+inp.value='';
+mkCampaignComposeModal();
+}
+function mkRemoveManualEmail(idx){
+if(window._mkCampSend._manualEmails){window._mkCampSend._manualEmails.splice(idx,1);mkCampaignComposeModal();}
+}
+function mkSaveCurrentSelectionAsGroup(){
+const sel=window._mkCampSend._selTags||[];
+if(!sel.length){toast('Sélectionne au moins un tag','err');return;}
+const name=prompt('Nom du groupe :',sel.slice(0,3).join(', ')+(sel.length>3?' +'+(sel.length-3):''));
+if(!name)return;
+mkSaveGroup(name,sel);
+mkCampaignComposeModal();
+}
+function mkSaveDraftFromCompose(){
+const send=window._mkCampSend;
+const subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
+const body=send.item.body||document.getElementById('mkeBody')?.value||'';
+if(!subject&&!body){toast('Renseigne au moins un objet ou un corps','err');return;}
+MK.emails.push({
+  name:'[Brouillon] '+subject,
+  subject,
+  audience:(send._selTags||[]).join(', '),
+  body,
+  status:'draft',
+  createdAt:new Date().toISOString(),
+  updatedAt:new Date().toISOString(),
+  scheduledDate:'',openRate:'',clickRate:'',recipients:''
+});
+svMk();clsM();toast('Brouillon sauvegardé','ok');
+rMarketing();
+}
 async function mkExecuteEnhancedSend(){
 const send=window._mkCampSend;
 const selTags=send._selTags||[];
 const contacts=mkContactsByTag(selTags).filter(c=>c.email);
+const manualEmails=send._manualEmails||[];
+const manualContacts=manualEmails.map(e=>({id:'manual',email:e,firstName:'',lastName:'',company:'',title:'',_fkey:'manual',_folder:'Manual'}));
+const allContacts=[...contacts,...manualContacts];
 if(!contacts.length){toast('Aucun contact avec email','err');return;}
 const subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
 const bodyTemplate=send.item.body||document.getElementById('mkeBody')?.value||'';
@@ -3196,15 +3274,14 @@ toast('Email de test envoyé !','ok');
 }catch(e){toast('Échec de l\'envoi du test','err');}
 return;
 }
-let recipients=bccMode?contacts:contacts;
-let ok=0,fail=0;const total=recipients.length;
+let ok=0,fail=0;const total=allContacts.length;
 const emailItemId=send.idx!=null?(MK.emails[send.idx].name||send.idx):'quick_'+Date.now();
 opM(`<div class="p-6 text-center"><h2 class="font-disp font-bold text-lg mb-4">${bccMode?'Envoi BCC en cours...':'Envoi en cours...'}<div class="text-[.65rem] text-mut font-normal mt-1">${bccMode?'1 email, '+total+' destinataires en copie cachée':total+' email'+(total>1?'s individuels':' individuel')+'<br>Les destinataires ne voient pas les emails des autres'}</div></h2>
-<div class="mb-4"><div class="text-sm text-mut mb-2" id="mkSendProgress">0 / ${bccMode?1:total}</div>${mkProgress(0,'#5fbf8f')}</div>
+<div class="mb-4"><div class="text-sm text-mut mb-2" id="mkSendProgress">0 / ${total}</div>${mkProgress(0,'#5fbf8f')}</div>
 <div class="max-h-40 overflow-y-auto text-left bg-sAlt/50 border border-bdr rounded-xl p-3" id="mkSendLog"></div></div>`);
 if(bccMode){
 try{
-const bccList=recipients.map(c=>c.email).join(', ');
+const bccList=allContacts.map(c=>c.email).join(', ');
 const body=bodyTemplate+(signature?'\n\n---\n'+signature:'');
 const lines=['Bcc: '+bccList,'Subject: '+gmailEncodeSubject(subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',body];
 const raw=lines.join('\r\n');
@@ -3213,12 +3290,12 @@ const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/sen
 if(r.status===401){toast('Session Google expirée','err');return;}
 if(!r.ok)throw new Error('HTTP '+r.status);
 const data=await r.json();
-recipients.forEach(c=>{MK_ELOG.push({id:elogNewId(),emailItemId,contactId:c.id,contactEmail:c.email,contactName:contactDisplayName(c),folder:c._fkey,subject,sentAt:new Date().toISOString(),gmailMessageId:data.id||'',status:'sent',openedAt:null,repliedAt:null,tags:selTags});});
+allContacts.forEach(c=>{MK_ELOG.push({id:elogNewId(),emailItemId,contactId:c.id,contactEmail:c.email,contactName:contactDisplayName(c),folder:c._fkey,subject,sentAt:new Date().toISOString(),gmailMessageId:data.id||'',status:'sent',openedAt:null,repliedAt:null,tags:selTags});});
 ok=total;
 }catch(e){fail=total;}
 }else{
-for(let i=0;i<contacts.length;i++){
-const c=contacts[i];
+for(let i=0;i<allContacts.length;i++){
+const c=allContacts[i];
 const personalizedBody=mkPersonalizeBody(bodyTemplate,c)+(signature?'\n\n---\n'+signature:'');
 const lines=['To: '+c.email,'Subject: '+gmailEncodeSubject(subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',personalizedBody];
 const raw=lines.join('\r\n');
@@ -3508,6 +3585,33 @@ const items=(MK.social||[]).filter(s=>s.date);
 const months={};items.forEach(s=>{const m=s.date.substring(0,7);if(!months[m])months[m]=[];months[m].push(s);});
 return`<div class="flex justify-end mb-4 af d1 gap-2"><button onclick="S._mkCal_social=false;rMarketing()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium"><i class="fa-solid fa-list"></i>Liste</button><button onclick="openMkForm('social')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau post</button></div>
 ${Object.keys(months).sort().reverse().map(m=>{const d=new Date(m+'-01');const label=d.toLocaleDateString('fr-CH',{year:'numeric',month:'long'});return`<div class="mb-6"><h3 class="font-disp font-semibold text-sm mb-3 text-mut">${label}</h3><div class="flex flex-col gap-2">${months[m].sort((a,b)=>a.date.localeCompare(b.date)).map(s=>{const origIdx=MK.social.indexOf(s);return`<div class="bg-surface border border-bdr rounded-lg p-3 flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-infS text-inf flex items-center justify-center shrink-0"><i class="fa-brands fa-${s.platform==='linkedin'?'linkedin':s.platform==='twitter'?'twitter':'globe'} text-sm"></i></div><div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escHtml(s.name)}</div><div class="text-[.6rem] text-mut">${s.date}</div></div>${s.status?`<span class="bdg ${mkStatusColor(s.status)} text-[.5rem]">${mkStatusLabel(s.status)}</span>`:''}</div>`;}).join('')}</div></div>`;}).join('')||'<div class="text-mut text-sm text-center py-10">Aucun post avec date planifiée.</div>'}`;}
+/* ===== EMAILS SECTION (compose-centric) ===== */
+function rEmailsSection(){
+const items=MK.emails||[];
+const totalSent=MK_ELOG.length;
+const totalReplied=MK_ELOG.filter(r=>r.status==='replied').length;
+return`
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 af d0">
+<div class="flex gap-2">
+<button onclick="mkQuickCompose()" class="h-10 px-5 rounded-xl bg-ok hover:bg-ok/80 text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-paper-plane"></i>Rédiger & Envoyer</button>
+<button onclick="mkOpenEmailTracking()" class="h-10 px-4 rounded-xl bg-inf/20 border border-inf/30 text-inf text-xs font-semibold flex items-center gap-1.5 transition-colors bp hover:bg-inf/30"><i class="fa-solid fa-chart-line text-[.55rem]"></i>Suivi</button>
+</div>
+${totalSent?`<div class="flex gap-3 text-[.65rem] text-mut"><span><i class="fa-solid fa-paper-plane mr-1 text-ok"></i>${totalSent} envoyé${totalSent>1?'s':''}</span><span><i class="fa-solid fa-reply mr-1 text-acc"></i>${totalReplied} réponse${totalReplied>1?'s':''}</span></div>`:''}
+</div>
+${MK_GROUPS.length?`<div class="mb-5 af d1"><div class="text-[.65rem] text-mut mb-2 flex items-center gap-1.5"><i class="fa-solid fa-layer-group text-[.55rem]"></i>Groupes de destinataires</div><div class="flex flex-wrap gap-2">${MK_GROUPS.map(g=>{const count=mkContactsByTag(g.tags).filter(c=>c.email).length;return`<button onclick="mkQuickComposeWithGroup('${g.id}')" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-bdr hover:border-acc/30 hover:bg-accS/20 transition-all bp text-left"><div class="w-7 h-7 rounded-lg bg-infS text-inf flex items-center justify-center shrink-0"><i class="fa-solid fa-layer-group text-[.6rem]"></i></div><div><div class="text-xs font-medium">${escHtml(g.name)}</div><div class="text-[.55rem] text-mut">${g.tags.length} tag${g.tags.length>1?'s':''} · ${count} contact${count>1?'s':''}</div></div></button>`;}).join('')}</div></div>`:''}
+<div class="flex items-center justify-between mb-3 af d1"><span class="text-xs text-mut font-medium">${items.length} email${items.length>1?'s':''} enregistré${items.length>1?'s':''}</span><button onclick="openMkForm('emails')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt transition-all bp"><i class="fa-solid fa-plus mr-1 text-[.5rem]"></i>Brouillon</button></div>
+<div class="flex flex-col gap-3">${items.length?items.map((c,i)=>mkCard('emails',c,i)).join(''):'<div class="text-mut text-sm text-center py-10 bg-surface border border-bdr rounded-xl"><i class="fa-solid fa-envelope text-2xl mb-2 block opacity-30"></i>Aucun email enregistré. Cliquez sur <strong>Rédiger & Envoyer</strong> pour commencer.</div>'}</div>
+`;
+}
+function mkQuickComposeWithGroup(gid){
+if(!gcalHasValidToken()){toast('Connecte ton compte Google depuis l\u2019onglet Agenda','err');return;}
+const g=MK_GROUPS.find(x=>x.id===gid);
+if(!g)return;
+if(!MK_SIGNATURE)gmailFetchSignature();
+window._mkCampSend={idx:null,item:{name:'',subject:'',body:'',audience:''},signature:MK_SIGNATURE,_selTags:[...g.tags],_bccMode:false,_testMode:false,_manualEmails:[]};
+mkCampaignComposeModal();
+}
+
 /* ===== MARKETING : MAIN ROUTER ===== */
 function rMarketing(){
 if(typeof destroyCharts==='function'){Object.keys(chartInstances).forEach(k=>{if(k.startsWith('mk_')){try{chartInstances[k].destroy();}catch(e){}delete chartInstances[k];}});}
@@ -3516,7 +3620,7 @@ let body='';
 if(S.mkv==='overview')body=rMarketingOverview();
 else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucune campagne','Nouvelle campagne');
 else if(S.mkv==='content')body=mkTabsBar()+(S._mkCal_content?rContentCalendar():rMarketingSection('content','Aucun contenu','Nouveau contenu'));
-else if(S.mkv==='emails')body=mkTabsBar()+`<div class="flex items-center justify-end gap-2 mb-3 af d0"><button onclick="mkQuickCompose()" class="h-9 px-3 rounded-xl bg-ok/20 border border-ok/30 text-ok text-xs font-semibold flex items-center gap-1.5 transition-colors bp hover:bg-ok/30"><i class="fa-solid fa-bolt text-[.55rem]"></i>Envoi rapide</button><button onclick="mkOpenEmailTracking()" class="h-9 px-3 rounded-xl bg-inf/20 border border-inf/30 text-inf text-xs font-semibold flex items-center gap-1.5 transition-colors bp hover:bg-inf/30"><i class="fa-solid fa-chart-line text-[.55rem]"></i>Suivi emailing</button></div>`+rMarketingSection('emails','Aucun email','Nouvel email');
+else if(S.mkv==='emails')body=mkTabsBar()+rEmailsSection();
 else if(S.mkv==='social')body=mkTabsBar()+(S._mkCal_social?rSocialCalendar():rMarketingSection('social','Aucun post social','Nouveau post'));
 else if(S.mkv==='pages')body=mkTabsBar()+rMarketingSection('pages','Aucune page','Nouvelle page');
 else if(S.mkv==='ads')body=mkTabsBar()+rMarketingSection('ads','Aucune publicité','Nouvelle publicité');
