@@ -2926,6 +2926,132 @@ toast('Email envoyé');
 gmailFetchMessages(true);
 }catch(e){toast('Échec de l\u2019envoi','err');}
 }
+
+/* ===== MARKETING : GMAIL SIGNATURE + CONTACT TAGS ===== */
+let MK_SIGNATURE='';
+let MK_SIGNATURE_LOADING=false;
+async function gmailFetchSignature(){
+if(!gcalHasValidToken()||MK_SIGNATURE_LOADING)return;
+MK_SIGNATURE_LOADING=true;
+try{
+const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs',{headers:{Authorization:'Bearer '+GCAL.token}});
+if(!r.ok)throw new Error('HTTP '+r.status);
+const data=await r.json();
+const primary=(data.sendAs||[]).find(s=>s.isPrimary)||((data.sendAs||[])[0]);
+MK_SIGNATURE=primary?primary.signature||'':'';
+}catch(e){MK_SIGNATURE='';}
+MK_SIGNATURE_LOADING=false;
+return MK_SIGNATURE;
+}
+function mkGetAllTags(){
+const tagSet=new Set();
+FOLDERS.forEach(f=>{(D[f.key]?.contacts||[]).forEach(c=>{(c.tags||[]).forEach(t=>tagSet.add(t));});});
+return[...tagSet].sort((a,b)=>a.localeCompare(b,b.localeCompare,'fr'));
+}
+function mkContactsByTag(selectedTags){
+if(!selectedTags||!selectedTags.length)return[];
+const set=new Set(selectedTags);
+const results=[];
+FOLDERS.forEach(f=>{(D[f.key]?.contacts||[]).forEach(c=>{
+if(!c.email)return;
+const cTags=new Set(c.tags||[]);
+if([...set].some(t=>cTags.has(t)))results.push({...c,_folder:f.name,_fkey:f.key});
+});});
+return results;
+}
+function mkPersonalizeBody(body,contact){
+return(body||'').replace(/\{\{\s*prenom\s*\}\}/gi,contact.firstName||'').replace(/\{\{\s*nom\s*\}\}/gi,contact.lastName||'').replace(/\{\{\s*name\s*\}\}/gi,contactDisplayName(contact)).replace(/\{\{\s*entreprise\s*\}\}/gi,contact.company||'').replace(/\{\{\s*poste\s*\}\}/gi,contact.title||'').replace(/\{\{\s*email\s*\}\}/gi,contact.email||'');
+}
+async function mkCampaignSend(emailIdx){
+if(!gcalHasValidToken()){toast('Connecte ton compte Google depuis l\'onglet Agenda pour envoyer des emails','err');return;}
+const emailItem=MK.emails[emailIdx];if(!emailItem){toast('Email introuvable','err');return;}
+if(!emailItem.subject){toast('L\'email n\'a pas d\'objet','err');return;}
+if(!emailItem.body){toast('L\'email n\'a pas de contenu','err');return;}
+if(!MK_SIGNATURE)await gmailFetchSignature();
+window._mkCampSend={idx:emailIdx,item:emailItem,signature:MK_SIGNATURE};
+mkCampaignTagPicker();
+}
+function mkCampaignTagPicker(){
+const allTags=mkGetAllTags();
+const send=window._mkCampSend;
+let selTags=send._selTags||[];
+let selectedContacts=selTags.length?mkContactsByTag(selTags):[];
+opM(`<div class="p-6 max-h-[85vh] overflow-y-auto">
+<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">Envoyer : ${escHtml(send.item.name||send.item.subject)}</h2><span class="bdg bg-okS text-ok text-[.6rem]">${send.signature?'Signature Gmail chargée':'Pas de signature'}</span></div>
+<div class="mb-5"><label class="text-xs text-mut block mb-2"><i class="fa-solid fa-tags mr-1"></i>Sélectionne les tags pour filtrer tes contacts</label>
+${allTags.length?`<div class="flex flex-wrap gap-2 mb-3">${allTags.map(t=>`<button type="button" onclick="mkToggleCampTag('${escHtml(t)}')" class="px-3 py-1.5 rounded-full text-xs font-medium transition-all bp ${selTags.includes(t)?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">${escHtml(t)}</button>`).join('')}</div>
+<div class="flex gap-2 mb-3"><button onclick="mkSelectAllTags()" class="text-[.65rem] text-acc hover:underline">Tout sélectionner</button><button onclick="window._mkCampSend._selTags=[];mkCampaignTagPicker()" class="text-[.65rem] text-mut hover:underline">Réinitialiser</button></div>`:'<div class="text-xs text-mut text-center py-4">Aucun tag trouvé sur tes contacts. Ajoute des tags à tes fiches contacts d\'abord.</div>'}
+${selectedContacts.length?`<div class="text-xs text-mut mb-2"><span class="font-semibold text-txt">${selectedContacts.length}</span> contact${selectedContacts.length>1?'s':''} trouvé${selectedContacts.length>1?'s':''} avec au moins un des tags sélectionnés :</div>
+<div class="bg-sAlt/50 border border-bdr rounded-xl max-h-48 overflow-y-auto mb-4">${selectedContacts.map(c=>`<div class="flex items-center gap-2 px-3 py-2 border-b border-bdr/50 last:border-0"><div class="w-6 h-6 rounded bg-infS text-inf flex items-center justify-center text-[.55rem] font-bold shrink-0">${escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))}</div><div class="flex-1 min-w-0"><span class="text-xs font-medium truncate block">${escHtml(contactDisplayName(c))}</span><span class="text-[.6rem] text-mut">${escHtml(c.email)}</span></div><span class="text-[.55rem] text-mut">${escHtml(c._folder)}</span></div>`).join('')}</div>`:'<div class="text-xs text-mut text-center py-3 mb-4">Sélectionne au moins un tag pour voir les contacts correspondants</div>'}
+</div>
+<div class="mb-5"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aperçu du message (premier contact)</label>
+<div class="bg-black/40 border border-bdr rounded-xl p-4 max-h-40 overflow-y-auto text-xs whitespace-pre-wrap">${escHtml(selectedContacts.length?mkPersonalizeBody(send.item.body,selectedContacts[0]):send.item.body)}${send.signature?'\n\n---\n'+escHtml(send.signature):''}</div>
+</div>
+<div class="bg-warnS/50 border border-warn/20 rounded-lg p-3 mb-5 text-[.7rem] text-warn flex items-start gap-2"><i class="fa-solid fa-circle-info mt-0.5 shrink-0"></i><span>Les emails sont envoyés un par un via Gmail. Chaque destinataire reçoit un email individuel avec le message personnalisé et ta signature Gmail.</span></div>
+<div class="flex justify-between items-center"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>
+<div class="flex gap-2">
+${selectedContacts.length?`<span class="text-xs text-mut self-center">${selectedContacts.length} destinataire${selectedContacts.length>1?'s':''}</span>`:''}
+<button onclick="mkExecuteCampaignSend()" class="h-10 px-5 rounded-xl ${selectedContacts.length?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut'} text-sm font-semibold transition-colors bp" ${!selectedContacts.length?'disabled':''}><i class="fa-solid fa-paper-plane mr-1.5"></i>Envoyer${selectedContacts.length>1?' ('+selectedContacts.length+')':''}</button>
+</div></div>
+</div>`);
+}
+function mkToggleCampTag(tag){
+if(!window._mkCampSend._selTags)window._mkCampSend._selTags=[];
+const arr=window._mkCampSend._selTags;
+const idx=arr.indexOf(tag);
+if(idx>=0)arr.splice(idx,1);else arr.push(tag);
+mkCampaignTagPicker();
+}
+function mkSelectAllTags(){
+window._mkCampSend._selTags=mkGetAllTags();
+mkCampaignTagPicker();
+}
+async function mkExecuteCampaignSend(){
+const send=window._mkCampSend;
+const selTags=send._selTags||[];
+const contacts=mkContactsByTag(selTags).filter(c=>c.email);
+if(!contacts.length){toast('Aucun contact avec email','err');return;}
+const subject=send.item.subject;
+const bodyTemplate=send.item.body;
+const signature=send.signature;
+let ok=0,fail=0;
+const total=contacts.length;
+opM(`<div class="p-6 text-center"><h2 class="font-disp font-bold text-lg mb-4">Envoi en cours...</h2>
+<div class="mb-4"><div class="text-sm text-mut mb-2" id="mkSendProgress">0 / ${total}</div>${mkProgress(0,'#5fbf8f')}</div>
+<div class="max-h-40 overflow-y-auto text-left bg-sAlt/50 border border-bdr rounded-xl p-3" id="mkSendLog"></div></div>`);
+for(let i=0;i<contacts.length;i++){
+const c=contacts[i];
+const personalizedBody=mkPersonalizeBody(bodyTemplate,c)+(signature?'\n\n---\n'+signature:'');
+const lines=['To: '+c.email,'Subject: '+gmailEncodeSubject(subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',personalizedBody];
+const raw=lines.join('\r\n');
+const b64=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+try{
+const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:b64})});
+if(r.status===401){toast('Session Google expirée','err');break;}
+if(!r.ok)throw new Error('HTTP '+r.status);
+ok++;
+}catch(e){fail++;}
+const prog=document.getElementById('mkSendProgress');
+const log=document.getElementById('mkSendLog');
+const bar=document.querySelector('#mkSendLog')?.previousElementSibling?.querySelector('div:last-child');
+if(prog)prog.textContent=`${i+1} / ${total}`;
+if(bar)bar.style.width=Math.round((i+1)/total*100)+'%';
+if(log){const statusClass=fail>ok?'text-acc':(i===ok?'text-ok':'text-warn');
+log.innerHTML+=`<div class="flex items-center gap-2 py-1 border-b border-bdr/30 last:border-0"><i class="fa-solid fa-${fail>ok?'xmark':'check'} text-[.55rem] ${statusClass}"></i><span class="text-[.65rem] ${fail>ok?'text-mut':'text-txt'}">${escHtml(c.email)} — ${escHtml(contactDisplayName(c))}</span></div>`;
+log.scrollTop=log.scrollHeight;}
+await new Promise(r=>setTimeout(r,1200));
+}
+const emailItem=MK.emails[send.idx];
+if(emailItem){emailItem.status='sent';emailItem.sentAt=new Date().toISOString();emailItem.recipients=String(ok);svMk();}
+const sentStr=ok?ok+' email'+(ok>1?'s':'')+' envoyé'+(ok>1?'s':''):'';
+const failStr=fail?fail+' échoué'+(fail>1?'s':''):'';
+toast(sentStr+(sentStr&&failStr?' — ':'')+failStr, fail?'info':'ok');
+opM(`<div class="p-6 text-center"><i class="fa-solid fa-circle-check text-3xl text-ok mb-3"></i>
+<h2 class="font-disp font-bold text-lg mb-2">Envoi terminé</h2>
+<p class="text-sm text-mut mb-5">${sentStr}${failStr?'<br><span class="text-acc">'+failStr+'</span>':''}</p>
+<div class="flex justify-center gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Fermer</button></div></div>`);
+rMarketing();
+}
 function gmailRow(m){
 const name=gmailFromName(m.from);
 const av=gmailAvatarStyle(name);
@@ -3123,7 +3249,7 @@ return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start 
 <div class="text-xs text-mut mt-1">${escHtml(c.subject||'')} ${c.status?`&middot; <span class="${c.status==='sent'?'text-ok':'text-warn'}">${mkStatusLabel(c.status)}</span>`:''}</div>
 ${c.audience?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-users mr-1"></i>${escHtml(c.audience)}</div>`:''}
 ${c.openRate!=null?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-eye mr-1"></i>Ouverture : ${mkFormatPct(c.openRate)} &middot; Clics : ${mkFormatPct(c.clickRate)}</div>`:''}</div>
-<div class="flex gap-1 shrink-0"><button onclick="editMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>`;}
+<div class="flex gap-1 shrink-0">${c.body&&c.subject?`<button onclick="event.stopPropagation();mkCampaignSend(${i})" class="w-7 h-7 rounded-lg hover:bg-okS text-mut hover:text-ok flex items-center justify-center" title="Envoyer via Gmail"><i class="fa-solid fa-paper-plane text-[.55rem]"></i></button>`:''}<button onclick="editMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>`;}
 if(type==='social'){
 return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i%6+2,6)}">
 <div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('social',${i})">${escHtml(c.name)}</span><div class="flex gap-1"><button onclick="editMkItem('social',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('social',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>
@@ -3217,7 +3343,7 @@ content:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="
 emails:`<label class="text-xs text-mut block mb-1.5">Nom interne</label><input type="text" id="mkName" class="fi mb-4" placeholder="Email onboarding" value="${escHtml(item.name||'')}">
 <label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkSubject" class="fi mb-4" placeholder="Objet de l'email" value="${escHtml(item.subject||'')}">
 <label class="text-xs text-mut block mb-1.5">Audience cible</label><input type="text" id="mkAudience" class="fi mb-4" placeholder="Ex: Leads Q2, VIP clients" value="${escHtml(item.audience||'')}">
-<label class="text-xs text-mut block mb-1.5">Corps du message</label><textarea id="mkBody" class="fi mb-4" rows="6" placeholder="Bonjour {{prenom}},\n\nVotre message ici...">${escHtml(item.body||'')}</textarea>
+<label class="text-xs text-mut block mb-1.5">Corps du message</label><div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div><textarea id="mkBody" class="fi mb-4" rows="6" placeholder="Bonjour {{prenom}},\n\nVotre message ici...">${escHtml(item.body||'')}</textarea>
 <div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="scheduled" ${item.status==='scheduled'?'selected':''}>Planifié</option><option value="sent" ${item.status==='sent'?'selected':''}>Envoyé</option></select></div><div><label class="text-xs text-mut block mb-1.5">Date d'envoi</label><input type="date" id="mkSchedDate" class="fi" value="${item.scheduledDate||''}"></div></div>
 <div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Taux ouverture (%)</label><input type="number" step="0.1" id="mkOpenRate" class="fi" placeholder="0" value="${item.openRate??''}"></div><div><label class="text-xs text-mut block mb-1.5">Taux clic (%)</label><input type="number" step="0.1" id="mkClickRate" class="fi" placeholder="0" value="${item.clickRate??''}"></div><div><label class="text-xs text-mut block mb-1.5">Destinataires</label><input type="number" id="mkRecipients" class="fi" placeholder="0" value="${item.recipients||''}"></div></div>`,
 social:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkName" class="fi mb-4" placeholder="Post LinkedIn" value="${escHtml(item.name||'')}">
@@ -3265,8 +3391,9 @@ ${(c.startDate||c.endDate)?`<div class="text-xs text-mut mb-3"><i class="fa-soli
 ${(c.budget&&c.spent)?`<div class="text-xs text-mut mb-1">Budget consommé</div>${mkProgress(Math.min(100,Math.round(Number(c.spent)/Number(c.budget)*100)),'#ff9c00')}`:''}`;}
 if(type==='emails'){meta=`${c.subject?`<div class="mb-3"><div class="text-xs text-mut mb-1">Objet</div><p class="text-sm font-medium">${escHtml(c.subject)}</p></div>`:''}
 ${c.audience?`<div class="mb-3"><div class="text-xs text-mut mb-1">Audience</div><p class="text-sm">${escHtml(c.audience)}</p></div>`:''}
-${c.body?`<div class="mb-4"><div class="text-xs text-mut mb-1">Aperçu du message</div><div class="bg-black/40 rounded-lg p-4 text-xs whitespace-pre-wrap border border-bdr max-h-48 overflow-y-auto">${escHtml(c.body)}</div></div>`:''}
-<div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Destinataires</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.recipients)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Ouverture</div><div class="font-disp font-bold text-sm text-ok">${mkFormatPct(c.openRate)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Clics</div><div class="font-disp font-bold text-sm text-inf">${mkFormatPct(c.clickRate)}</div></div></div>`;}
+${c.body?`<div class="mb-4"><div class="text-xs text-mut mb-1">Aperçu du message</div><noscrl></noscrl><div class="bg-black/40 rounded-lg p-4 text-xs whitespace-pre-wrap border border-bdr max-h-48 overflow-y-auto">${escHtml(c.body)}</div></div>`:''}
+<div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Destinataires</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.recipients)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Ouverture</div><div class="font-disp font-bold text-sm text-ok">${mkFormatPct(c.openRate)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Clics</div><div class="font-disp font-bold text-sm text-inf">${mkFormatPct(c.clickRate)}</div></div></div>
+${c.sentAt?`<div class="text-[.65rem] text-mut mb-3"><i class="fa-solid fa-clock mr-1"></i>Envoyé le ${new Date(c.sentAt).toLocaleString('fr-CH')}</div>`:''}`;}
 if(type==='social'){meta=`${c.platform?`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf mb-3 inline-block"><i class="fa-brands fa-${c.platform==='linkedin'?'linkedin':c.platform==='twitter'?'twitter':'globe'} mr-1"></i>${escHtml(c.platform)}</span>`:''}
 ${c.hashtags?`<div class="mb-3"><div class="text-xs text-mut mb-1">Hashtags</div><p class="text-sm text-inf">${escHtml(c.hashtags)}</p></div>`:''}
 ${c.impressions?`<div class="grid grid-cols-4 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Impressions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.impressions)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Likes</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.likes||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Commentaires</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.comments||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Partages</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.shares||0)}</div></div></div>`:''}`;}
@@ -3279,7 +3406,7 @@ opM(`<div class="p-6 max-h-[85vh] overflow-y-auto"><div class="flex items-center
 ${c.description?`<p class="text-sm mb-4">${escHtml(c.description)}</p>`:''}
 ${meta}
 <div class="flex justify-end gap-3 mt-6"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Fermer</button>
-<button onclick="clsM();editMkItem('${type}',${idx})" class="h-10 px-5 rounded-xl bg-inf hover:bg-inf/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-pen mr-1.5"></i>Modifier</button></div></div>`);
+<button onclick="clsM();editMkItem('${type}',${idx})" class="h-10 px-5 rounded-xl bg-inf hover:bg-inf/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-pen mr-1.5"></i>Modifier</button>${type==='emails'&&c.body&&c.subject?`<button onclick="clsM();mkCampaignSend(${idx})" class="h-10 px-5 rounded-xl bg-ok hover:bg-ok/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-paper-plane mr-1.5"></i>Envoyer via Gmail</button>`:''}</div></div>`);
 }
 /* ===== MARKETING : REPORTS (with Chart.js) ===== */
 function rMarketingReports(){
@@ -3756,13 +3883,97 @@ ${showSelectors?`<div class="grid grid-cols-2 gap-3">
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Statut de prospection</label><select name="prospectStatus" class="fi">${PROSPECT_STAGES.map(s=>`<option value="${s.key}" ${(src.prospectStatus||'a_contacter')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Dernier contact</label><div class="flex gap-1.5"><input type="date" name="lastContactedAt" id="cLastContacted" value="${c?(c.lastContactedAt||''):''}" class="fi"><button type="button" onclick="document.getElementById('cLastContacted').value=todayStr()" class="h-10 px-2.5 rounded-xl bg-sAlt border border-bdr text-mut hover:text-txt transition-colors bp text-xs shrink-0" data-tip="Aujourd'hui"><i class="fa-solid fa-calendar-day"></i></button></div></div>
 </div>
-<div><label class="text-xs font-medium text-mut mb-1.5 block">Tags <span class="text-mut font-normal normal-case">(séparés par des virgules)</span></label><input name="tags" value="${escHtml((src.tags||[]).join(', '))}" placeholder="Ex : chaud, décideur, secteur santé" class="fi"></div>
+<div><label class="text-xs font-medium text-mut mb-1.5 block"><i class="fa-solid fa-tags mr-1"></i>Tags</label>
+<input type="hidden" name="tags" id="ctSelTags" value="${escHtml((src.tags||[]).join(', '))}">
+<div id="ctChips" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
+<div class="flex gap-1.5 mb-2"><input type="text" id="ctCustomInp" class="fi flex-1" placeholder="Ajouter un tag personnalisé..." onkeydown="if(event.key==='Enter'){event.preventDefault();ctAddCustom();}"><button type="button" onclick="ctAddCustom()" class="h-10 px-3 rounded-xl bg-acc hover:bg-accH text-black text-xs font-semibold transition-colors bp shrink-0"><i class="fa-solid fa-plus mr-1"></i>Ajouter</button></div>
+<button type="button" onclick="ctToggleSection(this)" class="flex items-center gap-1.5 text-[.65rem] text-acc hover:underline mb-2"><i class="fa-solid fa-chevron-down text-[.55rem]"></i> Voir les tags suggérés</button>
+<div id="ctCheckboxes" class="hidden max-h-52 overflow-y-auto pr-1 rounded-xl border border-bdr p-3 bg-surface/50"></div>
+</div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Notes</label><textarea name="notes" rows="2" class="fi">${escHtml(src.notes||'')}</textarea></div>
 <div class="flex justify-end gap-3 mt-2">${c?`<button type="button" onclick="delContact('${folder}',${c.id})" class="h-10 px-5 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp mr-auto">Supprimer</button>`:''}<button type="button" onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:bg-sHov transition-colors bp">Annuler</button><button type="submit" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">${c?'Enregistrer':'Ajouter'}</button></div>
 </form></div>`);
+initContactTagPicker(src.tags||[]);
 if(showSelectors){fillContactProjects(folder,c?c.projectId:pid);}
 if(isVoiceMode){VC.ctx='voice_contact_form';botSay(c?"Fiche de <b>"+escHtml(contactDisplayName(c))+"</b> ouverte pour modification. Dites <b>valide</b> pour enregistrer, ou <b>annule</b> pour abandonner (vous pouvez aussi corriger les champs a l'ecran).":"Fiche pré-remplie ouverte. Dites <b>valide</b> pour enregistrer, ou <b>annule</b> pour abandonner (vous pouvez aussi corriger les champs a l'ecran).");}
 }
+
+/* ===== CONTACT TAG PICKER (tags préétablis + manuels) ===== */
+function getSuggestedTags(){
+  const cats=[];
+  /* 1) Dossiers */
+  cats.push({label:'\U0001f4c1 Dossiers',icon:'fa-folder',tags:FOLDERS.map(f=>f.name)});
+  /* 2) Projets (tous dossiers confondus) */
+  const projNames=new Set();
+  FOLDERS.forEach(fk=>{(D[fk.key]?.projects||[]).forEach(p=>{if(p.name)projNames.add(p.name);});});
+  if(projNames.size)cats.push({label:'\U0001f4bb Projets',icon:'fa-diagram-project',tags:[...projNames]});
+  /* 3) Entreprises (depuis les contacts existants) */
+  const compSet=new Set();
+  FOLDERS.forEach(fk=>{(D[fk.key]?.contacts||[]).forEach(c=>{if(c.company)compSet.add(c.company);});});
+  if(compSet.size)cats.push({label:'\U0001f3e2 Entreprises',icon:'fa-building',tags:[...compSet]});
+  /* 4) Fonctions / Titres */
+  const titleSet=new Set();
+  FOLDERS.forEach(fk=>{(D[fk.key]?.contacts||[]).forEach(c=>{if(c.title)titleSet.add(c.title);});});
+  if(titleSet.size)cats.push({label:'\U0001f4bc Fonctions',icon:'fa-user-tie',tags:[...titleSet]});
+  /* 5) Statuts de prospection */
+  cats.push({label:'\U0001f4ca Prospection',icon:'fa-chart-line',tags:PROSPECT_STAGES.map(s=>s.label)});
+  /* 6) Tags métier courants */
+  cats.push({label:'\u2b50 M\u00e9tier',icon:'fa-star',tags:['d\u00e9cideur','influenceur','prescripteur','partenaire','fournisseur','prospect chaud','prospect froid','client actif','ancien client','r\u00e9f\u00e9rence','ambassadeur','veille','concurrent','recruteur','candidat','mentor','investisseur']});
+  /* 7) Secteurs d'activit\u00e9 */
+  cats.push({label:'\U0001f3ed Secteurs',icon:'fa-industry',tags:['Sant\u00e9','Tech / IT','Finance','Industrie','Retail / Commerce','Immobilier','Conseil','Marketing','Ressources Humaines','Juridique','\u00c9ducation','Association','Startup','Grande entreprise','PME','Collectivit\u00e9']});
+  /* 8) Canaux */
+  cats.push({label:'\U0001f4e8 Canaux',icon:'fa-envelope',tags:['LinkedIn','Email','T\u00e9l\u00e9phone','Visio','Meetup','Salon','Referral','Inbound','Cold outreach']});
+  return cats;
+}
+function ctGetSel(){const el=document.getElementById('ctSelTags');return el?el.value.split(',').map(t=>t.trim()).filter(Boolean):[];}
+function ctSetSel(arr){const el=document.getElementById('ctSelTags');if(el)el.value=arr.join(', ');}
+function ctRenderChips(){
+  const sel=ctGetSel();
+  const box=document.getElementById('ctChips');if(!box)return;
+  if(!sel.length){box.innerHTML='<span class="text-[.65rem] text-mut italic">Aucun tag s\u00e9lectionn\u00e9</span>';return;}
+  box.innerHTML=sel.map(t=>'<span class="inline-flex items-center gap-1 text-[.65rem] px-2.5 py-1 rounded-full bg-accS text-acc font-medium">'+escHtml(t)+'<button type="button" onclick="ctRemoveTag(\''+escHtml(t).replace(/'/g,"\\\'")+'\')" class="ml-0.5 hover:text-red-400 transition-colors"><i class="fa-solid fa-xmark text-[.55rem]"></i></button></span>').join('');
+}
+function ctRenderCheckboxes(){
+  const sel=new Set(ctGetSel());
+  const cats=getSuggestedTags();
+  const box=document.getElementById('ctCheckboxes');if(!box)return;
+  box.innerHTML=cats.map(cat=>{
+    const catTags=cat.tags.filter(t=>t);
+    if(!catTags.length)return '';
+    return '<div class="mb-3"><div class="text-[.65rem] font-semibold text-mut mb-1.5 flex items-center gap-1.5"><i class="fa-solid '+cat.icon+' text-[.6rem]"></i>'+cat.label+' <span class="font-normal text-mut/60">('+catTags.length+')</span></div><div class="flex flex-wrap gap-1.5">'+catTags.map(t=>{
+      const checked=sel.has(t)?'checked':'';
+      const active=sel.has(t)?'bg-accS border-acc text-acc':'bg-sAlt border-bdr text-mut hover:border-acc/50 hover:text-txt';
+      return '<label class="ct-tag-cb inline-flex items-center gap-1 text-[.6rem] px-2.5 py-1 rounded-full border cursor-pointer transition-all select-none '+active+'"><input type="checkbox" class="hidden" value="'+escHtml(t)+'" '+checked+' onchange="ctToggleTag(\''+escHtml(t).replace(/'/g,"\\\'")+'\',this.checked)"><i class="fa-solid '+(sel.has(t)?'fa-check-square':'fa-square')+' text-[.55rem]"></i> '+escHtml(t)+'</label>';
+    }).join('')+'</div></div>';
+  }).join('');
+}
+function ctToggleTag(tag,checked){
+  const sel=new Set(ctGetSel());
+  if(checked)sel.add(tag);else sel.delete(tag);
+  ctSetSel([...sel]);ctRenderChips();ctRenderCheckboxes();
+}
+function ctRemoveTag(tag){
+  const sel=new Set(ctGetSel());sel.delete(tag);
+  ctSetSel([...sel]);ctRenderChips();ctRenderCheckboxes();
+}
+function ctAddCustom(){
+  const inp=document.getElementById('ctCustomInp');if(!inp)return;
+  const raw=inp.value.trim();if(!raw)return;
+  const newTags=raw.split(/[,;]/).map(t=>t.trim()).filter(Boolean);
+  const sel=new Set(ctGetSel());
+  newTags.forEach(t=>sel.add(t));
+  ctSetSel([...sel]);inp.value='';ctRenderChips();ctRenderCheckboxes();
+}
+function ctToggleSection(btn){
+  const box=document.getElementById('ctCheckboxes');
+  const arrow=btn.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+  if(box.classList.contains('hidden')){box.classList.remove('hidden');if(arrow){arrow.classList.remove('fa-chevron-down');arrow.classList.add('fa-chevron-up');}}
+  else{box.classList.add('hidden');if(arrow){arrow.classList.remove('fa-chevron-up');arrow.classList.add('fa-chevron-down');}}
+}
+function initContactTagPicker(selectedTags){
+  ctSetSel(selectedTags||[]);ctRenderChips();ctRenderCheckboxes();
+}
+
 function fillContactProjects(folder,selPid){
 const sel=document.getElementById('cProject');if(!sel)return;
 const projects=(D[folder]||emptyFolderData()).projects;
