@@ -2884,478 +2884,7 @@ const bodyHtml=parts.html?`<iframe class="w-full rounded-xl border-0" style="hei
 .md-preview th{background:#141414;font-weight:600;color:#ff9c00}
 .md-preview .cb{display:inline-flex;align-items:center;gap:4px;color:#c9a97e}
 .md-preview .cb input[type=checkbox]{accent-color:#ff9c00}
-</style></head><body>${gmailSanitizeHtml(parts.html)}<script>
-/* ===== EMAIL ENHANCEMENT MODULE ===== */
-(function(){
-'use strict';
-
-/* --- Dynamic Quill loader (loads JS only when needed, avoids blocking) --- */
-var _quillLoaded=false;
-var _quillLoading=false;
-var _quillLoadCallbacks=[];
-function ensureQuill(cb){
-  if(_quillLoaded){cb();return;}
-  if(_quillLoading){_quillLoadCallbacks.push(cb);return;}
-  if(typeof Quill!=='undefined'){_quillLoaded=true;cb();return;}
-  _quillLoading=true;
-  var s=document.createElement('script');
-  s.src='https://cdn.quilljs.com/1.3.7/quill.min.js';
-  s.onload=function(){_quillLoaded=true;_quillLoading=false;cb();while(_quillLoadCallbacks.length)_quillLoadCallbacks.shift()();};
-  s.onerror=function(){_quillLoading=false;toast('Impossible de charger l\'éditeur, vérifie ta connexion','err');};
-  document.head.appendChild(s);
-}
-
-/* --- Gmail Signature --- */
-window.MK_SIGNATURE='';
-window.MK_SIGNATURE_LOADING=false;
-window.gmailFetchSignature=async function(){
-  if(!gcalHasValidToken()||window.MK_SIGNATURE_LOADING)return;
-  window.MK_SIGNATURE_LOADING=true;
-  try{
-    var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs',{headers:{Authorization:'Bearer '+GCAL.token}});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    var data=await r.json();
-    var primary=(data.sendAs||[]).find(function(s){return s.isPrimary})||((data.sendAs||[])[0]);
-    window.MK_SIGNATURE=primary?primary.signature||'':'';
-  }catch(e){window.MK_SIGNATURE='';}
-  window.MK_SIGNATURE_LOADING=false;
-  return window.MK_SIGNATURE;
-};
-
-/* --- Contact Tags --- */
-window.mkGetAllTags=function(){
-  var tagSet=new Set();
-  FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){(c.tags||[]).forEach(function(t){tagSet.add(t)});});});
-  return Array.from(tagSet).sort(function(a,b){return a.localeCompare(b,'fr')});
-};
-window.mkContactsByTag=function(selectedTags){
-  if(!selectedTags||!selectedTags.length)return[];
-  var set=new Set(selectedTags);
-  var results=[];
-  FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){
-    if(!c.email)return;
-    var cTags=new Set(c.tags||[]);
-    if(Array.from(set).some(function(t){return cTags.has(t)}))results.push(Object.assign({},c,{_folder:f.name,_fkey:f.key}));
-  });});
-  return results;
-};
-
-/* --- Email body personalization --- */
-window.mkPersonalizeBody=function(body,contact){
-  return(body||'').replace(/\{\{\s*prenom\s*\}\}/gi,contact.firstName||'').replace(/\{\{\s*nom\s*\}\}/gi,contact.lastName||'').replace(/\{\{\s*name\s*\}\}/gi,contactDisplayName(contact)).replace(/\{\{\s*entreprise\s*\}\}/gi,contact.company||'').replace(/\{\{\s*poste\s*\}\}/gi,contact.title||'').replace(/\{\{\s*email\s*\}\}/gi,contact.email||'');
-};
-
-/* --- Email Tracking --- */
-function emptyElog(){return[];}
-function ldElog(){try{var s=localStorage.getItem('cdc_email_log');if(s)return JSON.parse(s);}catch(e){}return emptyElog();}
-function svElog(){localStorage.setItem('cdc_email_log',JSON.stringify(window.MK_ELOG));}
-window.MK_ELOG=ldElog();
-
-/* --- Saved Recipient Groups --- */
-function ldGroups(){try{var s=localStorage.getItem('cdc_email_groups');if(s)return JSON.parse(s);}catch(e){}return[];}
-function svGroups(){localStorage.setItem('cdc_email_groups',JSON.stringify(window.MK_GROUPS));}
-window.MK_GROUPS=ldGroups();
-window.mkNewGroupId=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)};
-window.mkSaveGroup=function(name,tags){
-  if(!name||!tags.length){toast('Nom et tags requis','err');return;}
-  var existing=window.MK_GROUPS.find(function(g){return g.name.toLowerCase()===name.toLowerCase()});
-  if(existing){existing.tags=Array.from(new Set(tags));svGroups();toast('Groupe mis à jour','ok');}
-  else{window.MK_GROUPS.push({id:mkNewGroupId(),name:name,tags:Array.from(new Set(tags)),createdAt:new Date().toISOString()});svGroups();toast('Groupe enregistré','ok');}
-};
-window.mkDeleteGroup=function(gid){window.MK_GROUPS=window.MK_GROUPS.filter(function(g){return g.id!==gid});svGroups();toast('Groupe supprimé','info');if(window._mkCampSend)mkCampaignComposeModal();};
-window.mkLoadGroupTags=function(gid){var g=window.MK_GROUPS.find(function(g){return g.id===gid});if(g){window._mkCampSend._selTags=g.tags.slice();mkCampaignComposeModal();}};
-
-/* --- Email Templates --- */
-window.MK_EMAIL_TEMPLATES=[
-  {id:'empty',name:'Vide',icon:'fa-file',subject:'',body:'<p><br></p>'},
-  {id:'follow_up',name:'Relance',icon:'fa-rotate-right',subject:'Suite à notre échange',body:'<p>Bonjour {{prenom}},</p><p>Je me permets de revenir vers vous suite à notre dernier échange. Avez-vous eu l\'occasion d\'examiner la proposition ?</p><p>Je reste à votre disposition pour en discuter.</p><p>Cordialement,<br>{{signature}}</p>'},
-  {id:'meeting',name:'Rendez-vous',icon:'fa-calendar-check',subject:'Proposition de rendez-vous',body:'<p>Bonjour {{prenom}},</p><p>Seriez-vous disponible pour un échange de <strong>30 minutes</strong> la semaine prochaine ?</p><p>Je vous propose les créneaux suivants :</p><ul><li>Mardi 14h-16h</li><li>Jeudi 10h-12h</li></ul><p>N\'hésitez pas à me proposer un autre horaire.</p><p>À très bientôt,<br>{{signature}}</p>'},
-  {id:'welcome',name:'Bienvenue',icon:'fa-handshake',subject:'Bienvenue !',body:'<p>Bonjour {{prenom}},</p><p>Bienvenue ! Nous sommes ravis de vous compter parmi nous.</p><p>Prochaines étapes :</p><ol><li><strong>Configurez votre profil</strong></li><li><strong>Planifiez votre premier rendez-vous</strong></li><li><strong>Explorez nos ressources</strong></li></ol><p>Excellente journée,<br>{{signature}}</p>'},
-  {id:'newsletter',name:'Newsletter',icon:'fa-newspaper',subject:'Actualité du mois',body:'<p>Bonjour {{prenom}},</p><h3>Événement</h3><p>Notre prochain événement aura lieu le <strong>[date]</strong>.</p><h3>Chiffres clés</h3><p>Résultats du mois : <strong>[données]</strong></p><p>Cordialement,<br>{{signature}}</p>'},
-  {id:'thank_you',name:'Remerciements',icon:'fa-heart',subject:'Merci pour votre confiance',body:'<p>Bonjour {{prenom}},</p><p>Je tenais à vous remercier sincèrement pour votre confiance.</p><p>C\'est un plaisir de collaborer avec <strong>{{entreprise}}</strong>.</p><p>Avec toute ma considération,<br>{{signature}}</p>'},
-  {id:'proposal',name:'Proposition comm.',icon:'fa-file-invoice-dollar',subject:'Notre proposition pour {{entreprise}}',body:'<p>Bonjour {{prenom}},</p><p>Suite à nos échanges, voici notre proposition.</p><p>Valable <strong>30 jours</strong>.</p><p>Cordialement,<br>{{signature}}</p>'},
-  {id:'reminder',name:'Rappel',icon:'fa-bell',subject:'Rappel : action requise',body:'<p>Bonjour {{prenom}},</p><p>Rappel : <strong>[action]</strong> est attendue pour le <strong>[date]</strong>.</p><p>N\'hésitez pas à me contacter si besoin.</p><p>Cordialement,<br>{{signature}}</p>'}
-];
-
-/* --- Quill Editor --- */
-var _mkQuill=null;
-window.mkInitQuill=function(htmlContent){
-  ensureQuill(function(){
-    try{
-      var el=document.getElementById('mkeQuill');
-      if(!el)return;
-      if(_mkQuill){try{_mkQuill.off('text-change');}catch(e){}_mkQuill=null;}
-      if(typeof Quill==='undefined'){console.warn('Quill not loaded');return;}
-      _mkQuill=new Quill(el,{
-        theme:'snow',
-        placeholder:'Bonjour {{prenom}},\n\nVotre message ici...',
-        modules:{toolbar:[['bold','italic','underline','strike'],[{'header':[1,2,3,false]}],[{'list':'ordered'},{'list':'bullet'}],['blockquote','link'],['clean']]}
-      });
-      if(htmlContent&&htmlContent.trim()){
-        var isPlain=!/<[a-z][\s\S]*>/i.test(htmlContent);
-        if(isPlain){_mkQuill.setText(htmlContent);}else{_mkQuill.root.innerHTML=htmlContent;}
-      }
-      _mkQuill.on('text-change',function(){
-        if(window._mkCampSend)window._mkCampSend.item.body=_mkQuill.root.innerHTML;
-        var prevEl=document.getElementById('mkePreviewContent');
-        if(prevEl){var txt=_mkQuill.getText().substring(0,300);prevEl.textContent=txt||'(Aucun contenu)';}
-      });
-    }catch(e){console.error('mkInitQuill error:',e);}
-  });
-};
-window.mkGetQuillHTML=function(){
-  if(_mkQuill){try{return _mkQuill.root.innerHTML;}catch(e){}}
-  if(window._mkCampSend)return window._mkCampSend.item.body||'';
-  return'';
-};
-window.mkApplyTemplate=function(tplId){
-  var tpl=window.MK_EMAIL_TEMPLATES.find(function(t){return t.id===tplId});
-  if(!tpl)return;
-  if(window._mkCampSend){
-    if(tpl.subject)window._mkCampSend.item.subject=tpl.subject;
-    window._mkCampSend.item.body=tpl.body;
-    var subEl=document.getElementById('mkeSubject');
-    if(subEl&&tpl.subject)subEl.value=tpl.subject;
-  }
-  if(_mkQuill){
-    var isPlain=!/<[a-z][\s\S]*>/i.test(tpl.body);
-    if(isPlain){_mkQuill.setText(tpl.body);}else{_mkQuill.root.innerHTML=tpl.body;}
-  }
-  var prevEl=document.getElementById('mkePreviewContent');
-  if(prevEl){var txt=(tpl.body||'').replace(/<[^>]*>/g,'').substring(0,300);prevEl.textContent=txt||'(Aucun contenu)';}
-  toast('Template \"'+tpl.name+'\" appliqué','ok');
-};
-
-/* --- Tag grouping --- */
-window.mkGetGroupedTags=function(){
-  var allTags=mkGetAllTags();
-  var icons={'prospect':'fa-user-plus','client':'fa-handshake','partenaire':'fa-people-arrows','fournisseur':'fa-truck','collègue':'fa-building','lead':'fa-magnet','vip':'fa-crown'};
-  var grouped=[];var catMap={};
-  allTags.forEach(function(t){
-    var cat='Autres';var tl=t.toLowerCase();
-    Object.keys(icons).forEach(function(k){if(tl.indexOf(k)!==-1)cat=k.charAt(0).toUpperCase()+k.slice(1)});
-    if(!catMap[cat])catMap[cat]=[];
-    catMap[cat].push(t);
-  });
-  Object.keys(catMap).sort().forEach(function(cat){grouped.push({label:cat,icon:icons[cat.toLowerCase()]||'fa-tag',tags:catMap[cat]});});
-  return grouped;
-};
-
-/* --- Email Compose Modal (built with string concat, NO template literals) --- */
-window.mkCampaignComposeModal=function(existingItem,existingIdx){
-  var send=window._mkCampSend;
-  if(!send){
-    send={item:existingItem||{name:'',subject:'',body:'',status:'draft',createdAt:new Date().toISOString()},_selTags:[],_manualEmails:[],_bccMode:false,_testMode:false};
-    window._mkCampSend=send;
-  }
-  if(existingItem){send.item=existingItem;send._idx=existingIdx;}
-  var isExisting=!!send.item.subject;
-  if(gcalHasValidToken()&&!window.MK_SIGNATURE)window.gmailFetchSignature();
-  var selTags=send._selTags||[];
-  var emailContacts=mkContactsByTag(selTags);
-  var manualEmails=send._manualEmails||[];
-  var totalRecipients=emailContacts.length+manualEmails.length;
-  var groupedTags=mkGetGroupedTags();
-  var existingSent=send.item.sentCount||0;
-
-  /* Template buttons */
-  var tplButtons='';
-  window.MK_EMAIL_TEMPLATES.forEach(function(t){
-    tplButtons+='<button type=\'button\' onclick=\'mkApplyTemplate("'+t.id+'")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp flex items-center gap-1.5 bg-sAlt border border-bdr text-mut hover:text-txt\'><i class=\'fa-solid '+t.icon+' text-[.5rem]\'></i>'+escHtml(t.name)+'</button>';
-  });
-
-  /* Group buttons */
-  var groupHtml='';
-  if(window.MK_GROUPS.length){
-    groupHtml+='<div class=\'mb-3\'><div class=\'text-[.6rem] text-mut mb-1.5\'><i class=\'fa-solid fa-layer-group mr-1\'></i>Groupes enregistrés</div><div class=\'flex flex-wrap gap-1.5\'>';
-    window.MK_GROUPS.forEach(function(g){
-      groupHtml+='<button type=\'button\' onclick=\'mkLoadGroupTags("'+g.id+'")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp flex items-center gap-1.5 bg-sAlt border border-bdr text-mut hover:text-txt\'><i class=\'fa-solid fa-layer-group text-[.5rem]\'></i>'+escHtml(g.name)+'<span class=\'opacity-60\'>('+g.tags.length+')</span></button>';
-    });
-    groupHtml+='</div></div>';
-  }
-
-  /* Tag buttons */
-  var tagHtml='';
-  if(groupedTags.length){
-    tagHtml+='<div class=\'mb-3\'>';
-    groupedTags.forEach(function(cat){
-      tagHtml+='<div class=\'mb-2\'><div class=\'text-[.6rem] text-mut mb-1 flex items-center gap-1\'><i class=\'fa-solid '+cat.icon+' text-[.5rem]\'></i>'+escHtml(cat.label)+'</div><div class=\'flex flex-wrap gap-1.5\'>';
-      cat.tags.forEach(function(t){
-        var act=selTags.indexOf(t)!==-1;
-        tagHtml+='<button type=\'button\' onclick=\'mkToggleCampTag("'+escHtml(t).replace(/"/g,'')+  '")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp '+(act?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'\'>'+escHtml(t)+'</button>';
-      });
-      tagHtml+='</div></div>';
-    });
-    tagHtml+='</div>';
-  }else{
-    tagHtml='<div class=\'text-xs text-mut text-center py-3 bg-sAlt/30 rounded-xl mb-3\'><i class=\'fa-solid fa-tag mr-1\'></i>Aucun tag trouvé. Ajoute des tags à tes contacts.</div>';
-  }
-
-  /* Contact list */
-  var contactListHtml='';
-  if(emailContacts.length){
-    contactListHtml+='<div class=\'mb-4\'><div class=\'flex items-center justify-between mb-2\'><span class=\'text-xs text-mut\'><span class=\'font-semibold text-txt\'>'+emailContacts.length+'</span> contact'+(emailContacts.length>1?'s':'')+' '+(manualEmails.length?'+ '+manualEmails.length+' manuel'+(manualEmails.length>1?'s':''):'')+'</span>';
-    contactListHtml+='<div class=\'flex items-center gap-3\'>';
-    contactListHtml+='<label class=\'flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none\'><input type=\'radio\' name=\'mkeSendMode\' value=\'individual\' '+(send._bccMode?'':'checked=\'checked\'')+' onchange=\'window._mkCampSend._bccMode=false;mkCampaignComposeModal()\'><span>Individuel</span></label>';
-    contactListHtml+='<label class=\'flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none\'><input type=\'radio\' name=\'mkeSendMode\' value=\'bcc\' '+(send._bccMode?'checked=\'checked\'':'')+' onchange=\'window._mkCampSend._bccMode=true;mkCampaignComposeModal()\'><span>BCC (caché)</span></label>';
-    contactListHtml+='</div></div>';
-    contactListHtml+='<div class=\'bg-sAlt/50 border border-bdr rounded-xl max-h-32 overflow-y-auto\'>';
-    emailContacts.forEach(function(c){
-      contactListHtml+='<div class=\'flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0\'><div class=\'w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0\'>'+escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))+'</div><div class=\'flex-1 min-w-0\'><span class=\'text-[.6rem] font-medium truncate block\'>'+escHtml(contactDisplayName(c))+'</span><span class=\'text-[.55rem] text-mut\'>'+escHtml(c.email)+'</span></div></div>';
-    });
-    contactListHtml+='</div></div>';
-  }
-
-  /* Manual emails */
-  var manualHtml='';
-  if(manualEmails.length){
-    manualHtml='<div class=\'flex flex-wrap gap-1.5 mt-2\'>';
-    manualEmails.forEach(function(e,i){
-      manualHtml+='<span class=\'inline-flex items-center gap-1 text-[.6rem] px-2 py-0.5 rounded-full bg-okS text-ok\'><span>'+escHtml(e)+'</span><button type=\'button\' onclick=\'mkRemoveManualEmail('+i+')\' class=\'hover:text-red-400\'><i class=\'fa-solid fa-xmark text-[.45rem]\'></i></button></span>';
-    });
-    manualHtml+='</div>';
-  }
-
-  /* Preview text */
-  var previewText=(send.item.body||'').replace(/<[^>]*>/g,'').substring(0,300)||'(Aucun contenu)';
-  if(window.MK_SIGNATURE)previewText+='\n\n---\n'+window.MK_SIGNATURE.replace(/<[^>]*>/g,'').substring(0,100);
-
-  /* BCC notice */
-  var bccNotice='';
-  if(send._bccMode&&totalRecipients)bccNotice='<div class=\'bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.6rem] text-inf flex items-start gap-2\'><i class=\'fa-solid fa-eye-slash mt-0.5 shrink-0\'></i><span>Mode BCC : un seul email, tous en copie cachée. Pas de personnalisation.</span></div>';
-
-  /* Sent info */
-  var sentInfo='';
-  if(existingSent)sentInfo='<span class=\'text-[.6rem] text-mut\'><i class=\'fa-solid fa-paper-plane mr-1\'></i>'+existingSent+' déjà envoyé'+(existingSent>1?'s':'')+'</span>';
-
-  /* Buttons */
-  var saveBtn='';
-  if(!isExisting)saveBtn='<button onclick=\'mkSaveDraftFromCompose()\' class=\'h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp\'><i class=\'fa-solid fa-floppy-disk mr-1.5 text-[.7rem]\'></i>Sauver</button>';
-  var recipCount=totalRecipients?'<span class=\'text-xs text-mut self-center\'>'+totalRecipients+' destinataire'+(totalRecipients>1?'s':'')+'</span>':'';
-  var sendDisabled=!totalRecipients&&!send._testMode?'disabled':'';
-  var sendClass=totalRecipients||send._testMode?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut';
-  var sendLabel=send._testMode?'Tester':'Envoyer';
-  var sendCount=totalRecipients>1&&!send._testMode?' ('+totalRecipients+')':'';
-  var sigBadge=window.MK_SIGNATURE?'bg-okS text-ok':'bg-warnS text-warn';
-  var sigIcon=window.MK_SIGNATURE?'check':'xmark';
-  var sigText=window.MK_SIGNATURE?'Signature Gmail':'Pas de signature';
-
-  /* Build full modal HTML */
-  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
-  h+='<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">'+(isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'\U0001f4e7 Rédiger & Envoyer')+'</h2><span class="bdg '+sigBadge+' text-[.6rem]"><i class="fa-solid fa-'+sigIcon+' mr-1"></i>'+sigText+'</span></div>';
-
-  if(!isExisting){
-    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkeSubject" class="fi" placeholder="Objet de l\'email" value="'+escHtml(send.item.subject)+'" oninput="window._mkCampSend.item.subject=this.value"></div>';
-    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Corps du message</label>';
-    h+='<div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div>';
-    h+='<div class="mb-3"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Template</div><div class="flex flex-wrap gap-1.5">'+tplButtons+'</div></div>';
-    h+='<div id="mkeQuill"></div></div>';
-  }
-
-  h+='<div class="mb-4">';
-  h+='<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-mut"><i class="fa-solid fa-users mr-1"></i>Destinataires <span class="text-ok font-bold ml-1">'+totalRecipients+'</span></label>';
-  h+='<div class="flex gap-2"><button onclick="mkSaveCurrentSelectionAsGroup()" class="text-[.6rem] text-acc hover:underline bp" '+(selTags.length?'':'style="opacity:.4;pointer-events:none"')+'><i class="fa-solid fa-bookmark mr-0.5"></i>Sauver en groupe</button></div></div>';
-  h+=groupHtml+tagHtml;
-  h+='<div class="mt-3 pt-3 border-t border-bdr/50"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-at mr-1"></i>Ajouter un email manuellement</div><div class="flex gap-2"><input type="email" id="mkeManualEmail" class="fi text-xs flex-1" placeholder="prenom.nom@exemple.com" onkeydown="if(event.key===\'Enter\'){event.preventDefault();mkAddManualEmail();}"><button onclick="mkAddManualEmail()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-plus"></i></button></div>';
-  h+=manualHtml+'</div></div>';
-  h+=contactListHtml+bccNotice;
-
-  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aperçu'+(emailContacts.length?' (1er contact)':'')+'</label>';
-  h+='<div class="bg-black/40 border border-bdr rounded-xl p-3 max-h-28 overflow-y-auto text-xs whitespace-pre-wrap" id="mkePreviewContent">'+escHtml(previewText)+'</div></div>';
-
-  h+='<div class="flex items-center gap-3 mb-4"><label class="flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none"><input type="checkbox" id="mkeTest" '+(send._testMode?'checked':'')+' onchange="window._mkCampSend._testMode=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Tester sur mon adresse</span></label>';
-  h+=sentInfo+'</div>';
-  h+='<div class="flex justify-between items-center"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
-  h+='<div class="flex gap-2">'+saveBtn+recipCount;
-  h+='<button onclick="mkExecuteEnhancedSend()" class="h-10 px-5 rounded-xl '+sendClass+' text-sm font-semibold transition-colors bp" '+sendDisabled+'><i class="fa-solid fa-paper-plane mr-1.5"></i>'+sendLabel+sendCount+'</button>';
-  h+='</div></div></div>';
-
-  opM(h);
-  setTimeout(function(){mkInitQuill(window._mkCampSend.item.body||'');},80);
-};
-
-/* --- Tag toggle --- */
-window.mkToggleCampTag=function(tag){
-  if(!window._mkCampSend._selTags)window._mkCampSend._selTags=[];
-  var arr=window._mkCampSend._selTags;
-  var idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
-  mkCampaignComposeModal();
-};
-window.mkSelectAllTags=function(){window._mkCampSend._selTags=mkGetAllTags();mkCampaignComposeModal();};
-
-/* --- Manual email --- */
-window.mkAddManualEmail=function(){
-  var inp=document.getElementById('mkeManualEmail');
-  if(!inp)return;
-  var email=inp.value.trim();
-  if(!email||email.indexOf('@')===-1){toast('Email invalide','err');return;}
-  if(!window._mkCampSend._manualEmails)window._mkCampSend._manualEmails=[];
-  if(window._mkCampSend._manualEmails.indexOf(email)!==-1){toast('Email déjà ajouté','info');return;}
-  window._mkCampSend._manualEmails.push(email);
-  inp.value='';
-  mkCampaignComposeModal();
-};
-window.mkRemoveManualEmail=function(idx){if(window._mkCampSend._manualEmails){window._mkCampSend._manualEmails.splice(idx,1);mkCampaignComposeModal();}};
-window.mkSaveCurrentSelectionAsGroup=function(){
-  var sel=window._mkCampSend._selTags||[];
-  if(!sel.length){toast('Sélectionne au moins un tag','err');return;}
-  var name=prompt('Nom du groupe :',sel.slice(0,3).join(', ')+(sel.length>3?' +'+(sel.length-3):''));
-  if(!name)return;
-  mkSaveGroup(name,sel);
-  mkCampaignComposeModal();
-};
-
-/* --- Save draft --- */
-window.mkSaveDraftFromCompose=function(){
-  var send=window._mkCampSend;
-  var subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
-  var body=mkGetQuillHTML();
-  if(!subject&&!body){toast('Renseigne au moins un objet ou un corps','err');return;}
-  MK.emails.push({name:'[Brouillon] '+subject,subject:subject,body:body,status:'draft',createdAt:new Date().toISOString()});
-  svMk();clsM();toast('Brouillon sauvegardé','ok');rMarketing();
-};
-
-/* --- Enhanced Gmail Send --- */
-window.mkExecuteEnhancedSend=async function(){
-  var send=window._mkCampSend;
-  if(!send)return;
-  if(!gcalHasValidToken()){toast('Connecte ton compte Google d\'abord','err');return;}
-  var selTags=send._selTags||[];
-  var contacts=mkContactsByTag(selTags).filter(function(c){return c.email});
-  var manualEmails=send._manualEmails||[];
-  var manualContacts=manualEmails.map(function(e){return{id:'manual',email:e,firstName:'',lastName:'',company:'',title:'',_fkey:'manual',_folder:'Manual'};});
-  var allContacts=contacts.concat(manualContacts);
-  if(!allContacts.length&&!send._testMode){toast('Aucun contact avec email','err');return;}
-  var subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
-  var bodyTemplate=mkGetQuillHTML();
-  var signature=window.MK_SIGNATURE||'';
-  var recipients=[];
-  if(send._testMode){
-    try{var prof=await gcalGetProfile();recipients=[{email:prof.email||'',firstName:'Moi',lastName:''}];}catch(e){toast('Impossible de récupérer ton email','err');return;}
-  }else{recipients=allContacts;}
-  if(!send._testMode&&!subject){toast('Ajoute un objet','err');return;}
-  if(!send._testMode&&!bodyTemplate){toast('Écris un message','err');return;}
-  toast('Envoi en cours...','info');
-  var sent=0;var errors=0;
-  if(send._bccMode&&!send._testMode){
-    try{
-      var bccList=recipients.map(function(r){return r.email}).join(',');
-      var rawBody='Content-Type: text/html; charset=UTF-8\r\n\r\n'+bodyTemplate.replace(/\{\{signature\}\}/g,signature);
-      var encoded=typeof btoa!=='undefined'?btoa(unescape(encodeURIComponent(rawBody))):'';
-      var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded,to:bccList})});
-      if(r.ok)sent=recipients.length;else errors=recipients.length;
-    }catch(e){errors=recipients.length;console.error(e);}
-  }else{
-    for(var i=0;i<recipients.length;i++){
-      try{
-        var rcpt=recipients[i];
-        var personalized=mkPersonalizeBody(bodyTemplate.replace(/\{\{signature\}\}/g,signature),rcpt);
-        var rawBody2='Content-Type: text/html; charset=UTF-8\r\n\r\n'+personalized;
-        var encoded2=typeof btoa!=='undefined'?btoa(unescape(encodeURIComponent(rawBody2))):'';
-        var r2=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded2,to:rcpt.email})});
-        if(r2.ok){
-          sent++;
-          window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt)});
-        }else{errors++;}
-      }catch(e){errors++;console.error(e);}
-      if(i<recipients.length-1)await new Promise(function(r){setTimeout(r,200)});
-    }
-  }
-  svElog();
-  if(send._testMode){toast(sent?'Email de test envoyé !':'Échec de l\'envoi',sent?'ok':'err');}
-  else{
-    send.item.sentCount=(send.item.sentCount||0)+sent;
-    send.item.status='sent';
-    if(!send.item.name)send.item.name=subject;
-    if(send.item.createdAt&&MK.emails){
-      var idx2=MK.emails.findIndex(function(e){return e.createdAt===send.item.createdAt});
-      if(idx2>=0)MK.emails[idx2]=send.item;
-    }
-    svMk();clsM();rMarketing();
-    toast(sent+' email'+(sent>1?'s':'')+' envoyé'+(sent>1?'s':'')+(errors?' ('+errors+' échec'+(errors>1?'s':'')+')':''),'ok');
-  }
-};
-
-/* --- Check email replies --- */
-window.checkEmailReplies=async function(){
-  if(!gcalHasValidToken()||!window.MK_ELOG||!window.MK_ELOG.length)return;
-  try{
-    var profile=await gcalGetProfile();
-    var since=window.MK_ELOG.reduce(function(min,e){return Math.min(min,new Date(e.date).getTime())},Date.now()-7*86400000);
-    var sinceStr=new Date(since).toISOString();
-    var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:'+sinceStr.split('T')[0]+'&maxResults=50',{headers:{Authorization:'Bearer '+GCAL.token}});
-    if(!r.ok)return;
-    var data=await r.json();
-    if(!data.messages)return;
-    var updated=false;
-    for(var i=0;i<data.messages.length&&i<10;i++){
-      var msgId=data.messages[i].id;
-      var mr=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msgId+'?format=metadata&metadataHeaders=From&metadataHeaders=References',{headers:{Authorization:'Bearer '+GCAL.token}});
-      if(!mr.ok)continue;
-      var msg=await mr.json();
-      var headers=(msg.payload&&msg.payload.headers)||[];
-      var from=headers.find(function(h){return h.name==='From'})||{};
-      var fromEmail=(from.value||'').replace(/.*<(.+?)>.*/,function(m,e){return e});
-      var replyTo=window.MK_ELOG.find(function(e){return fromEmail===e.to&&!e.replyDate});
-      if(replyTo){replyTo.replyDate=new Date().toISOString();replyTo.replied=true;updated=true;}
-    }
-    if(updated){svElog();if(S.page==='marketing'&&S.mkv==='emails')rMarketing();}
-  }catch(e){console.error('checkEmailReplies:',e);}
-};
-
-/* Auto-check replies every 5 min */
-setInterval(function(){if(gcalHasValidToken()&&window.MK_ELOG&&window.MK_ELOG.length)checkEmailReplies();},300000);
-
-/* --- Override rMarketing for emails tab --- */
-var _origRMarketing=window.rMarketing;
-window.rMarketing=function(){
-  if(S.mkv==='emails'){
-    var el=document.getElementById('PC');
-    if(!el)return;
-    var emails=MK.emails||[];
-    var sentCount=window.MK_ELOG?window.MK_ELOG.length:0;
-    var replyCount=window.MK_ELOG?window.MK_ELOG.filter(function(e){return e.replied}).length:0;
-    var h='<div class="af">';
-    h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Emails</h1></div>';
-    h+='<div class="grid grid-cols-3 gap-4 mb-6">';
-    h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-paper-plane text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+emails.filter(function(e){return e.status==='sent'}).length+'</div><div class="text-xs opacity-90 mt-1">Envoyés</div></div>';
-    h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-reply text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+replyCount+'</div><div class="text-xs opacity-90 mt-1">Réponses</div></div>';
-    h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-file text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+emails.filter(function(e){return e.status==='draft'}).length+'</div><div class="text-xs opacity-90 mt-1">Brouillons</div></div>';
-    h+='</div>';
-    h+='<div class="flex flex-wrap gap-2 mb-6">'+mkTabsBar()+'</div>';
-    h+='<div class="flex justify-end mb-4 af d2"><button onclick="window._mkCampSend=null;mkCampaignComposeModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Rédiger un email</button></div>';
-    if(emails.length){
-      h+='<div class="flex flex-col gap-3">';
-      emails.forEach(function(c,i){
-        var isSent=c.status==='sent';
-        var isDraft=c.status==='draft';
-        h+='<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af">';
-        h+='<div class="w-10 h-10 rounded-lg '+(isSent?'bg-okS text-ok':isDraft?'bg-warnS text-warn':'bg-accS text-acc')+' flex items-center justify-center shrink-0"><i class="fa-solid '+(isSent?'fa-paper-plane':isDraft?'fa-file':'fa-envelope')+'"></i></div>';
-        h+='<div class="flex-1 min-w-0"><div class="text-sm font-medium">'+escHtml(c.name||c.subject||'Sans titre')+'</div>';
-        h+='<div class="text-xs text-mut mt-1">'+escHtml(c.subject||'')+'</div>';
-        if(isSent)h+='<div class="text-[.6rem] text-mut mt-1"><i class="fa-solid fa-check text-ok mr-1"></i>Envoyé</div>';
-        h+='</div>';
-        if(isDraft)h+='<button onclick="window._mkCampSend=null;mkCampaignComposeModal(MK.emails['+i+'],'+i+')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-pen mr-1"></i>Modifier</button>';
-        if(isSent&&c.subject)h+='<button onclick="window._mkCampSend=null;mkCampaignComposeModal(MK.emails['+i+'],'+i+')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-rotate-right mr-1"></i>Relancer</button>';
-        h+='<button onclick="delMkItem(\'emails\','+i+');" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-trash text-[.6rem]"></i></button>';
-        h+='</div>';
-      });
-      h+='</div>';
-    }else{
-      h+='<div class="text-mut text-sm text-center py-10">Aucun email. Cliquez sur "Rédiger un email" pour commencer.</div>';
-    }
-    h+='</div>';
-    el.innerHTML=h;
-  }else{
-    _origRMarketing();
-  }
-};
-
-console.log('[CRM] Email enhancement module loaded');
-})();
-
-</script>
-</body></html>`)}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
+</style></head><body>${gmailSanitizeHtml(parts.html)}</body></html>`)}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-1"><h2 class="font-disp font-bold text-lg">${escHtml(subject)}</h2></div>
 <div class="text-xs text-mut mb-4">De : ${escHtml(from)}<br>À : ${escHtml(to)}<br>${escHtml(date)}</div>
@@ -5682,6 +5211,477 @@ if('serviceWorker' in navigator){
     console.log('Service Worker non disponible:', err);
   });
 }
+</script>
+<script>
+/* ===== EMAIL ENHANCEMENT MODULE ===== */
+(function(){
+'use strict';
+
+/* --- Dynamic Quill loader (loads JS only when needed, avoids blocking) --- */
+var _quillLoaded=false;
+var _quillLoading=false;
+var _quillLoadCallbacks=[];
+function ensureQuill(cb){
+  if(_quillLoaded){cb();return;}
+  if(_quillLoading){_quillLoadCallbacks.push(cb);return;}
+  if(typeof Quill!=='undefined'){_quillLoaded=true;cb();return;}
+  _quillLoading=true;
+  var s=document.createElement('script');
+  s.src='https://cdn.quilljs.com/1.3.7/quill.min.js';
+  s.onload=function(){_quillLoaded=true;_quillLoading=false;cb();while(_quillLoadCallbacks.length)_quillLoadCallbacks.shift()();};
+  s.onerror=function(){_quillLoading=false;toast('Impossible de charger l\'éditeur, vérifie ta connexion','err');};
+  document.head.appendChild(s);
+}
+
+/* --- Gmail Signature --- */
+window.MK_SIGNATURE='';
+window.MK_SIGNATURE_LOADING=false;
+window.gmailFetchSignature=async function(){
+  if(!gcalHasValidToken()||window.MK_SIGNATURE_LOADING)return;
+  window.MK_SIGNATURE_LOADING=true;
+  try{
+    var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs',{headers:{Authorization:'Bearer '+GCAL.token}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    var data=await r.json();
+    var primary=(data.sendAs||[]).find(function(s){return s.isPrimary})||((data.sendAs||[])[0]);
+    window.MK_SIGNATURE=primary?primary.signature||'':'';
+  }catch(e){window.MK_SIGNATURE='';}
+  window.MK_SIGNATURE_LOADING=false;
+  return window.MK_SIGNATURE;
+};
+
+/* --- Contact Tags --- */
+window.mkGetAllTags=function(){
+  var tagSet=new Set();
+  FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){(c.tags||[]).forEach(function(t){tagSet.add(t)});});});
+  return Array.from(tagSet).sort(function(a,b){return a.localeCompare(b,'fr')});
+};
+window.mkContactsByTag=function(selectedTags){
+  if(!selectedTags||!selectedTags.length)return[];
+  var set=new Set(selectedTags);
+  var results=[];
+  FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){
+    if(!c.email)return;
+    var cTags=new Set(c.tags||[]);
+    if(Array.from(set).some(function(t){return cTags.has(t)}))results.push(Object.assign({},c,{_folder:f.name,_fkey:f.key}));
+  });});
+  return results;
+};
+
+/* --- Email body personalization --- */
+window.mkPersonalizeBody=function(body,contact){
+  return(body||'').replace(/\{\{\s*prenom\s*\}\}/gi,contact.firstName||'').replace(/\{\{\s*nom\s*\}\}/gi,contact.lastName||'').replace(/\{\{\s*name\s*\}\}/gi,contactDisplayName(contact)).replace(/\{\{\s*entreprise\s*\}\}/gi,contact.company||'').replace(/\{\{\s*poste\s*\}\}/gi,contact.title||'').replace(/\{\{\s*email\s*\}\}/gi,contact.email||'');
+};
+
+/* --- Email Tracking --- */
+function emptyElog(){return[];}
+function ldElog(){try{var s=localStorage.getItem('cdc_email_log');if(s)return JSON.parse(s);}catch(e){}return emptyElog();}
+function svElog(){localStorage.setItem('cdc_email_log',JSON.stringify(window.MK_ELOG));}
+window.MK_ELOG=ldElog();
+
+/* --- Saved Recipient Groups --- */
+function ldGroups(){try{var s=localStorage.getItem('cdc_email_groups');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svGroups(){localStorage.setItem('cdc_email_groups',JSON.stringify(window.MK_GROUPS));}
+window.MK_GROUPS=ldGroups();
+window.mkNewGroupId=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)};
+window.mkSaveGroup=function(name,tags){
+  if(!name||!tags.length){toast('Nom et tags requis','err');return;}
+  var existing=window.MK_GROUPS.find(function(g){return g.name.toLowerCase()===name.toLowerCase()});
+  if(existing){existing.tags=Array.from(new Set(tags));svGroups();toast('Groupe mis à jour','ok');}
+  else{window.MK_GROUPS.push({id:mkNewGroupId(),name:name,tags:Array.from(new Set(tags)),createdAt:new Date().toISOString()});svGroups();toast('Groupe enregistré','ok');}
+};
+window.mkDeleteGroup=function(gid){window.MK_GROUPS=window.MK_GROUPS.filter(function(g){return g.id!==gid});svGroups();toast('Groupe supprimé','info');if(window._mkCampSend)mkCampaignComposeModal();};
+window.mkLoadGroupTags=function(gid){var g=window.MK_GROUPS.find(function(g){return g.id===gid});if(g){window._mkCampSend._selTags=g.tags.slice();mkCampaignComposeModal();}};
+
+/* --- Email Templates --- */
+window.MK_EMAIL_TEMPLATES=[
+  {id:'empty',name:'Vide',icon:'fa-file',subject:'',body:'<p><br></p>'},
+  {id:'follow_up',name:'Relance',icon:'fa-rotate-right',subject:'Suite à notre échange',body:'<p>Bonjour {{prenom}},</p><p>Je me permets de revenir vers vous suite à notre dernier échange. Avez-vous eu l\'occasion d\'examiner la proposition ?</p><p>Je reste à votre disposition pour en discuter.</p><p>Cordialement,<br>{{signature}}</p>'},
+  {id:'meeting',name:'Rendez-vous',icon:'fa-calendar-check',subject:'Proposition de rendez-vous',body:'<p>Bonjour {{prenom}},</p><p>Seriez-vous disponible pour un échange de <strong>30 minutes</strong> la semaine prochaine ?</p><p>Je vous propose les créneaux suivants :</p><ul><li>Mardi 14h-16h</li><li>Jeudi 10h-12h</li></ul><p>N\'hésitez pas à me proposer un autre horaire.</p><p>À très bientôt,<br>{{signature}}</p>'},
+  {id:'welcome',name:'Bienvenue',icon:'fa-handshake',subject:'Bienvenue !',body:'<p>Bonjour {{prenom}},</p><p>Bienvenue ! Nous sommes ravis de vous compter parmi nous.</p><p>Prochaines étapes :</p><ol><li><strong>Configurez votre profil</strong></li><li><strong>Planifiez votre premier rendez-vous</strong></li><li><strong>Explorez nos ressources</strong></li></ol><p>Excellente journée,<br>{{signature}}</p>'},
+  {id:'newsletter',name:'Newsletter',icon:'fa-newspaper',subject:'Actualité du mois',body:'<p>Bonjour {{prenom}},</p><h3>Événement</h3><p>Notre prochain événement aura lieu le <strong>[date]</strong>.</p><h3>Chiffres clés</h3><p>Résultats du mois : <strong>[données]</strong></p><p>Cordialement,<br>{{signature}}</p>'},
+  {id:'thank_you',name:'Remerciements',icon:'fa-heart',subject:'Merci pour votre confiance',body:'<p>Bonjour {{prenom}},</p><p>Je tenais à vous remercier sincèrement pour votre confiance.</p><p>C\'est un plaisir de collaborer avec <strong>{{entreprise}}</strong>.</p><p>Avec toute ma considération,<br>{{signature}}</p>'},
+  {id:'proposal',name:'Proposition comm.',icon:'fa-file-invoice-dollar',subject:'Notre proposition pour {{entreprise}}',body:'<p>Bonjour {{prenom}},</p><p>Suite à nos échanges, voici notre proposition.</p><p>Valable <strong>30 jours</strong>.</p><p>Cordialement,<br>{{signature}}</p>'},
+  {id:'reminder',name:'Rappel',icon:'fa-bell',subject:'Rappel : action requise',body:'<p>Bonjour {{prenom}},</p><p>Rappel : <strong>[action]</strong> est attendue pour le <strong>[date]</strong>.</p><p>N\'hésitez pas à me contacter si besoin.</p><p>Cordialement,<br>{{signature}}</p>'}
+];
+
+/* --- Quill Editor --- */
+var _mkQuill=null;
+window.mkInitQuill=function(htmlContent){
+  ensureQuill(function(){
+    try{
+      var el=document.getElementById('mkeQuill');
+      if(!el)return;
+      if(_mkQuill){try{_mkQuill.off('text-change');}catch(e){}_mkQuill=null;}
+      if(typeof Quill==='undefined'){console.warn('Quill not loaded');return;}
+      _mkQuill=new Quill(el,{
+        theme:'snow',
+        placeholder:'Bonjour {{prenom}},\n\nVotre message ici...',
+        modules:{toolbar:[['bold','italic','underline','strike'],[{'header':[1,2,3,false]}],[{'list':'ordered'},{'list':'bullet'}],['blockquote','link'],['clean']]}
+      });
+      if(htmlContent&&htmlContent.trim()){
+        var isPlain=!/<[a-z][\s\S]*>/i.test(htmlContent);
+        if(isPlain){_mkQuill.setText(htmlContent);}else{_mkQuill.root.innerHTML=htmlContent;}
+      }
+      _mkQuill.on('text-change',function(){
+        if(window._mkCampSend)window._mkCampSend.item.body=_mkQuill.root.innerHTML;
+        var prevEl=document.getElementById('mkePreviewContent');
+        if(prevEl){var txt=_mkQuill.getText().substring(0,300);prevEl.textContent=txt||'(Aucun contenu)';}
+      });
+    }catch(e){console.error('mkInitQuill error:',e);}
+  });
+};
+window.mkGetQuillHTML=function(){
+  if(_mkQuill){try{return _mkQuill.root.innerHTML;}catch(e){}}
+  if(window._mkCampSend)return window._mkCampSend.item.body||'';
+  return'';
+};
+window.mkApplyTemplate=function(tplId){
+  var tpl=window.MK_EMAIL_TEMPLATES.find(function(t){return t.id===tplId});
+  if(!tpl)return;
+  if(window._mkCampSend){
+    if(tpl.subject)window._mkCampSend.item.subject=tpl.subject;
+    window._mkCampSend.item.body=tpl.body;
+    var subEl=document.getElementById('mkeSubject');
+    if(subEl&&tpl.subject)subEl.value=tpl.subject;
+  }
+  if(_mkQuill){
+    var isPlain=!/<[a-z][\s\S]*>/i.test(tpl.body);
+    if(isPlain){_mkQuill.setText(tpl.body);}else{_mkQuill.root.innerHTML=tpl.body;}
+  }
+  var prevEl=document.getElementById('mkePreviewContent');
+  if(prevEl){var txt=(tpl.body||'').replace(/<[^>]*>/g,'').substring(0,300);prevEl.textContent=txt||'(Aucun contenu)';}
+  toast('Template \"'+tpl.name+'\" appliqué','ok');
+};
+
+/* --- Tag grouping --- */
+window.mkGetGroupedTags=function(){
+  var allTags=mkGetAllTags();
+  var icons={'prospect':'fa-user-plus','client':'fa-handshake','partenaire':'fa-people-arrows','fournisseur':'fa-truck','collègue':'fa-building','lead':'fa-magnet','vip':'fa-crown'};
+  var grouped=[];var catMap={};
+  allTags.forEach(function(t){
+    var cat='Autres';var tl=t.toLowerCase();
+    Object.keys(icons).forEach(function(k){if(tl.indexOf(k)!==-1)cat=k.charAt(0).toUpperCase()+k.slice(1)});
+    if(!catMap[cat])catMap[cat]=[];
+    catMap[cat].push(t);
+  });
+  Object.keys(catMap).sort().forEach(function(cat){grouped.push({label:cat,icon:icons[cat.toLowerCase()]||'fa-tag',tags:catMap[cat]});});
+  return grouped;
+};
+
+/* --- Email Compose Modal (built with string concat, NO template literals) --- */
+window.mkCampaignComposeModal=function(existingItem,existingIdx){
+  var send=window._mkCampSend;
+  if(!send){
+    send={item:existingItem||{name:'',subject:'',body:'',status:'draft',createdAt:new Date().toISOString()},_selTags:[],_manualEmails:[],_bccMode:false,_testMode:false};
+    window._mkCampSend=send;
+  }
+  if(existingItem){send.item=existingItem;send._idx=existingIdx;}
+  var isExisting=!!send.item.subject;
+  if(gcalHasValidToken()&&!window.MK_SIGNATURE)window.gmailFetchSignature();
+  var selTags=send._selTags||[];
+  var emailContacts=mkContactsByTag(selTags);
+  var manualEmails=send._manualEmails||[];
+  var totalRecipients=emailContacts.length+manualEmails.length;
+  var groupedTags=mkGetGroupedTags();
+  var existingSent=send.item.sentCount||0;
+
+  /* Template buttons */
+  var tplButtons='';
+  window.MK_EMAIL_TEMPLATES.forEach(function(t){
+    tplButtons+='<button type=\'button\' onclick=\'mkApplyTemplate("'+t.id+'")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp flex items-center gap-1.5 bg-sAlt border border-bdr text-mut hover:text-txt\'><i class=\'fa-solid '+t.icon+' text-[.5rem]\'></i>'+escHtml(t.name)+'</button>';
+  });
+
+  /* Group buttons */
+  var groupHtml='';
+  if(window.MK_GROUPS.length){
+    groupHtml+='<div class=\'mb-3\'><div class=\'text-[.6rem] text-mut mb-1.5\'><i class=\'fa-solid fa-layer-group mr-1\'></i>Groupes enregistrés</div><div class=\'flex flex-wrap gap-1.5\'>';
+    window.MK_GROUPS.forEach(function(g){
+      groupHtml+='<button type=\'button\' onclick=\'mkLoadGroupTags("'+g.id+'")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp flex items-center gap-1.5 bg-sAlt border border-bdr text-mut hover:text-txt\'><i class=\'fa-solid fa-layer-group text-[.5rem]\'></i>'+escHtml(g.name)+'<span class=\'opacity-60\'>('+g.tags.length+')</span></button>';
+    });
+    groupHtml+='</div></div>';
+  }
+
+  /* Tag buttons */
+  var tagHtml='';
+  if(groupedTags.length){
+    tagHtml+='<div class=\'mb-3\'>';
+    groupedTags.forEach(function(cat){
+      tagHtml+='<div class=\'mb-2\'><div class=\'text-[.6rem] text-mut mb-1 flex items-center gap-1\'><i class=\'fa-solid '+cat.icon+' text-[.5rem]\'></i>'+escHtml(cat.label)+'</div><div class=\'flex flex-wrap gap-1.5\'>';
+      cat.tags.forEach(function(t){
+        var act=selTags.indexOf(t)!==-1;
+        tagHtml+='<button type=\'button\' onclick=\'mkToggleCampTag("'+escHtml(t).replace(/"/g,'')+  '")\' class=\'px-2.5 py-1 rounded-full text-[.6rem] font-medium transition-all bp '+(act?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'\'>'+escHtml(t)+'</button>';
+      });
+      tagHtml+='</div></div>';
+    });
+    tagHtml+='</div>';
+  }else{
+    tagHtml='<div class=\'text-xs text-mut text-center py-3 bg-sAlt/30 rounded-xl mb-3\'><i class=\'fa-solid fa-tag mr-1\'></i>Aucun tag trouvé. Ajoute des tags à tes contacts.</div>';
+  }
+
+  /* Contact list */
+  var contactListHtml='';
+  if(emailContacts.length){
+    contactListHtml+='<div class=\'mb-4\'><div class=\'flex items-center justify-between mb-2\'><span class=\'text-xs text-mut\'><span class=\'font-semibold text-txt\'>'+emailContacts.length+'</span> contact'+(emailContacts.length>1?'s':'')+' '+(manualEmails.length?'+ '+manualEmails.length+' manuel'+(manualEmails.length>1?'s':''):'')+'</span>';
+    contactListHtml+='<div class=\'flex items-center gap-3\'>';
+    contactListHtml+='<label class=\'flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none\'><input type=\'radio\' name=\'mkeSendMode\' value=\'individual\' '+(send._bccMode?'':'checked=\'checked\'')+' onchange=\'window._mkCampSend._bccMode=false;mkCampaignComposeModal()\'><span>Individuel</span></label>';
+    contactListHtml+='<label class=\'flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none\'><input type=\'radio\' name=\'mkeSendMode\' value=\'bcc\' '+(send._bccMode?'checked=\'checked\'':'')+' onchange=\'window._mkCampSend._bccMode=true;mkCampaignComposeModal()\'><span>BCC (caché)</span></label>';
+    contactListHtml+='</div></div>';
+    contactListHtml+='<div class=\'bg-sAlt/50 border border-bdr rounded-xl max-h-32 overflow-y-auto\'>';
+    emailContacts.forEach(function(c){
+      contactListHtml+='<div class=\'flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0\'><div class=\'w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0\'>'+escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))+'</div><div class=\'flex-1 min-w-0\'><span class=\'text-[.6rem] font-medium truncate block\'>'+escHtml(contactDisplayName(c))+'</span><span class=\'text-[.55rem] text-mut\'>'+escHtml(c.email)+'</span></div></div>';
+    });
+    contactListHtml+='</div></div>';
+  }
+
+  /* Manual emails */
+  var manualHtml='';
+  if(manualEmails.length){
+    manualHtml='<div class=\'flex flex-wrap gap-1.5 mt-2\'>';
+    manualEmails.forEach(function(e,i){
+      manualHtml+='<span class=\'inline-flex items-center gap-1 text-[.6rem] px-2 py-0.5 rounded-full bg-okS text-ok\'><span>'+escHtml(e)+'</span><button type=\'button\' onclick=\'mkRemoveManualEmail('+i+')\' class=\'hover:text-red-400\'><i class=\'fa-solid fa-xmark text-[.45rem]\'></i></button></span>';
+    });
+    manualHtml+='</div>';
+  }
+
+  /* Preview text */
+  var previewText=(send.item.body||'').replace(/<[^>]*>/g,'').substring(0,300)||'(Aucun contenu)';
+  if(window.MK_SIGNATURE)previewText+='\n\n---\n'+window.MK_SIGNATURE.replace(/<[^>]*>/g,'').substring(0,100);
+
+  /* BCC notice */
+  var bccNotice='';
+  if(send._bccMode&&totalRecipients)bccNotice='<div class=\'bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.6rem] text-inf flex items-start gap-2\'><i class=\'fa-solid fa-eye-slash mt-0.5 shrink-0\'></i><span>Mode BCC : un seul email, tous en copie cachée. Pas de personnalisation.</span></div>';
+
+  /* Sent info */
+  var sentInfo='';
+  if(existingSent)sentInfo='<span class=\'text-[.6rem] text-mut\'><i class=\'fa-solid fa-paper-plane mr-1\'></i>'+existingSent+' déjà envoyé'+(existingSent>1?'s':'')+'</span>';
+
+  /* Buttons */
+  var saveBtn='';
+  if(!isExisting)saveBtn='<button onclick=\'mkSaveDraftFromCompose()\' class=\'h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp\'><i class=\'fa-solid fa-floppy-disk mr-1.5 text-[.7rem]\'></i>Sauver</button>';
+  var recipCount=totalRecipients?'<span class=\'text-xs text-mut self-center\'>'+totalRecipients+' destinataire'+(totalRecipients>1?'s':'')+'</span>':'';
+  var sendDisabled=!totalRecipients&&!send._testMode?'disabled':'';
+  var sendClass=totalRecipients||send._testMode?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut';
+  var sendLabel=send._testMode?'Tester':'Envoyer';
+  var sendCount=totalRecipients>1&&!send._testMode?' ('+totalRecipients+')':'';
+  var sigBadge=window.MK_SIGNATURE?'bg-okS text-ok':'bg-warnS text-warn';
+  var sigIcon=window.MK_SIGNATURE?'check':'xmark';
+  var sigText=window.MK_SIGNATURE?'Signature Gmail':'Pas de signature';
+
+  /* Build full modal HTML */
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">'+(isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'\U0001f4e7 Rédiger & Envoyer')+'</h2><span class="bdg '+sigBadge+' text-[.6rem]"><i class="fa-solid fa-'+sigIcon+' mr-1"></i>'+sigText+'</span></div>';
+
+  if(!isExisting){
+    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkeSubject" class="fi" placeholder="Objet de l\'email" value="'+escHtml(send.item.subject)+'" oninput="window._mkCampSend.item.subject=this.value"></div>';
+    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Corps du message</label>';
+    h+='<div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div>';
+    h+='<div class="mb-3"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Template</div><div class="flex flex-wrap gap-1.5">'+tplButtons+'</div></div>';
+    h+='<div id="mkeQuill"></div></div>';
+  }
+
+  h+='<div class="mb-4">';
+  h+='<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-mut"><i class="fa-solid fa-users mr-1"></i>Destinataires <span class="text-ok font-bold ml-1">'+totalRecipients+'</span></label>';
+  h+='<div class="flex gap-2"><button onclick="mkSaveCurrentSelectionAsGroup()" class="text-[.6rem] text-acc hover:underline bp" '+(selTags.length?'':'style="opacity:.4;pointer-events:none"')+'><i class="fa-solid fa-bookmark mr-0.5"></i>Sauver en groupe</button></div></div>';
+  h+=groupHtml+tagHtml;
+  h+='<div class="mt-3 pt-3 border-t border-bdr/50"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-at mr-1"></i>Ajouter un email manuellement</div><div class="flex gap-2"><input type="email" id="mkeManualEmail" class="fi text-xs flex-1" placeholder="prenom.nom@exemple.com" onkeydown="if(event.key===\'Enter\'){event.preventDefault();mkAddManualEmail();}"><button onclick="mkAddManualEmail()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-plus"></i></button></div>';
+  h+=manualHtml+'</div></div>';
+  h+=contactListHtml+bccNotice;
+
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aperçu'+(emailContacts.length?' (1er contact)':'')+'</label>';
+  h+='<div class="bg-black/40 border border-bdr rounded-xl p-3 max-h-28 overflow-y-auto text-xs whitespace-pre-wrap" id="mkePreviewContent">'+escHtml(previewText)+'</div></div>';
+
+  h+='<div class="flex items-center gap-3 mb-4"><label class="flex items-center gap-1.5 text-[.6rem] text-mut cursor-pointer select-none"><input type="checkbox" id="mkeTest" '+(send._testMode?'checked':'')+' onchange="window._mkCampSend._testMode=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Tester sur mon adresse</span></label>';
+  h+=sentInfo+'</div>';
+  h+='<div class="flex justify-between items-center"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
+  h+='<div class="flex gap-2">'+saveBtn+recipCount;
+  h+='<button onclick="mkExecuteEnhancedSend()" class="h-10 px-5 rounded-xl '+sendClass+' text-sm font-semibold transition-colors bp" '+sendDisabled+'><i class="fa-solid fa-paper-plane mr-1.5"></i>'+sendLabel+sendCount+'</button>';
+  h+='</div></div></div>';
+
+  opM(h);
+  setTimeout(function(){mkInitQuill(window._mkCampSend.item.body||'');},80);
+};
+
+/* --- Tag toggle --- */
+window.mkToggleCampTag=function(tag){
+  if(!window._mkCampSend._selTags)window._mkCampSend._selTags=[];
+  var arr=window._mkCampSend._selTags;
+  var idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
+  mkCampaignComposeModal();
+};
+window.mkSelectAllTags=function(){window._mkCampSend._selTags=mkGetAllTags();mkCampaignComposeModal();};
+
+/* --- Manual email --- */
+window.mkAddManualEmail=function(){
+  var inp=document.getElementById('mkeManualEmail');
+  if(!inp)return;
+  var email=inp.value.trim();
+  if(!email||email.indexOf('@')===-1){toast('Email invalide','err');return;}
+  if(!window._mkCampSend._manualEmails)window._mkCampSend._manualEmails=[];
+  if(window._mkCampSend._manualEmails.indexOf(email)!==-1){toast('Email déjà ajouté','info');return;}
+  window._mkCampSend._manualEmails.push(email);
+  inp.value='';
+  mkCampaignComposeModal();
+};
+window.mkRemoveManualEmail=function(idx){if(window._mkCampSend._manualEmails){window._mkCampSend._manualEmails.splice(idx,1);mkCampaignComposeModal();}};
+window.mkSaveCurrentSelectionAsGroup=function(){
+  var sel=window._mkCampSend._selTags||[];
+  if(!sel.length){toast('Sélectionne au moins un tag','err');return;}
+  var name=prompt('Nom du groupe :',sel.slice(0,3).join(', ')+(sel.length>3?' +'+(sel.length-3):''));
+  if(!name)return;
+  mkSaveGroup(name,sel);
+  mkCampaignComposeModal();
+};
+
+/* --- Save draft --- */
+window.mkSaveDraftFromCompose=function(){
+  var send=window._mkCampSend;
+  var subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
+  var body=mkGetQuillHTML();
+  if(!subject&&!body){toast('Renseigne au moins un objet ou un corps','err');return;}
+  MK.emails.push({name:'[Brouillon] '+subject,subject:subject,body:body,status:'draft',createdAt:new Date().toISOString()});
+  svMk();clsM();toast('Brouillon sauvegardé','ok');rMarketing();
+};
+
+/* --- Enhanced Gmail Send --- */
+window.mkExecuteEnhancedSend=async function(){
+  var send=window._mkCampSend;
+  if(!send)return;
+  if(!gcalHasValidToken()){toast('Connecte ton compte Google d\'abord','err');return;}
+  var selTags=send._selTags||[];
+  var contacts=mkContactsByTag(selTags).filter(function(c){return c.email});
+  var manualEmails=send._manualEmails||[];
+  var manualContacts=manualEmails.map(function(e){return{id:'manual',email:e,firstName:'',lastName:'',company:'',title:'',_fkey:'manual',_folder:'Manual'};});
+  var allContacts=contacts.concat(manualContacts);
+  if(!allContacts.length&&!send._testMode){toast('Aucun contact avec email','err');return;}
+  var subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
+  var bodyTemplate=mkGetQuillHTML();
+  var signature=window.MK_SIGNATURE||'';
+  var recipients=[];
+  if(send._testMode){
+    try{var prof=await gcalGetProfile();recipients=[{email:prof.email||'',firstName:'Moi',lastName:''}];}catch(e){toast('Impossible de récupérer ton email','err');return;}
+  }else{recipients=allContacts;}
+  if(!send._testMode&&!subject){toast('Ajoute un objet','err');return;}
+  if(!send._testMode&&!bodyTemplate){toast('Écris un message','err');return;}
+  toast('Envoi en cours...','info');
+  var sent=0;var errors=0;
+  if(send._bccMode&&!send._testMode){
+    try{
+      var bccList=recipients.map(function(r){return r.email}).join(',');
+      var rawBody='Content-Type: text/html; charset=UTF-8\r\n\r\n'+bodyTemplate.replace(/\{\{signature\}\}/g,signature);
+      var encoded=typeof btoa!=='undefined'?btoa(unescape(encodeURIComponent(rawBody))):'';
+      var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded,to:bccList})});
+      if(r.ok)sent=recipients.length;else errors=recipients.length;
+    }catch(e){errors=recipients.length;console.error(e);}
+  }else{
+    for(var i=0;i<recipients.length;i++){
+      try{
+        var rcpt=recipients[i];
+        var personalized=mkPersonalizeBody(bodyTemplate.replace(/\{\{signature\}\}/g,signature),rcpt);
+        var rawBody2='Content-Type: text/html; charset=UTF-8\r\n\r\n'+personalized;
+        var encoded2=typeof btoa!=='undefined'?btoa(unescape(encodeURIComponent(rawBody2))):'';
+        var r2=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded2,to:rcpt.email})});
+        if(r2.ok){
+          sent++;
+          window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt)});
+        }else{errors++;}
+      }catch(e){errors++;console.error(e);}
+      if(i<recipients.length-1)await new Promise(function(r){setTimeout(r,200)});
+    }
+  }
+  svElog();
+  if(send._testMode){toast(sent?'Email de test envoyé !':'Échec de l\'envoi',sent?'ok':'err');}
+  else{
+    send.item.sentCount=(send.item.sentCount||0)+sent;
+    send.item.status='sent';
+    if(!send.item.name)send.item.name=subject;
+    if(send.item.createdAt&&MK.emails){
+      var idx2=MK.emails.findIndex(function(e){return e.createdAt===send.item.createdAt});
+      if(idx2>=0)MK.emails[idx2]=send.item;
+    }
+    svMk();clsM();rMarketing();
+    toast(sent+' email'+(sent>1?'s':'')+' envoyé'+(sent>1?'s':'')+(errors?' ('+errors+' échec'+(errors>1?'s':'')+')':''),'ok');
+  }
+};
+
+/* --- Check email replies --- */
+window.checkEmailReplies=async function(){
+  if(!gcalHasValidToken()||!window.MK_ELOG||!window.MK_ELOG.length)return;
+  try{
+    var profile=await gcalGetProfile();
+    var since=window.MK_ELOG.reduce(function(min,e){return Math.min(min,new Date(e.date).getTime())},Date.now()-7*86400000);
+    var sinceStr=new Date(since).toISOString();
+    var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:'+sinceStr.split('T')[0]+'&maxResults=50',{headers:{Authorization:'Bearer '+GCAL.token}});
+    if(!r.ok)return;
+    var data=await r.json();
+    if(!data.messages)return;
+    var updated=false;
+    for(var i=0;i<data.messages.length&&i<10;i++){
+      var msgId=data.messages[i].id;
+      var mr=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msgId+'?format=metadata&metadataHeaders=From&metadataHeaders=References',{headers:{Authorization:'Bearer '+GCAL.token}});
+      if(!mr.ok)continue;
+      var msg=await mr.json();
+      var headers=(msg.payload&&msg.payload.headers)||[];
+      var from=headers.find(function(h){return h.name==='From'})||{};
+      var fromEmail=(from.value||'').replace(/.*<(.+?)>.*/,function(m,e){return e});
+      var replyTo=window.MK_ELOG.find(function(e){return fromEmail===e.to&&!e.replyDate});
+      if(replyTo){replyTo.replyDate=new Date().toISOString();replyTo.replied=true;updated=true;}
+    }
+    if(updated){svElog();if(S.page==='marketing'&&S.mkv==='emails')rMarketing();}
+  }catch(e){console.error('checkEmailReplies:',e);}
+};
+
+/* Auto-check replies every 5 min */
+setInterval(function(){if(gcalHasValidToken()&&window.MK_ELOG&&window.MK_ELOG.length)checkEmailReplies();},300000);
+
+/* --- Override rMarketing for emails tab --- */
+var _origRMarketing=window.rMarketing;
+window.rMarketing=function(){
+  if(S.mkv==='emails'){
+    var el=document.getElementById('PC');
+    if(!el)return;
+    var emails=MK.emails||[];
+    var sentCount=window.MK_ELOG?window.MK_ELOG.length:0;
+    var replyCount=window.MK_ELOG?window.MK_ELOG.filter(function(e){return e.replied}).length:0;
+    var h='<div class="af">';
+    h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Emails</h1></div>';
+    h+='<div class="grid grid-cols-3 gap-4 mb-6">';
+    h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-paper-plane text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+emails.filter(function(e){return e.status==='sent'}).length+'</div><div class="text-xs opacity-90 mt-1">Envoyés</div></div>';
+    h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-reply text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+replyCount+'</div><div class="text-xs opacity-90 mt-1">Réponses</div></div>';
+    h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-file text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+emails.filter(function(e){return e.status==='draft'}).length+'</div><div class="text-xs opacity-90 mt-1">Brouillons</div></div>';
+    h+='</div>';
+    h+='<div class="flex flex-wrap gap-2 mb-6">'+mkTabsBar()+'</div>';
+    h+='<div class="flex justify-end mb-4 af d2"><button onclick="window._mkCampSend=null;mkCampaignComposeModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Rédiger un email</button></div>';
+    if(emails.length){
+      h+='<div class="flex flex-col gap-3">';
+      emails.forEach(function(c,i){
+        var isSent=c.status==='sent';
+        var isDraft=c.status==='draft';
+        h+='<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af">';
+        h+='<div class="w-10 h-10 rounded-lg '+(isSent?'bg-okS text-ok':isDraft?'bg-warnS text-warn':'bg-accS text-acc')+' flex items-center justify-center shrink-0"><i class="fa-solid '+(isSent?'fa-paper-plane':isDraft?'fa-file':'fa-envelope')+'"></i></div>';
+        h+='<div class="flex-1 min-w-0"><div class="text-sm font-medium">'+escHtml(c.name||c.subject||'Sans titre')+'</div>';
+        h+='<div class="text-xs text-mut mt-1">'+escHtml(c.subject||'')+'</div>';
+        if(isSent)h+='<div class="text-[.6rem] text-mut mt-1"><i class="fa-solid fa-check text-ok mr-1"></i>Envoyé</div>';
+        h+='</div>';
+        if(isDraft)h+='<button onclick="window._mkCampSend=null;mkCampaignComposeModal(MK.emails['+i+'],'+i+')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-pen mr-1"></i>Modifier</button>';
+        if(isSent&&c.subject)h+='<button onclick="window._mkCampSend=null;mkCampaignComposeModal(MK.emails['+i+'],'+i+')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-rotate-right mr-1"></i>Relancer</button>';
+        h+='<button onclick="delMkItem(\'emails\','+i+');" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-trash text-[.6rem]"></i></button>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }else{
+      h+='<div class="text-mut text-sm text-center py-10">Aucun email. Cliquez sur "Rédiger un email" pour commencer.</div>';
+    }
+    h+='</div>';
+    el.innerHTML=h;
+  }else{
+    _origRMarketing();
+  }
+};
+
+console.log('[CRM] Email enhancement module loaded');
+})();
+
 </script>
 </body>
 </html>
