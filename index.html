@@ -343,7 +343,7 @@ return false;
 // libellés, mais jamais la suppression définitive (seulement la corbeille).
 const GCAL_SCOPE='https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.modify';
 let GCAL={
-    clientId:localStorage.getItem('cdc_gcal_client_id','cdc_email_log')||'',
+    clientId:localStorage.getItem('cdc_gcal_client_id')||'',
     token:null,
     tokenExpiry:0,
     tokenClient:null,
@@ -484,8 +484,6 @@ localStorage.setItem(k,JSON.stringify(parsed));
 });
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
-// Auto-check email replies periodically
-setInterval(()=>{if(gcalHasValidToken()&&MK_ELOG&&MK_ELOG.length)checkEmailReplies();},300000);
 /* Recharger aussi les notes si le module existe */
 if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}}
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
@@ -2360,7 +2358,7 @@ function gcalDisconnect(){
         try{google.accounts.oauth2.revoke(GCAL.token,()=>{});}catch(e){}
     }
     GCAL.token=null;GCAL.tokenExpiry=0;GCAL.connected=false;GCAL.events=[];
-    GMAIL.messages=[];GMAIL.labels=[];GMAIL.nextPageToken=null;GMAIL._loaded=false;GMAIL.filter='all';MK_ELOG=[];
+    GMAIL.messages=[];GMAIL.labels=[];GMAIL.nextPageToken=null;GMAIL._loaded=false;GMAIL.filter='all';
     ren();
     toast('Déconnecté de Google Agenda','info');
 }
@@ -2928,333 +2926,6 @@ toast('Email envoyé');
 gmailFetchMessages(true);
 }catch(e){toast('Échec de l\u2019envoi','err');}
 }
-
-/* ===== MARKETING : GMAIL SIGNATURE + CONTACT TAGS ===== */
-let MK_SIGNATURE='';
-let MK_SIGNATURE_LOADING=false;
-async function gmailFetchSignature(){
-if(!gcalHasValidToken()||MK_SIGNATURE_LOADING)return;
-MK_SIGNATURE_LOADING=true;
-try{
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs',{headers:{Authorization:'Bearer '+GCAL.token}});
-if(!r.ok)throw new Error('HTTP '+r.status);
-const data=await r.json();
-const primary=(data.sendAs||[]).find(s=>s.isPrimary)||((data.sendAs||[])[0]);
-MK_SIGNATURE=primary?primary.signature||'':'';
-}catch(e){MK_SIGNATURE='';}
-MK_SIGNATURE_LOADING=false;
-return MK_SIGNATURE;
-}
-function mkGetAllTags(){
-const tagSet=new Set();
-FOLDERS.forEach(f=>{(D[f.key]?.contacts||[]).forEach(c=>{(c.tags||[]).forEach(t=>tagSet.add(t));});});
-return[...tagSet].sort((a,b)=>a.localeCompare(b,b.localeCompare,'fr'));
-}
-function mkContactsByTag(selectedTags){
-if(!selectedTags||!selectedTags.length)return[];
-const set=new Set(selectedTags);
-const results=[];
-FOLDERS.forEach(f=>{(D[f.key]?.contacts||[]).forEach(c=>{
-if(!c.email)return;
-const cTags=new Set(c.tags||[]);
-if([...set].some(t=>cTags.has(t)))results.push({...c,_folder:f.name,_fkey:f.key});
-});});
-return results;
-}
-function mkPersonalizeBody(body,contact){
-return(body||'').replace(/\{\{\s*prenom\s*\}\}/gi,contact.firstName||'').replace(/\{\{\s*nom\s*\}\}/gi,contact.lastName||'').replace(/\{\{\s*name\s*\}\}/gi,contactDisplayName(contact)).replace(/\{\{\s*entreprise\s*\}\}/gi,contact.company||'').replace(/\{\{\s*poste\s*\}\}/gi,contact.title||'').replace(/\{\{\s*email\s*\}\}/gi,contact.email||'');
-}
-/* ===== EMAIL TRACKING DATA ===== */
-function emptyElog(){return[];}
-function ldElog(){try{const s=localStorage.getItem('cdc_email_log');if(s)return JSON.parse(s);}catch(e){}return emptyElog();}
-function svElog(){localStorage.setItem('cdc_email_log',JSON.stringify(MK_ELOG));}
-let MK_ELOG=ldElog();
-/* Each record: {id, emailItemId, contactId, contactEmail, contactName, folder, subject, sentAt, gmailMessageId, status:'sent'|'opened'|'replied'|'bounced', openedAt, repliedAt, tags:[]} */
-function elogNewId(){return Date.now()+Math.random().toString(36).slice(2,6);}
-function elogByEmailItem(eid){return MK_ELOG.filter(r=>r.emailItemId===eid);}
-function elogStats(){
-  const total=MK_ELOG.length;
-  const sent=MK_ELOG.filter(r=>r.status==='sent').length;
-  const opened=MK_ELOG.filter(r=>r.status==='opened'||r.status==='replied').length;
-  const replied=MK_ELOG.filter(r=>r.status==='replied').length;
-  const bounced=MK_ELOG.filter(r=>r.status==='bounced').length;
-  return{total,sent,opened,replied,bounced,openRate:total?Math.round(opened/total*100):0,replyRate:total?Math.round(replied/total*100):0};
-}
-function elogByTag(){
-  const map={};
-  MK_ELOG.forEach(r=>{(r.tags||[]).forEach(t=>{if(!map[t])map[t]={sent:0,opened:0,replied:0};map[t].sent++;if(r.status==='opened'||r.status==='replied')map[t].opened++;if(r.status==='replied')map[t].replied++;});});
-  return map;
-}
-function elogByCampaign(){
-  const map={};
-  MK_ELOG.forEach(r=>{if(!r.emailItemId)return;const em=MK.emails.find(e=>e.name===r.emailItemId||e.subject===r.emailItemId);const key=em?em.name||em.subject:r.emailItemId;if(!map[key])map[key]={sent:0,opened:0,replied:0};map[key].sent++;if(r.status==='opened'||r.status==='replied')map[key].opened++;if(r.status==='replied')map[key].replied++;});
-  return map;
-}
-
-/* ===== REPLY DETECTION & OPEN TRACKING ===== */
-let _replyCheckRunning=false;
-async function checkEmailReplies(){
-if(!gcalHasValidToken()||_replyCheckRunning)return;
-const pending=MK_ELOG.filter(r=>r.status==='sent'&&r.gmailMessageId);
-if(!pending.length)return;
-_replyCheckRunning=true;
-const checked=new Set();
-for(const rec of pending){
-if(checked.has(rec.contactEmail))continue;
-checked.add(rec.contactEmail);
-try{
-const q='from:'+encodeURIComponent(rec.contactEmail)+' subject:'+encodeURIComponent('Re: '+rec.subject);
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=3&q='+encodeURIComponent(q),{headers:{Authorization:'Bearer '+GCAL.token}});
-if(!r.ok)continue;
-const data=await r.json();
-if(data.messages&&data.messages.length){
-const replyDate=data.messages[0].internalDate?new Date(parseInt(data.messages[0].internalDate)):new Date();
-MK_ELOG.filter(r=>r.contactEmail===rec.contactEmail&&r.subject===rec.subject&&r.status==='sent').forEach(r=>{r.status='replied';r.repliedAt=replyDate.toISOString();});
-}
-}catch(e){}
-await new Promise(r=>setTimeout(r,300));
-}
-svElog();
-_replyCheckRunning=false;
-if(S.v==='marketing'&&S.mkv==='email_tracking')mkOpenEmailTracking();
-}
-async function checkEmailBounces(){
-if(!gcalHasValidToken())return;
-try{
-const q='from:mailer-daemon OR from:postmaster subject:undelivered OR subject:delivery failure OR subject:failure notice';
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q='+encodeURIComponent(q),{headers:{Authorization:'Bearer '+GCAL.token}});
-if(!r.ok)return;
-const data=await r.json();
-if(!data.messages)return;
-for(const msg of data.messages){
-try{
-const dr=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msg.id+'?format=metadata&metadataHeaders=To&metadataHeaders=Subject',{headers:{Authorization:'Bearer '+GCAL.token}});
-if(!dr.ok)continue;
-const md=await dr.json();
-const toHdr=(md.payload?.headers||[]).find(h=>h.name.toLowerCase()==='to');
-const subHdr=(md.payload?.headers||[]).find(h=>h.name.toLowerCase()==='subject');
-if(!toHdr)continue;
-const bouncedEmail=toHdr.value.replace(/.*<(.+?)>.*/,'$1').trim();
-if(!bouncedEmail||bouncedEmail.includes('@gmail.com'))continue;
-MK_ELOG.filter(r=>r.contactEmail===bouncedEmail&&r.status!=='bounced').forEach(r=>{r.status='bounced';});
-}catch(e){}
-}
-svElog();
-}catch(e){}
-}
-function mkSetElogStatus(recId,status){
-const rec=MK_ELOG.find(r=>r.id===recId);if(!rec)return;
-rec.status=status;
-if(status==='opened')rec.openedAt=new Date().toISOString();
-if(status==='replied')rec.repliedAt=new Date().toISOString();
-svElog();mkOpenEmailTracking();
-}
-function mkDeleteElog(recId){
-MK_ELOG=MK_ELOG.filter(r=>r.id!==recId);svElog();mkOpenEmailTracking();
-}
-function mkClearElog(){
-if(!confirm('Supprimer tout l\'historique d\'envoi d\'emails ?'))return;
-MK_ELOG=[];svElog();mkOpenEmailTracking();toast('Historique effacé','info');
-}
-
-/* ===== EMAIL TRACKING DASHBOARD ===== */
-function mkOpenEmailTracking(){
-S.mkv='email_tracking';rMarketing();
-}
-function rEmailTracking(){
-const stats=elogStats();
-const byTag=elogByTag();
-const byCamp=elogByCampaign();
-const tagEntries=Object.entries(byTag).sort((a,b)=>b[1].sent-a[1].sent);
-const campEntries=Object.entries(byCamp).sort((a,b)=>b[1].sent-a[1].sent);
-const recent=MK_ELOG.slice().sort((a,b)=>new Date(b.sentAt)-new Date(a.sentAt)).slice(0,50);
-return`
-<div class="flex items-center justify-between mb-5 af"><h2 class="font-disp font-bold text-lg">Suivi d'emailing</h2>
-<div class="flex gap-2"><button onclick="checkEmailReplies();toast('Vérification en cours...','info')" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.65rem] text-mut hover:text-txt flex items-center gap-1.5 transition-all bp" ${gcalHasValidToken()?'':'disabled'}><i class="fa-solid fa-arrows-rotate text-[.55rem]"></i>Vérifier les réponses</button><button onclick="checkEmailBounces()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.65rem] text-mut hover:text-txt flex items-center gap-1.5 transition-all bp" ${gcalHasValidToken()?'':'disabled'}><i class="fa-solid fa-triangle-exclamation text-[.55rem]"></i>Bounces</button><button onclick="S.mkv='emails';rMarketing()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.65rem] text-mut hover:text-txt flex items-center gap-1.5 transition-all bp"><i class="fa-solid fa-arrow-left text-[.55rem]"></i>Retour</button></div></div>
-<!-- KPIs -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 af d1">
-<div class="kpi"><div class="text-[.6rem] text-mut mb-1"><i class="fa-solid fa-paper-plane mr-1"></i>Envoyés</div><div class="font-disp font-bold text-xl">${stats.total}</div></div>
-<div class="kpi"><div class="text-[.6rem] text-mut mb-1"><i class="fa-solid fa-check mr-1"></i>Envoyés OK</div><div class="font-disp font-bold text-xl text-ok">${stats.total-stats.bounced}</div></div>
-<div class="kpi"><div class="text-[.6rem] text-mut mb-1"><i class="fa-solid fa-envelope-open mr-1"></i>Ouverts</div><div class="font-disp font-bold text-xl text-inf">${stats.opened}</div></div>
-<div class="kpi"><div class="text-[.6rem] text-mut mb-1"><i class="fa-solid fa-reply mr-1"></i>Réponses</div><div class="font-disp font-bold text-xl text-acc">${stats.replied}</div></div>
-<div class="kpi"><div class="text-[.6rem] text-mut mb-1"><i class="fa-solid fa-ban mr-1"></i>Bounces</div><div class="font-disp font-bold text-xl ${stats.bounced?'text-red-400':'text-mut'}">${stats.bounced}</div></div>
-</div>
-<!-- Charts -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 af d2">
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-xs mb-3">Taux de réponse par tag</h3><div class="chart-wrap" style="height:220px"><canvas id="mkChartElogTag"></canvas></div></div>
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-xs mb-3">Performance par campagne</h3><div class="chart-wrap" style="height:220px"><canvas id="mkChartElogCamp"></canvas></div></div>
-</div>
-${tagEntries.length?`<div class="mb-6 af d3"><h3 class="font-disp font-semibold text-xs mb-3">Détail par tag</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">${tagEntries.map(([tag,s])=>`<div class="bg-surface border border-bdr rounded-xl p-3"><div class="flex items-center justify-between mb-2"><span class="text-xs font-medium truncate">#${escHtml(tag)}</span><span class="text-[.6rem] text-mut">${s.sent} envoyé${s.sent>1?'s':''}</span></div><div class="grid grid-cols-3 gap-2 text-center"><div><div class="text-[.55rem] text-mut">Ouverts</div><div class="text-xs font-semibold ${s.opened?'text-inf':'text-mut'}">${s.opened} <span class="text-[.55rem] font-normal">(${s.sent?Math.round(s.opened/s.sent*100):0}%)</span></div></div><div><div class="text-[.55rem] text-mut">Réponses</div><div class="text-xs font-semibold ${s.replied?'text-acc':'text-mut'}">${s.replied} <span class="text-[.55rem] font-normal">(${s.sent?Math.round(s.replied/s.sent*100):0}%)</span></div></div><div><div class="text-[.55rem] text-mut">En attente</div><div class="text-xs font-semibold text-warn">${s.sent-s.opened}</div></div></div></div>`).join('')}</div></div>`:''}
-${campEntries.length?`<div class="mb-6 af d4"><h3 class="font-disp font-semibold text-xs mb-3">Détail par campagne</h3><div class="flex flex-col gap-2">${campEntries.map(([name,s])=>`<div class="bg-surface border border-bdr rounded-xl p-3 flex items-center gap-4"><div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escHtml(name)}</div><div class="text-[.6rem] text-mut">${s.sent} envoyé${s.sent>1?'s':''}</div></div><div class="flex gap-4 text-center shrink-0"><div><div class="text-[.55rem] text-mut">Ouverts</div><div class="text-xs font-semibold text-inf">${s.opened} (${s.sent?Math.round(s.opened/s.sent*100):0}%)</div></div><div><div class="text-[.55rem] text-mut">Réponses</div><div class="text-xs font-semibold text-acc">${s.replied} (${s.sent?Math.round(s.replied/s.sent*100):0}%)</div></div></div></div>`).join('')}</div></div>`:''}
-<!-- Log table -->
-<div class="af d5"><div class="flex items-center justify-between mb-3"><h3 class="font-disp font-semibold text-xs">Historique des envois</h3>
-<div class="flex gap-2"><button onclick="mkExportElog()" class="h-7 px-2.5 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt flex items-center gap-1 bp"><i class="fa-solid fa-download text-[.5rem]"></i>Export CSV</button><button onclick="mkClearElog()" class="h-7 px-2.5 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-acc hover:text-acc/80 flex items-center gap-1 bp"><i class="fa-solid fa-trash text-[.5rem]"></i>Tout effacer</button></div></div>
-${recent.length?`<div class="bg-surface border border-bdr rounded-xl overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="border-b border-bdr bg-sAlt/50"><th class="text-left py-2 px-3 text-mut font-medium">Date</th><th class="text-left py-2 px-3 text-mut font-medium">Destinataire</th><th class="text-left py-2 px-3 text-mut font-medium">Objet</th><th class="text-left py-2 px-3 text-mut font-medium">Tags</th><th class="text-left py-2 px-3 text-mut font-medium">Statut</th><th class="text-right py-2 px-3 text-mut font-medium">Actions</th></tr></thead><tbody>${recent.map(r=>{const stIcon=r.status==='sent'?'fa-clock text-warn':r.status==='opened'?'fa-envelope-open text-inf':r.status==='replied'?'fa-reply text-ok':r.status==='bounced'?'fa-ban text-red-400':'fa-question text-mut';const stLabel=r.status==='sent'?'Envoyé':r.status==='opened'?'Ouvert':r.status==='replied'?'Répondu':r.status==='bounced'?'Bounce':'Inconnu';return`<tr class="border-b border-bdr/50 hover:bg-sAlt/30"><td class="py-2 px-3 text-mut whitespace-nowrap">${r.sentAt?new Date(r.sentAt).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'-'}</td><td class="py-2 px-3"><div class="font-medium truncate max-w-[180px]">${escHtml(r.contactName)}</div><div class="text-[.6rem] text-mut truncate">${escHtml(r.contactEmail)}</div></td><td class="py-2 px-3 truncate max-w-[160px] text-mut">${escHtml(r.subject)}</td><td class="py-2 px-3"><div class="flex flex-wrap gap-1">${(r.tags||[]).slice(0,3).map(t=>`<span class="text-[.5rem] px-1.5 py-0.5 rounded bg-sAlt text-mut">${escHtml(t)}</span>`).join('')}${(r.tags||[]).length>3?`<span class="text-[.5rem] text-mut">+${r.tags.length-3}</span>`:''}</div></td><td class="py-2 px-3"><span class="inline-flex items-center gap-1"><i class="fa-solid ${stIcon} text-[.55rem]"></i><span class="text-[.65rem]">${stLabel}</span>${r.repliedAt?`<span class="text-[.55rem] text-mut ml-1">${mkRelativeDate(r.repliedAt)}</span>`:''}</span></td><td class="py-2 px-3 text-right"><div class="flex justify-end gap-1"><button onclick="mkSetElogStatus('${r.id}','opened')" class="w-6 h-6 rounded hover:bg-infS text-mut hover:text-inf flex items-center justify-center" title="Marquer ouvert"><i class="fa-solid fa-envelope-open text-[.5rem]"></i></button><button onclick="mkSetElogStatus('${r.id}','replied')" class="w-6 h-6 rounded hover:bg-okS text-mut hover:text-ok flex items-center justify-center" title="Marquer répondu"><i class="fa-solid fa-reply text-[.5rem]"></i></button><button onclick="mkDeleteElog('${r.id}')" class="w-6 h-6 rounded hover:bg-accS text-mut hover:text-acc flex items-center justify-center" title="Supprimer"><i class="fa-solid fa-trash text-[.5rem]"></i></button></div></td></tr>`;}).join('')}</tbody></table></div></div>`:`<div class="bg-surface border border-bdr rounded-xl p-8 text-center text-sm text-mut"><i class="fa-solid fa-inbox text-2xl mb-2 block opacity-30"></i>Aucun envoi tracked. Envoie ton premier email depuis la section Emails !</div>`}
-</div>
-`;
-}
-function mkExportElog(){
-if(!MK_ELOG.length){toast('Aucune donnée à exporter','info');return;}
-const headers=['Date','Destinataire','Email','Objet','Tags','Statut','Dossier','Répondu le'];
-const csv=[headers.join(';'),...MK_ELOG.map(r=>[r.sentAt?new Date(r.sentAt).toLocaleString('fr-FR'):'',r.contactName||'',r.contactEmail||'',r.subject||'',(r.tags||[]).join('|'),r.status||'',r.folder||'',r.repliedAt?new Date(r.repliedAt).toLocaleString('fr-FR'):''].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';'))].join('\n');
-const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='email_tracking_'+todayStr()+'.csv';a.click();URL.revokeObjectURL(url);toast('Tracking exporté en CSV','ok');
-}
-function renderElogCharts(){
-if(typeof Chart==='undefined')return;
-const byTag=elogByTag();const byCamp=elogByCampaign();
-const tagEntries=Object.entries(byTag).sort((a,b)=>b[1].sent-a[1].sent).slice(0,8);
-const campEntries=Object.entries(byCamp).sort((a,b)=>b[1].sent-a[1].sent).slice(0,8);
-const chartOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
-const c1=document.getElementById('mkChartElogTag');
-if(c1){if(chartInstances.mkChartElogTag)chartInstances.mkChartElogTag.destroy();
-chartInstances.mkChartElogTag=new Chart(c1,{type:'bar',data:{labels:tagEntries.map(e=>e[0]),datasets:[{label:'Envoyés',data:tagEntries.map(e=>e[1].sent),backgroundColor:'rgba(255,156,0,.3)',borderColor:'#ff9c00',borderWidth:1},{label:'Réponses',data:tagEntries.map(e=>e[1].replied),backgroundColor:'rgba(95,191,143,.5)',borderColor:'#5fbf8f',borderWidth:1}]},options:{...chartOpts,scales:{x:{ticks:{color:'#6b6b6b',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#6b6b6b',font:{size:9}},grid:{color:'rgba(255,255,255,.05)'}}}}});}
-const c2=document.getElementById('mkChartElogCamp');
-if(c2){if(chartInstances.mkChartElogCamp)chartInstances.mkChartElogCamp.destroy();
-chartInstances.mkChartElogCamp=new Chart(c2,{type:'doughnut',data:{labels:campEntries.map(e=>e[0]),datasets:[{data:campEntries.map(e=>e[1].sent),backgroundColor:['#ff9c00','#9999ff','#5fbf8f','#ffcc66','#cc99cc','#cc6666','#ff9966','#99ccff'],borderWidth:0}]},options:{...chartOpts,cutout:'60%',plugins:{...chartOpts.plugins,tooltip:{callbacks:{label:ctx=>{const s=campEntries[ctx.dataIndex][1];return ctx.label+': '+s.sent+' envoyés, '+s.replied+' réponses ('+Math.round(s.replied/s.sent*100)+'%)';}}}}}});}
-}
-
-/* ===== ENHANCED EMAIL SEND FLOW ===== */
-async function mkCampaignSend(emailIdx){
-if(!gcalHasValidToken()){toast('Connecte ton compte Google depuis l\'onglet Agenda pour envoyer des emails','err');return;}
-const emailItem=MK.emails[emailIdx];if(!emailItem){toast('Email introuvable','err');return;}
-if(!emailItem.subject){toast('L\'email n\'a pas d\'objet','err');return;}
-if(!emailItem.body){toast('L\'email n\'a pas de contenu','err');return;}
-if(!MK_SIGNATURE)await gmailFetchSignature();
-window._mkCampSend={idx:emailIdx,item:emailItem,signature:MK_SIGNATURE,_selTags:[],_bccMode:false,_testMode:false};
-mkCampaignComposeModal();
-}
-function mkQuickCompose(){
-if(!gcalHasValidToken()){toast('Connecte ton compte Google depuis l\'onglet Agenda','err');return;}
-window._mkCampSend={idx:null,item:{name:'',subject:'',body:'',audience:''},signature:MK_SIGNATURE,_selTags:[],_bccMode:false,_testMode:false};
-mkCampaignComposeModal();
-}
-function mkCampaignComposeModal(){
-const send=window._mkCampSend;
-const allTags=mkGetAllTags();
-const selTags=send._selTags||[];
-const selectedContacts=selTags.length?mkContactsByTag(selTags):[];
-const emailContacts=selectedContacts.filter(c=>c.email);
-const isExisting=send.idx!=null;
-const existingLog=isExisting?elogByEmailItem(MK.emails[send.idx].name||send.idx):[];
-const existingSent=existingLog.length;
-opM(`<div class="p-6 max-h-[85vh] overflow-y-auto">
-<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">${isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'Nouvel envoi d\'email'}</h2><span class="bdg ${send.signature?'bg-okS text-ok':'bg-warnS text-warn'} text-[.6rem]"><i class="fa-solid fa-${send.signature?'check':'xmark'} mr-1"></i>${send.signature?'Signature Gmail chargée':'Pas de signature'}</span></div>
-${!isExisting?`<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkeSubject" class="fi" placeholder="Objet de l\'email" value="${escHtml(send.item.subject)}" oninput="window._mkCampSend.item.subject=this.value"></div>
-<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Corps du message</label><div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div><textarea id="mkeBody" class="fi" rows="5" placeholder="Bonjour {{prenom}},\n\nVotre message..." oninput="window._mkCampSend.item.body=this.value">${escHtml(send.item.body)}</textarea></div>`:''}
-<div class="mb-4"><label class="text-xs text-mut block mb-2"><i class="fa-solid fa-tags mr-1"></i>Sélectionne les tags pour filtrer tes contacts</label>
-${allTags.length?`<div class="flex flex-wrap gap-1.5 mb-3">${allTags.map(t=>`<button type="button" onclick="mkToggleCampTag('${escHtml(t).replace(/'/g,"\\\'")}')" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium transition-all bp ${selTags.includes(t)?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt'}">${escHtml(t)}</button>`).join('')}</div>
-<div class="flex gap-2 mb-3"><button onclick="mkSelectAllTags()" class="text-[.65rem] text-acc hover:underline">Tout sélectionner</button><button onclick="window._mkCampSend._selTags=[];mkCampaignComposeModal()" class="text-[.65rem] text-mut hover:underline">Réinitialiser</button></div>`:'<div class="text-xs text-mut text-center py-4">Aucun tag trouvé sur tes contacts.</div>'}
-</div>
-${emailContacts.length?`<div class="mb-4"><div class="flex items-center justify-between mb-2"><span class="text-xs text-mut"><span class="font-semibold text-txt">${emailContacts.length}</span> contact${emailContacts.length>1?'s':''} avec email</span><div class="flex items-center gap-3"><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="individual" ${!send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=false;mkCampaignComposeModal()"><span>Individuel (personnalisé)</span></label><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="radio" name="mkeSendMode" value="bcc" ${send._bccMode?'checked':''} onchange="window._mkCampSend._bccMode=true;mkCampaignComposeModal()"><span>BCC (destinataires cachés)</span></label></div></div>
-<div class="bg-sAlt/50 border border-bdr rounded-xl max-h-36 overflow-y-auto">${emailContacts.map(c=>`<div class="flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0"><div class="w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0">${escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))}</div><div class="flex-1 min-w-0"><span class="text-[.65rem] font-medium truncate block">${escHtml(contactDisplayName(c))}</span><span class="text-[.55rem] text-mut">${escHtml(c.email)}</span></div></div>`).join('')}</div></div>`:'<div class="text-xs text-mut text-center py-3 mb-4">Sélectionne au moins un tag pour voir les contacts</div>'}
-${send._bccMode&&emailContacts.length?'<div class="bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.65rem] text-inf flex items-start gap-2"><i class="fa-solid fa-eye-slash mt-0.5 shrink-0"></i><span>Mode BCC : un seul email envoyé, tous les destinataires en copie cachée. La personnalisation ({{prenom}}, etc.) ne sera pas appliquée.</span></div>':''}
-<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-eye mr-1"></i>Aperçu${emailContacts.length?' (premier contact)':''}</label>
-<div class="bg-black/40 border border-bdr rounded-xl p-3 max-h-32 overflow-y-auto text-xs whitespace-pre-wrap">${escHtml(emailContacts.length?(send._bccMode?send.item.body:mkPersonalizeBody(send.item.body,emailContacts[0])):send.item.body||'(pas de contenu)')}${send.signature?'\n\n---\n'+escHtml(send.signature):''}</div>
-</div>
-<div class="flex items-center gap-3 mb-4"><label class="flex items-center gap-1.5 text-[.65rem] text-mut cursor-pointer select-none"><input type="checkbox" id="mkeTest" ${send._testMode?'checked':''} onchange="window._mkCampSend._testMode=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Envoyer un test à mon adresse d\'abord</span></label>
-${existingSent?`<span class="text-[.6rem] text-mut"><i class="fa-solid fa-paper-plane mr-1"></i>${existingSent} déjà envoyé${existingSent>1?'s':''} pour cet email</span>`:''}</div>
-<div class="flex justify-between items-center"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>
-<div class="flex gap-2">
-${emailContacts.length?`<span class="text-xs text-mut self-center">${emailContacts.length} destinataire${emailContacts.length>1?'s':''}</span>`:''}
-<button onclick="mkExecuteEnhancedSend()" class="h-10 px-5 rounded-xl ${emailContacts.length?'bg-ok hover:bg-ok/80 text-black':'bg-sAlt border border-bdr text-mut'} text-sm font-semibold transition-colors bp" ${!emailContacts.length?'disabled':''}><i class="fa-solid fa-paper-plane mr-1.5"></i>${send._testMode?'Tester':'Envoyer'}${emailContacts.length>1&&!send._testMode?' ('+emailContacts.length+')':''}</button>
-</div></div>
-</div>`);
-}
-function mkToggleCampTag(tag){
-if(!window._mkCampSend._selTags)window._mkCampSend._selTags=[];
-const arr=window._mkCampSend._selTags;
-const idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
-mkCampaignComposeModal();
-}
-function mkSelectAllTags(){
-window._mkCampSend._selTags=mkGetAllTags();
-mkCampaignComposeModal();
-}
-async function mkExecuteEnhancedSend(){
-const send=window._mkCampSend;
-const selTags=send._selTags||[];
-const contacts=mkContactsByTag(selTags).filter(c=>c.email);
-if(!contacts.length){toast('Aucun contact avec email','err');return;}
-const subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
-const bodyTemplate=send.item.body||document.getElementById('mkeBody')?.value||'';
-const signature=send.signature;
-const bccMode=send._bccMode;
-const testMode=send._testMode;
-if(!subject){toast('Renseigne un objet','err');return;}
-if(!bodyTemplate){toast('Renseigne le corps du message','err');return;}
-if(testMode){
-try{
-const body=bodyTemplate+(signature?'\n\n---\n'+signature:'');
-const lines=['To: me','Subject: '+gmailEncodeSubject('[TEST] '+subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',body];
-const raw=lines.join('\r\n');
-const b64=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:b64})});
-if(r.status===401){toast('Session Google expirée','err');return;}
-if(!r.ok)throw new Error('HTTP '+r.status);
-toast('Email de test envoyé !','ok');
-}catch(e){toast('Échec de l\'envoi du test','err');}
-return;
-}
-let recipients=bccMode?contacts:contacts;
-let ok=0,fail=0;const total=recipients.length;
-const emailItemId=send.idx!=null?(MK.emails[send.idx].name||send.idx):'quick_'+Date.now();
-opM(`<div class="p-6 text-center"><h2 class="font-disp font-bold text-lg mb-4">${bccMode?'Envoi BCC en cours...':'Envoi en cours...'}<div class="text-[.65rem] text-mut font-normal mt-1">${bccMode?'1 email, '+total+' destinataires en copie cachée':total+' email'+(total>1?'s individuels':' individuel')+'<br>Les destinataires ne voient pas les emails des autres'}</div></h2>
-<div class="mb-4"><div class="text-sm text-mut mb-2" id="mkSendProgress">0 / ${bccMode?1:total}</div>${mkProgress(0,'#5fbf8f')}</div>
-<div class="max-h-40 overflow-y-auto text-left bg-sAlt/50 border border-bdr rounded-xl p-3" id="mkSendLog"></div></div>`);
-if(bccMode){
-try{
-const bccList=recipients.map(c=>c.email).join(', ');
-const body=bodyTemplate+(signature?'\n\n---\n'+signature:'');
-const lines=['Bcc: '+bccList,'Subject: '+gmailEncodeSubject(subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',body];
-const raw=lines.join('\r\n');
-const b64=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:b64})});
-if(r.status===401){toast('Session Google expirée','err');return;}
-if(!r.ok)throw new Error('HTTP '+r.status);
-const data=await r.json();
-recipients.forEach(c=>{MK_ELOG.push({id:elogNewId(),emailItemId,contactId:c.id,contactEmail:c.email,contactName:contactDisplayName(c),folder:c._fkey,subject,sentAt:new Date().toISOString(),gmailMessageId:data.id||'',status:'sent',openedAt:null,repliedAt:null,tags:selTags});});
-ok=total;
-}catch(e){fail=total;}
-}else{
-for(let i=0;i<contacts.length;i++){
-const c=contacts[i];
-const personalizedBody=mkPersonalizeBody(bodyTemplate,c)+(signature?'\n\n---\n'+signature:'');
-const lines=['To: '+c.email,'Subject: '+gmailEncodeSubject(subject),'Content-Type: text/plain; charset=UTF-8','MIME-Version: 1.0','','',personalizedBody];
-const raw=lines.join('\r\n');
-const b64=btoa(unescape(encodeURIComponent(raw))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-try{
-const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:b64})});
-if(r.status===401){toast('Session Google expirée','err');break;}
-if(!r.ok)throw new Error('HTTP '+r.status);
-const data=await r.json();
-MK_ELOG.push({id:elogNewId(),emailItemId,contactId:c.id,contactEmail:c.email,contactName:contactDisplayName(c),folder:c._fkey,subject,sentAt:new Date().toISOString(),gmailMessageId:data.id||'',status:'sent',openedAt:null,repliedAt:null,tags:selTags});
-ok++;
-}catch(e){fail++;}
-const prog=document.getElementById('mkSendProgress');
-const log=document.getElementById('mkSendLog');
-const bar=document.querySelector('#mkSendLog')?.previousElementSibling?.querySelector('div:last-child');
-if(prog)prog.textContent=`${i+1} / ${total}`;
-if(bar)bar.style.width=Math.round((i+1)/total*100)+'%';
-if(log){log.innerHTML+=`<div class="flex items-center gap-2 py-1 border-b border-bdr/30 last:border-0"><i class="fa-solid fa-${fail>ok?'xmark':'check'} text-[.55rem] ${fail>ok?'text-acc':'text-ok'}"></i><span class="text-[.65rem] ${fail>ok?'text-mut':'text-txt'}">${escHtml(c.email)} — ${escHtml(contactDisplayName(c))}</span></div>`;log.scrollTop=log.scrollHeight;}
-await new Promise(r=>setTimeout(r,1200));
-}
-}
-svElog();
-if(send.idx!=null){const emailItem=MK.emails[send.idx];if(emailItem){emailItem.status='sent';emailItem.sentAt=new Date().toISOString();emailItem.recipients=String(ok);svMk();}}
-if(!send.idx&&subject){MK.emails.push({name:'[Envoi rapide] '+subject,subject,status:'sent',audience:selTags.join(', '),body:bodyTemplate,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),sentAt:new Date().toISOString(),recipients:String(ok),openRate:'',clickRate:''});svMk();}
-const sentStr=ok?ok+' email'+(ok>1?'s':'')+' envoyé'+(ok>1?'s':''):'';
-const failStr=fail?fail+' échoué'+(fail>1?'s':'' ):'';
-toast(sentStr+(sentStr&&failStr?' — ':'')+failStr, fail?'info':'ok');
-opM(`<div class="p-6 text-center"><i class="fa-solid fa-circle-check text-3xl text-ok mb-3"></i>
-<h2 class="font-disp font-bold text-lg mb-2">Envoi terminé</h2>
-<p class="text-sm text-mut mb-3">${sentStr}${failStr?'<br><span class="text-acc">'+failStr+'</span>':''}</p>
-${bccMode?'<div class="bg-infS/50 border border-inf/20 rounded-lg p-3 mb-4 text-[.65rem] text-inf"><i class="fa-solid fa-eye-slash mr-1"></i>Mode BCC : les destinataires ne voient pas les emails des autres.</div>':''}
-<div class="flex justify-center gap-3 mb-4"><button onclick="clsM();mkOpenEmailTracking()" class="h-10 px-5 rounded-xl bg-inf hover:bg-inf/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-chart-line mr-1.5"></i>Voir le suivi</button><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Fermer</button></div>
-</div>`);
-rMarketing();
-setTimeout(()=>checkEmailReplies(),5000);
-}
 function gmailRow(m){
 const name=gmailFromName(m.from);
 const av=gmailAvatarStyle(name);
@@ -3324,368 +2995,126 @@ ${GMAIL.nextPageToken?`<div class="text-center mt-4 af d3"><button onclick="gmai
 </div>`;
 }
 
-/* ===== MARKETING MODULE (enhanced) ===== */
+/* ===== MARKETING : VUE D'ENSEMBLE (Fonction 1/8) ===== */
 const MK_TABS=[
 {key:'overview',label:'Vue d\u2019ensemble',icon:'fa-gauge'},
 {key:'campaigns',label:'Campagnes',icon:'fa-rocket'},
 {key:'content',label:'Contenu',icon:'fa-pen-nib'},
 {key:'emails',label:'Emails',icon:'fa-envelope'},
-{key:'social',label:'R\u00e9seaux sociaux',icon:'fa-share-nodes'},
+{key:'social',label:'Réseaux sociaux',icon:'fa-share-nodes'},
 {key:'pages',label:'Pages & Formulaires',icon:'fa-file-lines'},
-{key:'ads',label:'Publicit\u00e9s',icon:'fa-bullseye'},
-{key:'reports',label:'Rapports',icon:'fa-chart-line'},
-{key:'email_tracking',label:'Suivi emailing',icon:'fa-envelope-circle-check'}
+{key:'ads',label:'Publicités',icon:'fa-bullseye'},
+{key:'reports',label:'Rapports',icon:'fa-chart-line'}
 ];
-const MK_BUILT=['overview','campaigns','content','emails','social','pages','ads','reports','email_tracking'];
-const MK_CHANNEL_COLORS={'seo':'#5fbf8f','email':'#9999ff','social':'#ff9c00','ads':'#ffcc66','content':'#cc99cc','referral':'#c9a97e','events':'#66cccc'};
-const MK_STATUS_LABELS={'draft':'Brouillon','active':'Active','paused':'En pause','done':'Termin\u00e9e','published':'Publi\u00e9','sent':'Envoy\u00e9','scheduled':'Planifi\u00e9','live':'En ligne','archived':'Archiv\u00e9'};
-function mkStatusLabel(s){return MK_STATUS_LABELS[s]||s||'';}
-function mkStatusColor(s){if(!s)return'bg-sAlt text-mut';if(s==='active'||s==='published'||s==='sent'||s==='live')return'bg-okS text-ok';if(s==='paused'||s==='scheduled')return'bg-warnS text-warn';return'bg-sAlt text-mut';}
-function mkFormatMoney(v){return(Number(v)||0).toLocaleString('fr-CH')+' CHF';}
-function mkFormatPct(v){if(v==null||v==='')return'-';const n=Number(v);if(isNaN(n))return String(v);return n.toFixed(1)+'%';}
-function mkFormatNum(v){return(Number(v)||0).toLocaleString('fr-CH');}
-function mkDaysAgo(iso){if(!iso)return null;const d=Math.floor((Date.now()-new Date(iso).getTime())/86400000);if(d<0)return null;return d;}
-function mkRelativeDate(iso){if(!iso)return'';const d=mkDaysAgo(iso);if(d===0)return"Aujourd'hui";if(d===1)return'Hier';if(d!==null&&d<7)return'il y a '+d+' jours';return new Date(iso).toLocaleDateString('fr-CH',{day:'numeric',month:'short'});}
-function mkAllItems(){let all=[];['campaigns','content','emails','social','pages','ads'].forEach(t=>{(MK[t]||[]).forEach((item,i)=>{all.push({...item,_type:t,_idx:i});});});return all.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));}
-function navMk(tab){S.mkv=tab;if(tab==='reports')S._mkReportPeriod='month';rMarketing();if(tab==='email_tracking')setTimeout(renderElogCharts,100);}
+const MK_BUILT=['overview','campaigns','content','emails','social'];
+function navMk(tab){
+if(!MK_BUILT.includes(tab)){toast('Cette section arrive dans une prochaine étape','info');return;}
+S.mkv=tab;rMarketing();
+}
 function mkTabsBar(){
-return`<div class="flex flex-wrap gap-2 mb-6">${MK_TABS.map(t=>`<button onclick="navMk('${t.key}')" class="chip ${S.mkv===t.key?'act':''}"><i class="fa-solid ${t.icon} mr-1.5"></i>${t.label}</button>`).join('')}</div>`;}
-function mkKpi(label,value,icon,color,sub){
-return`<div class="kpi" style="background:${color}"><i class="fa-solid ${icon} text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">${value}</div><div class="text-xs opacity-90 mt-1">${label}</div>${sub?`<div class="text-[.65rem] opacity-70 mt-0.5">${sub}</div>`:''}</div>`;}
-function mkProgress(pct,color){pct=Math.max(0,Math.min(100,Number(pct)||0));return`<div class="w-full h-1.5 rounded-full bg-black/30 mt-2"><div class="h-full rounded-full transition-all" style="width:${pct}%;background:${color||'#ff9c00'}"></div></div>`;}
-function mkMiniBar(items,getKey,getColor){
-if(!items.length)return'';
-const counts={};items.forEach(i=>{const k=getKey(i);if(k)counts[k]=(counts[k]||0)+1;});
-const total=Object.values(counts).reduce((a,b)=>a+b,0);
-return`<div class="flex h-2 rounded-full overflow-hidden bg-black/30">${Object.entries(counts).map(([k,v])=>`<div style="width:${(v/total*100).toFixed(1)}%;background:${getColor(k)}" title="${k}: ${v}"></div>`).join('')}</div>`;}
-/* ===== MARKETING : VUE D'ENSEMBLE ===== */
+return`<div class="flex flex-wrap gap-2 mb-6">${MK_TABS.map(t=>`<button onclick="navMk('${t.key}')" class="chip ${S.mkv===t.key?'act':''} ${!MK_BUILT.includes(t.key)?'opacity-50':''}"><i class="fa-solid ${t.icon} mr-1.5"></i>${t.label}${!MK_BUILT.includes(t.key)?' <span class="text-[.6rem] opacity-70">(bientôt)</span>':''}</button>`).join('')}</div>`;
+}
+function mkKpi(label,value,icon,color){
+return`<div class="kpi" style="background:${color}"><i class="fa-solid ${icon} text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">${value}</div><div class="text-xs opacity-90 mt-1">${label}</div></div>`;
+}
 function rMarketingOverview(){
-const camp=MK.campaigns||[];const cont=MK.content||[];const ems=MK.emails||[];const soc=MK.social||[];const pgs=MK.pages||[];const ads=MK.ads||[];
-const activeCamp=camp.filter(c=>c.status==='active');
+const camp=MK.campaigns||[];
+const activeCamp=camp.filter(c=>c.status==='active').length;
 const totalBudget=camp.reduce((n,c)=>n+(Number(c.budget)||0),0);
-const spentBudget=camp.reduce((n,c)=>n+(Number(c.spent)||0),0);
-const contentPub=cont.filter(c=>c.status==='published').length;
-const contentDraft=cont.filter(c=>c.status==='draft').length;
+const contentPub=(MK.content||[]).filter(c=>c.status==='published').length;
 const leads=camp.reduce((n,c)=>n+(Number(c.leads)||0),0);
-const emailSent=ems.filter(e=>e.status==='sent').length;
-const emailSched=ems.filter(e=>e.status==='scheduled').length;
-const socPlat={};soc.forEach(s=>{const p=s.platform||'other';socPlat[p]=(socPlat[p]||0)+1;});
-const totalAdsSpend=ads.reduce((n,a)=>n+(Number(a.spend)||0),0);
-const totalAdsClicks=ads.reduce((n,a)=>n+(Number(a.clicks)||0),0);
-const totalAdsConv=ads.reduce((n,a)=>n+(Number(a.conversions)||0),0);
-const pageViews=pgs.reduce((n,p)=>n+(Number(p.views)||0),0);
-const pageConv=pgs.reduce((n,p)=>n+(Number(p.conversions)||0),0);
-const recentItems=mkAllItems().slice(0,6);
-const upcomingItems=[...camp.filter(c=>c.status==='active'&&c.endDate),...ems.filter(e=>e.status==='scheduled'&&e.scheduledDate),...soc.filter(s=>s.date&&s.date>=todayStr())].sort((a,b)=>(a.scheduledDate||a.endDate||a.date||'').localeCompare(b.scheduledDate||b.endDate||b.date||'')).slice(0,5);
 return`
 ${mkTabsBar()}
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 af d1">
-${mkKpi('Campagnes actives',activeCamp.length,'fa-rocket','#ff9c00',totalBudget?mkFormatMoney(totalBudget)+' budget':'Aucune budget')}
-${mkKpi('Leads générés',mkFormatNum(leads),'fa-users','#ffcc66',camp.length?mkFormatNum(Math.round(leads/Math.max(camp.length,1)))+'/campagne':'-')}
-${mkKpi('Contenus publiés',contentPub,'fa-pen-nib','#5fbf8f',contentDraft?contentDraft+' en brouillon':'-')}
-${mkKpi('Emails',emailSent+' envoyés','fa-envelope','#9999ff',emailSched?emailSched+' planifiés':'-')}
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+${mkKpi('Campagnes actives',activeCamp,'fa-rocket','#ff9c00')}
+${mkKpi('Budget marketing total',totalBudget.toLocaleString('fr-CH')+' CHF','fa-coins','#9999ff')}
+${mkKpi('Contenus publiés',contentPub,'fa-pen-nib','#5fbf8f')}
+${mkKpi('Leads générés',leads,'fa-users','#ffcc66')}
 </div>
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 af d2">
-${mkKpi('Dépenses pubs',mkFormatMoney(totalAdsSpend),'fa-bullseye','#cc99cc',totalAdsClicks?mkFormatNum(totalAdsClicks)+' clics':'-')}
-${mkKpi('Vues pages',mkFormatNum(pageViews),'fa-file-lines','#66cccc',pageConv?mkFormatNum(pageConv)+' conversions':'-')}
-${mkKpi('ROI estimé',totalBudget>0?(leads>0?Math.round((leads*150-totalBudget)/totalBudget*100)+'%':'-'):'-','fa-chart-line','#ff9c00','basé sur 150 CHF/lead')}
-${mkKpi('Taux conv. global',totalAdsClicks>0?(leads*100/totalAdsClicks).toFixed(1)+'%':'-','fa-bullseye','#ffcc66','clics → leads')}
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-<div class="lg:col-span-2 bg-surface border border-bdr rounded-xl p-5 af d3">
-<div class="flex items-center justify-between mb-4"><h3 class="font-disp font-semibold text-sm">Répartition budgétaire par canal</h3><span class="text-xs text-mut">${mkFormatMoney(totalBudget)} au total</span></div>
-${camp.length?mkMiniBar(camp,c=>c.channel||'other',k=>MK_CHANNEL_COLORS[k]||'#c9a97e'):''}
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">${Object.entries(camp.reduce((acc,c)=>{const ch=c.channel||'other';acc[ch]=(acc[ch]||0)+(Number(c.budget)||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${MK_CHANNEL_COLORS[k]||'#c9a97e'}"></div><span class="text-xs text-mut truncate">${k}</span><span class="text-xs font-semibold ml-auto">${mkFormatMoney(v)}</span></div>`).join('')||'<div class="col-span-full text-xs text-mut text-center py-4">Aucune campagne avec budget</div>'}</div>
-</div>
-<div class="bg-surface border border-bdr rounded-xl p-5 af d4">
-<div class="flex items-center justify-between mb-4"><h3 class="font-disp font-semibold text-sm">Réseaux sociaux</h3></div>
-${Object.keys(socPlat).length?Object.entries(socPlat).map(([p,c])=>`<div class="flex items-center justify-between py-2 border-b border-bdr last:border-0"><div class="flex items-center gap-2"><i class="fa-brands fa-${p==='linkedin'?'linkedin':p==='twitter'?'twitter':p==='instagram'?'instagram':'globe'} text-sm text-inf"></i><span class="text-xs capitalize">${p}</span></div><span class="text-xs font-disp font-bold">${c}</span></div>`).join(''):'<div class="text-xs text-mut text-center py-6">Aucun post social</div>'}
-</div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-<div class="bg-surface border border-bdr rounded-xl p-5 af d5">
-<div class="flex items-center justify-between mb-4"><h3 class="font-disp font-semibold text-sm">Activité récente</h3><button onclick="navMk('campaigns')" class="text-[.65rem] text-acc hover:text-accH">Voir tout</button></div>
-${recentItems.length?recentItems.map(it=>`<div class="flex items-center gap-3 py-2 border-b border-bdr last:border-0">
-<div class="w-8 h-8 rounded-lg ${it._type==='campaigns'?'bg-accS text-acc':it._type==='content'?'bg-infS text-inf':it._type==='emails'?'bg-okS text-ok':'bg-warnS text-warn'} flex items-center justify-center shrink-0"><i class="fa-solid ${it._type==='campaigns'?'fa-rocket':it._type==='content'?'fa-pen-nib':it._type==='emails'?'fa-envelope':it._type==='social'?'fa-share-nodes':'fa-file'} text-[.6rem]"></i></div>
-<div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escHtml(it.name)}</div><div class="text-[.6rem] text-mut">${mkRelativeDate(it.createdAt)}</div></div>
-<span class="bdg ${mkStatusColor(it.status)} text-[.55rem]">${mkStatusLabel(it.status)}</span>
-</div>`).join(''):'<div class="text-xs text-mut text-center py-6">Aucune activité récente</div>'}
-</div>
-<div class="bg-surface border border-bdr rounded-xl p-5 af d6">
-<div class="flex items-center justify-between mb-4"><h3 class="font-disp font-semibold text-sm">À venir</h3></div>
-${upcomingItems.length?upcomingItems.map(it=>`<div class="flex items-center gap-3 py-2 border-b border-bdr last:border-0">
-<div class="w-8 h-8 rounded-lg bg-warnS text-warn flex items-center justify-center shrink-0"><i class="fa-solid fa-clock text-[.6rem]"></i></div>
-<div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escHtml(it.name)}</div><div class="text-[.6rem] text-mut">${it.scheduledDate||it.endDate||it.date||''}</div></div>
-<span class="bdg ${mkStatusColor(it.status)} text-[.55rem]">${mkStatusLabel(it.status)}</span>
-</div>`).join(''):'<div class="text-xs text-mut text-center py-6">Aucun élément à venir</div>'}
-</div>
-</div>
-<div class="bg-surface border border-bdr rounded-xl p-5 af d6">
-<div class="font-disp font-semibold text-sm mb-4">Actions rapides</div>
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-<button onclick="S.mkv='campaigns';rMarketing();setTimeout(()=>openMkForm('campaigns'),100)" class="p-4 rounded-xl bg-sAlt border border-bdr hover:border-acc/30 hover:bg-accS/30 transition-all text-center group bp"><i class="fa-solid fa-rocket text-xl text-acc mb-2 block group-hover:scale-110 transition-transform"></i><span class="text-xs font-semibold">Campagne</span></button>
-<button onclick="S.mkv='content';rMarketing();setTimeout(()=>openMkForm('content'),100)" class="p-4 rounded-xl bg-sAlt border border-bdr hover:border-inf/30 hover:bg-infS/30 transition-all text-center group bp"><i class="fa-solid fa-pen-nib text-xl text-inf mb-2 block group-hover:scale-110 transition-transform"></i><span class="text-xs font-semibold">Contenu</span></button>
-<button onclick="S.mkv='emails';rMarketing();setTimeout(()=>openMkForm('emails'),100)" class="p-4 rounded-xl bg-sAlt border border-bdr hover:border-ok/30 hover:bg-okS/30 transition-all text-center group bp"><i class="fa-solid fa-envelope text-xl text-ok mb-2 block group-hover:scale-110 transition-transform"></i><span class="text-xs font-semibold">Email</span></button>
-<button onclick="S.mkv='social';rMarketing();setTimeout(()=>openMkForm('social'),100)" class="p-4 rounded-xl bg-sAlt border border-bdr hover:border-warn/30 hover:bg-warnS/30 transition-all text-center group bp"><i class="fa-solid fa-share-nodes text-xl text-warn mb-2 block group-hover:scale-110 transition-transform"></i><span class="text-xs font-semibold">Post social</span></button>
-</div></div>`;
+<div class="bg-surface border border-bdr rounded-2xl p-8 text-center">
+<i class="fa-solid fa-bullhorn text-3xl text-mut mb-3"></i>
+<div class="font-disp font-bold text-lg mb-2">Module Marketing</div>
+<div class="text-sm text-mut max-w-md mx-auto mb-1">Utilisez les onglets ci-dessus pour gérer vos campagnes, contenus, emails et posts sociaux. Pages &amp; Formulaires, Publicités et Rapports arrivent une par une.</div>
+</div>`;
 }
-/* ===== MARKETING : CARDS ===== */
 function mkCard(type,c,i){
 if(type==='campaigns'){
-const pct=(c.budget&&c.spent)?Math.min(100,Math.round(Number(c.spent)/Number(c.budget)*100)):null;
-return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i%6+2,6)}">
-<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('campaigns',${i})">${escHtml(c.name)}</span><div class="flex gap-1"><button onclick="editMkItem('campaigns',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('campaigns',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>
-<div class="flex flex-wrap gap-2 mb-2"><span class="bdg ${mkStatusColor(c.status)}">${mkStatusLabel(c.status)}</span>${c.channel?`<span class="bdg bg-sAlt text-mut"><i class="fa-solid fa-hashtag mr-1 text-[.5rem]"></i>${escHtml(c.channel)}</span>`:''}</div>
-<p class="text-xs text-mut mt-1 line-clamp-2">${escHtml(c.description||'')}</p>
-<div class="flex flex-wrap gap-3 mt-3 text-xs text-mut">${c.budget?`<span><i class="fa-solid fa-coins mr-1"></i>${mkFormatMoney(c.budget)}</span>`:''}<span><i class="fa-solid fa-users mr-1"></i>${mkFormatNum(c.leads||0)} leads</span></div>
-${pct!==null?`<div class="flex items-center justify-between mt-2 text-[.6rem] text-mut"><span>Budget consommé</span><span>${pct}%</span></div>${mkProgress(pct,'#ff9c00')}`:''}
-${c.startDate||c.endDate?`<div class="text-[.6rem] text-mut mt-2"><i class="fa-solid fa-calendar mr-1"></i>${c.startDate||'?'} → ${c.endDate||'?'}</div>`:''}
-</div>`;}
-if(type==='content'){
-return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af"><div class="w-10 h-10 rounded-lg bg-infS text-inf flex items-center justify-center shrink-0"><i class="fa-solid fa-${c.type==='Vidéo'?'video':c.type==='Infographie'?'chart-pie':'pen-nib'}"></i></div>
-<div class="flex-1 min-w-0"><div class="text-sm font-medium cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('content',${i})">${escHtml(c.name)}</div>
-<div class="text-xs text-mut mt-1">${escHtml(c.type||'Article')} ${c.category?'&middot; '+escHtml(c.category):''} ${c.status?`&middot; <span class="${c.status==='published'?'text-ok':'text-warn'}">${mkStatusLabel(c.status)}</span>`:''}</div>
-${c.author?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-user mr-1"></i>${escHtml(c.author)}</div>`:''}</div>
-<div class="flex gap-1 shrink-0"><button onclick="editMkItem('content',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('content',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>`;}
-if(type==='emails'){
-const eLog=elogByEmailItem(c.name||i);
-const eStats={sent:eLog.length,opened:eLog.filter(r=>r.status==='opened'||r.status==='replied').length,replied:eLog.filter(r=>r.status==='replied').length};
-return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 cl af"><div class="w-10 h-10 rounded-lg bg-accS text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-envelope"></i></div>
-<div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="text-sm font-medium cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('emails',${i})">${escHtml(c.name||c.subject||'Sans titre')}</span>${eStats.sent?`<span class="text-[.55rem] px-1.5 py-0.5 rounded bg-okS text-ok font-medium">${eStats.sent} envoyé${eStats.sent>1?'s':''}</span>`:''}</div>
-<div class="text-xs text-mut mt-1">${escHtml(c.subject||'')} ${c.status?`&middot; <span class="${c.status==='sent'?'text-ok':'text-warn'}">${mkStatusLabel(c.status)}</span>`:''}</div>
-${c.audience?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-users mr-1"></i>${escHtml(c.audience)}</div>`:''}
-${eStats.sent?`<div class="flex gap-3 mt-1.5 text-[.6rem] text-mut"><span><i class="fa-solid fa-envelope-open mr-1 text-inf"></i>${eStats.opened} ouvert${eStats.opened>1?'s':''} (${eStats.sent?Math.round(eStats.opened/eStats.sent*100):0}%)</span><span><i class="fa-solid fa-reply mr-1 text-ok"></i>${eStats.replied} réponse${eStats.replied>1?'s':''} (${eStats.sent?Math.round(eStats.replied/eStats.sent*100):0}%)</span></div>`:(c.openRate!=null?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-eye mr-1"></i>Ouverture : ${mkFormatPct(c.openRate)} &middot; Clics : ${mkFormatPct(c.clickRate)}</div>`:'')}</div>
-<div class="flex gap-1 shrink-0"><button onclick="event.stopPropagation();mkCampaignSend(${i})" class="w-7 h-7 rounded-lg hover:bg-okS text-mut hover:text-ok flex items-center justify-center" title="Envoyer via Gmail"><i class="fa-solid fa-paper-plane text-[.55rem]"></i></button>${eStats.sent?`<button onclick="event.stopPropagation();mkOpenEmailTracking()" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center" title="Voir le suivi"><i class="fa-solid fa-chart-line text-[.55rem]"></i></button>`:''}<button onclick="editMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>`;}
-if(type==='social'){
-return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i%6+2,6)}">
-<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('social',${i})">${escHtml(c.name)}</span><div class="flex gap-1"><button onclick="editMkItem('social',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('social',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>
-${c.platform?`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf"><i class="fa-brands fa-${c.platform==='linkedin'?'linkedin':c.platform==='twitter'?'twitter':c.platform==='instagram'?'instagram':'globe'} mr-1"></i>${escHtml(c.platform)}</span>`:''}
+return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i+2,6)}">
+<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm">${escHtml(c.name)}</span><button onclick="delMkItem('campaigns',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.6rem]"></i></button></div>
+${c.status?`<span class="bdg ${c.status==='active'?'bg-okS text-ok':c.status==='draft'?'bg-sAlt text-mut':'bg-warnS text-warn'}">${c.status}</span>`:''}
 <p class="text-xs text-mut mt-2 line-clamp-2">${escHtml(c.description||'')}</p>
-${c.date?`<div class="text-[.65rem] text-mut mt-2"><i class="fa-solid fa-calendar mr-1"></i>${c.date}</div>`:''}
-${c.impressions?`<div class="flex gap-3 mt-2 text-[.6rem] text-mut"><span><i class="fa-solid fa-eye mr-1"></i>${mkFormatNum(c.impressions)}</span><span><i class="fa-solid fa-heart mr-1"></i>${mkFormatNum(c.likes||0)}</span><span><i class="fa-solid fa-comment mr-1"></i>${mkFormatNum(c.comments||0)}</span><span><i class="fa-solid fa-share mr-1"></i>${mkFormatNum(c.shares||0)}</span></div>`:''}</div>`;}
-if(type==='pages'){
-return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i%6+2,6)}">
-<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('pages',${i})">${escHtml(c.name)}</span><div class="flex gap-1"><button onclick="editMkItem('pages',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('pages',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>
-<div class="flex flex-wrap gap-2 mb-2"><span class="bdg ${c.type==='landing'?'bg-accS text-acc':'bg-infS text-inf'}">${c.type==='landing'?'Landing':'Formulaire'}</span><span class="bdg ${mkStatusColor(c.status)}">${mkStatusLabel(c.status)}</span></div>
-<p class="text-xs text-mut mt-1 line-clamp-2">${escHtml(c.description||'')}</p>
-<div class="flex flex-wrap gap-3 mt-3 text-xs text-mut">${c.views!=null?`<span><i class="fa-solid fa-eye mr-1"></i>${mkFormatNum(c.views)} vues</span>`:''}<span><i class="fa-solid fa-arrow-right mr-1"></i>${mkFormatNum(c.conversions||0)} conv.</span>${c.convRate?`<span><i class="fa-solid fa-percent mr-1"></i>${mkFormatPct(c.convRate)}</span>`:''}</div>
-</div>`;}
-if(type==='ads'){
-return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i%6+2,6)}">
-<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm cursor-pointer hover:text-acc transition-colors" onclick="viewMkDetail('ads',${i})">${escHtml(c.name)}</span><div class="flex gap-1"><button onclick="editMkItem('ads',${i})" class="w-7 h-7 rounded-lg hover:bg-infS text-mut hover:text-inf flex items-center justify-center"><i class="fa-solid fa-pen text-[.55rem]"></i></button><button onclick="delMkItem('ads',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.55rem]"></i></button></div></div>
-<div class="flex flex-wrap gap-2 mb-2"><span class="bdg bg-sAlt text-mut"><i class="fa-brands fa-${c.platform==='google'?'google':c.platform==='meta'?'meta':c.platform==='linkedin'?'linkedin':'globe'} mr-1 text-[.5rem]"></i>${escHtml(c.platform||'Autre')}</span><span class="bdg ${mkStatusColor(c.status)}">${mkStatusLabel(c.status)}</span></div>
-<div class="grid grid-cols-2 gap-2 mt-3 text-xs">${c.spend!=null?`<div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-mut text-[.6rem]">Dépense</div><div class="font-disp font-bold text-sm">${mkFormatMoney(c.spend)}</div></div>`:''}${c.clicks!=null?`<div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-mut text-[.6rem]">Clics</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.clicks)}</div></div>`:''}${c.impressions!=null?`<div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-mut text-[.6rem]">Impressions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.impressions)}</div></div>`:''}${c.conversions!=null?`<div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-mut text-[.6rem]">Conversions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.conversions)}</div></div>`:''}</div>
-${c.ctr!=null?`<div class="text-[.6rem] text-mut mt-2">CTR : ${mkFormatPct(c.ctr)} &middot; CPC : ${mkFormatMoney(c.cpc||0)} &middot; ROAS : ${c.roas!=null?(Number(c.roas)).toFixed(2)+'x':'-'}</div>`:''}
-</div>`;}
-return'';}
-/* ===== MARKETING : SECTION FILTERS + VIEWS ===== */
-function mkSectionFilter(type){
-const items=MK[type]||[];
-if(!items.length)return'';
-if(type==='campaigns'){const statuses=[...new Set(items.map(c=>c.status).filter(Boolean))];if(statuses.length<2)return'';return`<div class="flex gap-2 mb-4 af d1 flex-wrap"><button onclick="S._mkFilter='all';rMarketing()" class="chip ${(!S._mkFilter||S._mkFilter==='all')?'act':''}">Toutes (${items.length})</button>${statuses.map(s=>`<button onclick="S._mkFilter='${s}';rMarketing()" class="chip ${S._mkFilter===s?'act':''}">${mkStatusLabel(s)} (${items.filter(c=>c.status===s).length})</button>`).join('')}</div>`;}
-if(type==='content'){const types=[...new Set(items.map(c=>c.type).filter(Boolean))];if(types.length<2)return'';return`<div class="flex gap-2 mb-4 af d1 flex-wrap"><button onclick="S._mkFilter='all';rMarketing()" class="chip ${(!S._mkFilter||S._mkFilter==='all')?'act':''}">Tous (${items.length})</button>${types.map(t=>`<button onclick="S._mkFilter='${t}';rMarketing()" class="chip ${S._mkFilter===t?'act':''}">${t} (${items.filter(c=>c.type===t).length})</button>`).join('')}</div>`;}
-if(type==='social'){const plats=[...new Set(items.map(c=>c.platform).filter(Boolean))];if(plats.length<2)return'';return`<div class="flex gap-2 mb-4 af d1 flex-wrap"><button onclick="S._mkFilter='all';rMarketing()" class="chip ${(!S._mkFilter||S._mkFilter==='all')?'act':''}">Tous (${items.length})</button>${plats.map(p=>`<button onclick="S._mkFilter='${p}';rMarketing()" class="chip ${S._mkFilter===p?'act':''}">${p} (${items.filter(c=>c.platform===p).length})</button>`).join('')}</div>`;}
-return'';}
-function mkFilterItems(type){const items=MK[type]||[];if(!S._mkFilter||S._mkFilter==='all')return items;if(type==='campaigns'||type==='pages'||type==='ads')return items.filter(c=>c.status===S._mkFilter);if(type==='content')return items.filter(c=>c.type===S._mkFilter);if(type==='social')return items.filter(c=>c.platform===S._mkFilter);return items;}
-function mkToggleViewBtn(type){const isCal=type==='content'||type==='social';if(!isCal)return'';const isCalView=S['_mkCal_'+type];return`<button onclick="S['_mkCal_${type}']=!S['_mkCal_${type}'];rMarketing()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium mr-auto"><i class="fa-solid fa-${isCalView?'list':'calendar-days'}"></i>${isCalView?'Liste':'Calendrier'}</button>`;}
+<div class="flex gap-3 mt-2 text-xs text-mut">${c.budget?`<span><i class="fa-solid fa-coins mr-1"></i>${Number(c.budget).toLocaleString('fr-CH')} CHF</span>`:''}${c.leads?`<span><i class="fa-solid fa-users mr-1"></i>${c.leads} leads</span>`:''}</div></div>`;
+}
+if(type==='content'){
+return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af"><div class="w-10 h-10 rounded-lg bg-infS text-inf flex items-center justify-center shrink-0"><i class="fa-solid fa-pen-nib"></i></div>
+<div class="flex-1 min-w-0"><div class="text-sm font-medium">${escHtml(c.name)}</div><div class="text-xs text-mut mt-1">${escHtml(c.type||'Article')} ${c.status?`· <span class="${c.status==='published'?'text-ok':'text-warn'}">${c.status}</span>`:''}</div></div>
+<button onclick="delMkItem('content',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-trash text-[.6rem]"></i></button></div>`;
+}
+if(type==='emails'){
+return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af"><div class="w-10 h-10 rounded-lg bg-accS text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-envelope"></i></div>
+<div class="flex-1 min-w-0"><div class="text-sm font-medium">${escHtml(c.name||c.subject||'Sans titre')}</div><div class="text-xs text-mut mt-1">${escHtml(c.subject||'')} ${c.status?`· <span class="${c.status==='sent'?'text-ok':'text-warn'}">${c.status}</span>`:''}</div></div>
+<button onclick="delMkItem('emails',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center shrink-0"><i class="fa-solid fa-trash text-[.6rem]"></i></button></div>`;
+}
+if(type==='social'){
+return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af d${Math.min(i+2,6)}">
+<div class="flex items-start justify-between mb-2"><span class="font-disp font-semibold text-sm">${escHtml(c.name)}</span><button onclick="delMkItem('social',${i})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.6rem]"></i></button></div>
+${c.platform?`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf"><i class="fa-brands fa-${c.platform==='linkedin'?'linkedin':c.platform==='twitter'?'twitter':'globe'} mr-1"></i>${escHtml(c.platform)}</span>`:''}
+<p class="text-xs text-mut mt-2 line-clamp-2">${escHtml(c.description||'')}</p>
+${c.date?`<div class="text-[.65rem] text-mut mt-2"><i class="fa-solid fa-calendar mr-1"></i>${c.date}</div>`:''}</div>`;
+}
+return'';
+}
 function rMarketingSection(type,label,newLabel){
-S._mkFilter='all';
-const items=mkFilterItems(type);
-const isGrid=type==='campaigns'||type==='social'||type==='pages'||type==='ads';
-return`<div class="flex items-center justify-between mb-4 af d1">${mkToggleViewBtn(type)}<button onclick="openMkForm('${type}')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>${newLabel}</button></div>
-<div class="${isGrid?'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4':'flex flex-col gap-3'}">${items.map((c,i)=>mkCard(type,c,i)).join('')||`<div class="text-mut text-sm ${isGrid?'col-span-full':''} text-center py-10">${label}</div>`}</div>`;}
-
-/* ===== CONTENT CALENDAR ===== */
-function rContentCalendar(){
-const items=(MK.content||[]).filter(c=>c.publishDate||c.date);
-const months={};items.forEach(c=>{const d=c.publishDate||c.date;const m=d.substring(0,7);if(!months[m])months[m]=[];months[m].push(c);});
-return`<div class="flex justify-end mb-4 af d1 gap-2"><button onclick="S._mkCal_content=false;rMarketing()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium"><i class="fa-solid fa-list"></i>Liste</button><button onclick="openMkForm('content')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau contenu</button></div>
-${Object.keys(months).sort().reverse().map(m=>{const d=new Date(m+'-01');const label=d.toLocaleDateString('fr-CH',{year:'numeric',month:'long'});return`<div class="mb-6"><h3 class="font-disp font-semibold text-sm mb-3 text-mut">${label}</h3><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${months[m].sort((a,b)=>(a.publishDate||a.date).localeCompare(b.publishDate||b.date)).map((c,i)=>{const origIdx=MK.content.indexOf(c);return`<div class="bg-surface border border-bdr rounded-lg p-3 cl"><div class="flex items-center justify-between"><span class="text-xs font-medium">${escHtml(c.name)}</span><span class="bdg ${mkStatusColor(c.status)} text-[.5rem]">${mkStatusLabel(c.status)}</span></div><div class="text-[.6rem] text-mut mt-1"><i class="fa-solid fa-calendar mr-1"></i>${c.publishDate||c.date} &middot; ${escHtml(c.type||'Article')}</div>${c.category?`<div class="text-[.6rem] text-mut mt-0.5"><i class="fa-solid fa-tag mr-1"></i>${escHtml(c.category)}</div>`:''}</div>`;}).join('')}</div></div>`;}).join('')||'<div class="text-mut text-sm text-center py-10">Aucun contenu avec date. Ajoutez une date de publication à vos contenus pour voir le calendrier.</div>'}`;}
-
-/* ===== SOCIAL CALENDAR ===== */
-function rSocialCalendar(){
-const items=(MK.social||[]).filter(s=>s.date);
-const months={};items.forEach(s=>{const m=s.date.substring(0,7);if(!months[m])months[m]=[];months[m].push(s);});
-return`<div class="flex justify-end mb-4 af d1 gap-2"><button onclick="S._mkCal_social=false;rMarketing()" class="h-9 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium"><i class="fa-solid fa-list"></i>Liste</button><button onclick="openMkForm('social')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau post</button></div>
-${Object.keys(months).sort().reverse().map(m=>{const d=new Date(m+'-01');const label=d.toLocaleDateString('fr-CH',{year:'numeric',month:'long'});return`<div class="mb-6"><h3 class="font-disp font-semibold text-sm mb-3 text-mut">${label}</h3><div class="flex flex-col gap-2">${months[m].sort((a,b)=>a.date.localeCompare(b.date)).map(s=>{const origIdx=MK.social.indexOf(s);return`<div class="bg-surface border border-bdr rounded-lg p-3 flex items-center gap-3"><div class="w-8 h-8 rounded-lg bg-infS text-inf flex items-center justify-center shrink-0"><i class="fa-brands fa-${s.platform==='linkedin'?'linkedin':s.platform==='twitter'?'twitter':'globe'} text-sm"></i></div><div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">${escHtml(s.name)}</div><div class="text-[.6rem] text-mut">${s.date}</div></div>${s.status?`<span class="bdg ${mkStatusColor(s.status)} text-[.5rem]">${mkStatusLabel(s.status)}</span>`:''}</div>`;}).join('')}</div></div>`;}).join('')||'<div class="text-mut text-sm text-center py-10">Aucun post avec date planifiée.</div>'}`;}
-/* ===== MARKETING : MAIN ROUTER ===== */
+const items=MK[type]||[];
+const isGrid=type==='campaigns'||type==='social';
+return`<div class="flex justify-end mb-4 af d2"><button onclick="openMkForm('${type}')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>${newLabel}</button></div>
+<div class="${isGrid?'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4':'flex flex-col gap-3'}">${items.map((c,i)=>mkCard(type,c,i)).join('')||`<div class="text-mut text-sm ${isGrid?'col-span-full':''} text-center py-10">${label}</div>`}</div>`;
+}
 function rMarketing(){
-if(typeof destroyCharts==='function'){Object.keys(chartInstances).forEach(k=>{if(k.startsWith('mk_')){try{chartInstances[k].destroy();}catch(e){}delete chartInstances[k];}});}
 const el=document.getElementById('PC');
 let body='';
 if(S.mkv==='overview')body=rMarketingOverview();
 else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucune campagne','Nouvelle campagne');
-else if(S.mkv==='content')body=mkTabsBar()+(S._mkCal_content?rContentCalendar():rMarketingSection('content','Aucun contenu','Nouveau contenu'));
-else if(S.mkv==='emails')body=mkTabsBar()+`<div class="flex items-center justify-end gap-2 mb-3 af d0"><button onclick="mkQuickCompose()" class="h-9 px-3 rounded-xl bg-ok/20 border border-ok/30 text-ok text-xs font-semibold flex items-center gap-1.5 transition-colors bp hover:bg-ok/30"><i class="fa-solid fa-bolt text-[.55rem]"></i>Envoi rapide</button><button onclick="mkOpenEmailTracking()" class="h-9 px-3 rounded-xl bg-inf/20 border border-inf/30 text-inf text-xs font-semibold flex items-center gap-1.5 transition-colors bp hover:bg-inf/30"><i class="fa-solid fa-chart-line text-[.55rem]"></i>Suivi emailing</button></div>`+rMarketingSection('emails','Aucun email','Nouvel email');
-else if(S.mkv==='social')body=mkTabsBar()+(S._mkCal_social?rSocialCalendar():rMarketingSection('social','Aucun post social','Nouveau post'));
-else if(S.mkv==='pages')body=mkTabsBar()+rMarketingSection('pages','Aucune page','Nouvelle page');
-else if(S.mkv==='ads')body=mkTabsBar()+rMarketingSection('ads','Aucune publicité','Nouvelle publicité');
-else if(S.mkv==='reports')body=mkTabsBar()+rMarketingReports();
-else if(S.mkv==='email_tracking'){body=mkTabsBar()+rEmailTracking();}
-else body=`${mkTabsBar()}<div class="bg-surface border border-bdr rounded-2xl p-8 text-center text-mut text-sm">Section inconnue.</div>`;
+else if(S.mkv==='content')body=mkTabsBar()+rMarketingSection('content','Aucun contenu','Nouveau contenu');
+else if(S.mkv==='emails')body=mkTabsBar()+rMarketingSection('emails','Aucun email','Nouvel email');
+else if(S.mkv==='social')body=mkTabsBar()+rMarketingSection('social','Aucun post social','Nouveau post');
+else body=`${mkTabsBar()}<div class="bg-surface border border-bdr rounded-2xl p-8 text-center text-mut text-sm">Cette section arrive dans une prochaine étape.</div>`;
 el.innerHTML=`<div class="af">
 <div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Marketing</h1></div>
 ${body}
 </div>`;
-if(S.mkv==='reports')setTimeout(renderMkCharts,50);
-if(S.mkv==='email_tracking')setTimeout(renderElogCharts,50);
 }
-
-/* ===== MARKETING : CREATE / EDIT / DETAIL / DELETE ===== */
-function openMkForm(type,editIdx){
-const isEdit=editIdx!=null;
-const item=isEdit?MK[type][editIdx]:{};
-const labels={campaigns:'campagne',content:'contenu',emails:'email',social:'post',pages:'page/formulaire',ads:'publicité'};
-const title=isEdit?`Modifier ${labels[type]}`:`Nouveau${['email',''].includes(labels[type])?'e ':' '}${labels[type]}`;
+function openMkForm(type){
+const labels={campaigns:'campagne',content:'contenu',emails:'email',social:'post'};
 const fields={
-campaigns:`<label class="text-xs text-mut block mb-1.5">Nom</label><input type="text" id="mkName" class="fi mb-4" placeholder="Nom de la campagne" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4" rows="3">${escHtml(item.description||'')}</textarea>
-<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="active" ${item.status==='active'?'selected':''}>Active</option><option value="paused" ${item.status==='paused'?'selected':''}>En pause</option><option value="done" ${item.status==='done'?'selected':''}>Terminée</option></select></div><div><label class="text-xs text-mut block mb-1.5">Canal</label><select id="mkChannel" class="fi"><option value="" ${!item.channel?'selected':''}>—</option><option value="seo" ${item.channel==='seo'?'selected':''}>SEO</option><option value="email" ${item.channel==='email'?'selected':''}>Email</option><option value="social" ${item.channel==='social'?'selected':''}>Social</option><option value="ads" ${item.channel==='ads'?'selected':''}>Ads</option><option value="content" ${item.channel==='content'?'selected':''}>Contenu</option><option value="referral" ${item.channel==='referral'?'selected':''}>Parrainage</option><option value="events" ${item.channel==='events'?'selected':''}>Événements</option></select></div></div>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Budget (CHF)</label><input type="number" id="mkBudget" class="fi" placeholder="5000" value="${item.budget||''}"></div><div><label class="text-xs text-mut block mb-1.5">Dépensé (CHF)</label><input type="number" id="mkSpent" class="fi" placeholder="0" value="${item.spent||''}"></div><div><label class="text-xs text-mut block mb-1.5">Leads</label><input type="number" id="mkLeads" class="fi" placeholder="0" value="${item.leads||''}"></div></div>
-<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Début</label><input type="date" id="mkStart" class="fi" value="${item.startDate||''}"></div><div><label class="text-xs text-mut block mb-1.5">Fin</label><input type="date" id="mkEnd" class="fi" value="${item.endDate||''}"></div></div>
-<label class="text-xs text-mut block mb-1.5">Objectifs</label><textarea id="mkGoals" class="fi mb-4" rows="2" placeholder="Ex: 50 leads, ROI 3x">${escHtml(item.goals||'')}</textarea>`,
-content:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkName" class="fi mb-4" placeholder="Titre du contenu" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4" rows="3">${escHtml(item.description||'')}</textarea>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Type</label><select id="mkType" class="fi"><option ${item.type==='Article'?'selected':''}>Article</option><option ${item.type==='Vidéo'?'selected':''}>Vidéo</option><option ${item.type==='Infographie'?'selected':''}>Infographie</option><option ${item.type==='Guide'?'selected':''}>Guide</option><option ${item.type==='Podcast'?'selected':''}>Podcast</option><option ${item.type==='Autre'?'selected':''}>Autre</option></select></div><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="published" ${item.status==='published'?'selected':''}>Publié</option></select></div><div><label class="text-xs text-mut block mb-1.5">Catégorie</label><input type="text" id="mkCategory" class="fi" placeholder="Blog, SEO..." value="${escHtml(item.category||'')}"></div></div>
-<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Auteur</label><input type="text" id="mkAuthor" class="fi" placeholder="Prénom Nom" value="${escHtml(item.author||'')}"></div><div><label class="text-xs text-mut block mb-1.5">Date de publication</label><input type="date" id="mkPubDate" class="fi" value="${item.publishDate||''}"></div></div>`,
-emails:`<label class="text-xs text-mut block mb-1.5">Nom interne</label><input type="text" id="mkName" class="fi mb-4" placeholder="Email onboarding" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkSubject" class="fi mb-4" placeholder="Objet de l'email" value="${escHtml(item.subject||'')}">
-<label class="text-xs text-mut block mb-1.5">Audience cible</label><input type="text" id="mkAudience" class="fi mb-4" placeholder="Ex: Leads Q2, VIP clients" value="${escHtml(item.audience||'')}">
-<label class="text-xs text-mut block mb-1.5">Corps du message</label><div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div><textarea id="mkBody" class="fi mb-4" rows="6" placeholder="Bonjour {{prenom}},\n\nVotre message ici...">${escHtml(item.body||'')}</textarea>
-<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="scheduled" ${item.status==='scheduled'?'selected':''}>Planifié</option><option value="sent" ${item.status==='sent'?'selected':''}>Envoyé</option></select></div><div><label class="text-xs text-mut block mb-1.5">Date d'envoi</label><input type="date" id="mkSchedDate" class="fi" value="${item.scheduledDate||''}"></div></div>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Taux ouverture (%)</label><input type="number" step="0.1" id="mkOpenRate" class="fi" placeholder="0" value="${item.openRate??''}"></div><div><label class="text-xs text-mut block mb-1.5">Taux clic (%)</label><input type="number" step="0.1" id="mkClickRate" class="fi" placeholder="0" value="${item.clickRate??''}"></div><div><label class="text-xs text-mut block mb-1.5">Destinataires</label><input type="number" id="mkRecipients" class="fi" placeholder="0" value="${item.recipients||''}"></div></div>`,
-social:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkName" class="fi mb-4" placeholder="Post LinkedIn" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Contenu du post</label><textarea id="mkDesc" class="fi mb-4" rows="4" placeholder="Rédigez votre post ici...">${escHtml(item.description||'')}</textarea>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Plateforme</label><select id="mkPlatform" class="fi"><option value="linkedin" ${item.platform==='linkedin'?'selected':''}>LinkedIn</option><option value="twitter" ${item.platform==='twitter'?'selected':''}>Twitter/X</option><option value="instagram" ${item.platform==='instagram'?'selected':''}>Instagram</option><option value="other" ${item.platform==='other'?'selected':''}>Autre</option></select></div><div><label class="text-xs text-mut block mb-1.5">Date</label><input type="date" id="mkDate" class="fi" value="${item.date||''}"></div><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="published" ${item.status==='published'?'selected':''}>Publié</option><option value="scheduled" ${item.status==='scheduled'?'selected':''}>Planifié</option></select></div></div>
-<label class="text-xs text-mut block mb-1.5">Hashtags</label><input type="text" id="mkHashtags" class="fi mb-4" placeholder="#CRM #Marketing #B2B" value="${escHtml(item.hashtags||'')}">
-<div class="grid grid-cols-4 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Impressions</label><input type="number" id="mkImpressions" class="fi" placeholder="0" value="${item.impressions||''}"></div><div><label class="text-xs text-mut block mb-1.5">Likes</label><input type="number" id="mkLikes" class="fi" placeholder="0" value="${item.likes||''}"></div><div><label class="text-xs text-mut block mb-1.5">Commentaires</label><input type="number" id="mkComments" class="fi" placeholder="0" value="${item.comments||''}"></div><div><label class="text-xs text-mut block mb-1.5">Partages</label><input type="number" id="mkShares" class="fi" placeholder="0" value="${item.shares||''}"></div></div>`,
-pages:`<label class="text-xs text-mut block mb-1.5">Nom</label><input type="text" id="mkName" class="fi mb-4" placeholder="Landing page produit X" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4" rows="3">${escHtml(item.description||'')}</textarea>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Type</label><select id="mkPageType" class="fi"><option value="landing" ${item.type==='landing'?'selected':''}>Landing page</option><option value="form" ${item.type==='form'?'selected':''}>Formulaire</option></select></div><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="live" ${item.status==='live'?'selected':''}>En ligne</option><option value="archived" ${item.status==='archived'?'selected':''}>Archivé</option></select></div><div><label class="text-xs text-mut block mb-1.5">URL</label><input type="text" id="mkUrl" class="fi" placeholder="https://..." value="${escHtml(item.url||'')}"></div></div>
-<div class="grid grid-cols-3 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Vues</label><input type="number" id="mkViews" class="fi" placeholder="0" value="${item.views??''}"></div><div><label class="text-xs text-mut block mb-1.5">Conversions</label><input type="number" id="mkConv" class="fi" placeholder="0" value="${item.conversions||''}"></div><div><label class="text-xs text-mut block mb-1.5">Taux conv. (%)</label><input type="number" step="0.1" id="mkConvRate" class="fi" placeholder="0" value="${item.convRate??''}"></div></div>`,
-ads:`<label class="text-xs text-mut block mb-1.5">Nom</label><input type="text" id="mkName" class="fi mb-4" placeholder="Campagne Google Ads Q3" value="${escHtml(item.name||'')}">
-<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4" rows="2">${escHtml(item.description||'')}</textarea>
-<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Plateforme</label><select id="mkPlatform" class="fi"><option value="google" ${item.platform==='google'?'selected':''}>Google Ads</option><option value="meta" ${item.platform==='meta'?'selected':''}>Meta (Facebook/IG)</option><option value="linkedin" ${item.platform==='linkedin'?'selected':''}>LinkedIn Ads</option><option value="tiktok" ${item.platform==='tiktok'?'selected':''}>TikTok Ads</option><option value="other" ${item.platform==='other'?'selected':''}>Autre</option></select></div><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft" ${item.status==='draft'?'selected':''}>Brouillon</option><option value="active" ${item.status==='active'?'selected':''}>Active</option><option value="paused" ${item.status==='paused'?'selected':''}>En pause</option><option value="done" ${item.status==='done'?'selected':''}>Terminée</option></select></div></div>
-<div class="grid grid-cols-4 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Budget (CHF)</label><input type="number" id="mkBudget" class="fi" placeholder="5000" value="${item.budget||''}"></div><div><label class="text-xs text-mut block mb-1.5">Dépensé (CHF)</label><input type="number" id="mkSpend" class="fi" placeholder="0" value="${item.spend||''}"></div><div><label class="text-xs text-mut block mb-1.5">Impressions</label><input type="number" id="mkImpressions" class="fi" placeholder="0" value="${item.impressions||''}"></div><div><label class="text-xs text-mut block mb-1.5">Clics</label><input type="number" id="mkClicks" class="fi" placeholder="0" value="${item.clicks||''}"></div></div>
-<div class="grid grid-cols-4 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Conversions</label><input type="number" id="mkConv" class="fi" placeholder="0" value="${item.conversions||''}"></div><div><label class="text-xs text-mut block mb-1.5">CTR (%)</label><input type="number" step="0.01" id="mkCtr" class="fi" placeholder="0" value="${item.ctr??''}"></div><div><label class="text-xs text-mut block mb-1.5">CPC (CHF)</label><input type="number" step="0.01" id="mkCpc" class="fi" placeholder="0" value="${item.cpc??''}"></div><div><label class="text-xs text-mut block mb-1.5">ROAS (x)</label><input type="number" step="0.01" id="mkRoas" class="fi" placeholder="0" value="${item.roas??''}"></div></div>`
+campaigns:`<label class="text-xs text-mut block mb-1.5">Nom</label><input type="text" id="mkName" class="fi mb-4" placeholder="Nom de la campagne">
+<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4"></textarea>
+<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft">Brouillon</option><option value="active">Active</option><option value="paused">En pause</option><option value="done">Terminée</option></select></div><div><label class="text-xs text-mut block mb-1.5">Budget (CHF)</label><input type="number" id="mkBudget" class="fi" placeholder="5000"></div></div>
+<label class="text-xs text-mut block mb-1.5">Leads générés</label><input type="number" id="mkLeads" class="fi mb-4" placeholder="0">`,
+content:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkName" class="fi mb-4" placeholder="Titre du contenu">
+<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4"></textarea>
+<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Type</label><select id="mkType" class="fi"><option>Article</option><option>Vidéo</option><option>Infographie</option><option>Guide</option><option>Autre</option></select></div><div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi"><option value="draft">Brouillon</option><option value="published">Publié</option></select></div></div>`,
+emails:`<label class="text-xs text-mut block mb-1.5">Nom interne</label><input type="text" id="mkName" class="fi mb-4" placeholder="Email onboarding">
+<label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkSubject" class="fi mb-4" placeholder="Objet de l'email">
+<label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkStatus" class="fi mb-4"><option value="draft">Brouillon</option><option value="sent">Envoyé</option><option value="scheduled">Planifié</option></select>`,
+social:`<label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkName" class="fi mb-4" placeholder="Post LinkedIn">
+<label class="text-xs text-mut block mb-1.5">Description</label><textarea id="mkDesc" class="fi mb-4"></textarea>
+<div class="grid grid-cols-2 gap-4 mb-4"><div><label class="text-xs text-mut block mb-1.5">Plateforme</label><select id="mkPlatform" class="fi"><option value="linkedin">LinkedIn</option><option value="twitter">Twitter/X</option><option value="instagram">Instagram</option><option value="other">Autre</option></select></div><div><label class="text-xs text-mut block mb-1.5">Date</label><input type="date" id="mkDate" class="fi"></div></div>`
 };
-opM(`<div class="p-6 max-h-[85vh] overflow-y-auto"><h2 class="font-disp font-bold text-lg mb-5">${title}</h2>${fields[type]||''}
+opM(`<div class="p-6"><h2 class="font-disp font-bold text-lg mb-5">Nouveau${labels[type]?.startsWith('e')?'e ':' '}${labels[type]}</h2>${fields[type]||''}
 <div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>
-<button onclick="saveMkItem('${type}',${isEdit?editIdx:'null'})" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">${isEdit?'Enregistrer':'Créer'}</button></div></div>`);
+<button onclick="saveMkItem('${type}')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Créer</button></div></div>`);
 }
-function saveMkItem(type,editIdx){
+function saveMkItem(type){
 const name=document.getElementById('mkName')?.value?.trim()||'Sans titre';
-const item={name,description:document.getElementById('mkDesc')?.value?.trim()||'',createdAt:editIdx!=null?MK[type][editIdx].createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-if(type==='campaigns'){item.status=document.getElementById('mkStatus')?.value||'draft';item.channel=document.getElementById('mkChannel')?.value||'';item.budget=document.getElementById('mkBudget')?.value||'';item.spent=document.getElementById('mkSpent')?.value||'';item.leads=document.getElementById('mkLeads')?.value||'';item.startDate=document.getElementById('mkStart')?.value||'';item.endDate=document.getElementById('mkEnd')?.value||'';item.goals=document.getElementById('mkGoals')?.value?.trim()||'';}
-if(type==='content'){item.type=document.getElementById('mkType')?.value||'Article';item.status=document.getElementById('mkStatus')?.value||'draft';item.category=document.getElementById('mkCategory')?.value?.trim()||'';item.author=document.getElementById('mkAuthor')?.value?.trim()||'';item.publishDate=document.getElementById('mkPubDate')?.value||'';}
-if(type==='emails'){item.subject=document.getElementById('mkSubject')?.value||'';item.status=document.getElementById('mkStatus')?.value||'draft';item.audience=document.getElementById('mkAudience')?.value?.trim()||'';item.body=document.getElementById('mkBody')?.value||'';item.scheduledDate=document.getElementById('mkSchedDate')?.value||'';item.openRate=document.getElementById('mkOpenRate')?.value??'';item.clickRate=document.getElementById('mkClickRate')?.value??'';item.recipients=document.getElementById('mkRecipients')?.value||'';}
-if(type==='social'){item.platform=document.getElementById('mkPlatform')?.value||'linkedin';item.date=document.getElementById('mkDate')?.value||'';item.status=document.getElementById('mkStatus')?.value||'draft';item.hashtags=document.getElementById('mkHashtags')?.value?.trim()||'';item.impressions=document.getElementById('mkImpressions')?.value||'';item.likes=document.getElementById('mkLikes')?.value||'';item.comments=document.getElementById('mkComments')?.value||'';item.shares=document.getElementById('mkShares')?.value||'';}
-if(type==='pages'){item.type=document.getElementById('mkPageType')?.value||'landing';item.status=document.getElementById('mkStatus')?.value||'draft';item.url=document.getElementById('mkUrl')?.value?.trim()||'';item.views=document.getElementById('mkViews')?.value??'';item.conversions=document.getElementById('mkConv')?.value||'';item.convRate=document.getElementById('mkConvRate')?.value??'';}
-if(type==='ads'){item.platform=document.getElementById('mkPlatform')?.value||'google';item.status=document.getElementById('mkStatus')?.value||'draft';item.budget=document.getElementById('mkBudget')?.value||'';item.spend=document.getElementById('mkSpend')?.value||'';item.impressions=document.getElementById('mkImpressions')?.value||'';item.clicks=document.getElementById('mkClicks')?.value||'';item.conversions=document.getElementById('mkConv')?.value||'';item.ctr=document.getElementById('mkCtr')?.value??'';item.cpc=document.getElementById('mkCpc')?.value??'';item.roas=document.getElementById('mkRoas')?.value??'';}
-if(editIdx!=null){MK[type][editIdx]=item;}else{MK[type].push(item);}
-svMk();clsM();toast(editIdx!=null?'Élément mis à jour':'Élément créé');rMarketing();
+const item={name,description:document.getElementById('mkDesc')?.value?.trim()||'',createdAt:new Date().toISOString()};
+if(type==='campaigns'){item.status=document.getElementById('mkStatus')?.value||'draft';item.budget=document.getElementById('mkBudget')?.value||'';item.leads=document.getElementById('mkLeads')?.value||'';}
+if(type==='content'){item.type=document.getElementById('mkType')?.value||'Article';item.status=document.getElementById('mkStatus')?.value||'draft';}
+if(type==='emails'){item.subject=document.getElementById('mkSubject')?.value||'';item.status=document.getElementById('mkStatus')?.value||'draft';}
+if(type==='social'){item.platform=document.getElementById('mkPlatform')?.value||'linkedin';item.date=document.getElementById('mkDate')?.value||'';}
+MK[type].push(item);svMk();clsM();toast('Élément créé');rMarketing();
 }
-function editMkItem(type,idx){openMkForm(type,idx);}
-function delMkItem(type,idx){opM(`<div class="p-6 text-center"><i class="fa-solid fa-triangle-exclamation text-2xl text-acc mb-3"></i><p class="text-sm mb-5">Supprimer <strong>${escHtml(MK[type][idx]?.name||'cet élément')}</strong> ?</p><div class="flex justify-center gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button><button onclick="MK['${type}'].splice(${idx},1);svMk();clsM();toast('Supprimé');rMarketing()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Supprimer</button></div></div>`);}
-
-/* ===== MARKETING : DETAIL VIEW ===== */
-function viewMkDetail(type,idx){
-const c=MK[type][idx];if(!c)return;
-const typeLabels={campaigns:'Campagne',content:'Contenu',emails:'Email',social:'Post social',pages:'Page / Formulaire',ads:'Publicité'};
-let meta='';
-if(type==='campaigns'){meta=`<div class="grid grid-cols-2 gap-4 mb-4"><div class="bg-sAlt rounded-lg p-3"><div class="text-[.6rem] text-mut mb-1">Budget</div><div class="font-disp font-bold">${mkFormatMoney(c.budget)}</div></div><div class="bg-sAlt rounded-lg p-3"><div class="text-[.6rem] text-mut mb-1">Dépensé</div><div class="font-disp font-bold">${mkFormatMoney(c.spent)}</div></div><div class="bg-sAlt rounded-lg p-3"><div class="text-[.6rem] text-mut mb-1">Leads</div><div class="font-disp font-bold">${mkFormatNum(c.leads)}</div></div><div class="bg-sAlt rounded-lg p-3"><div class="text-[.6rem] text-mut mb-1">Canal</div><div class="font-disp font-bold capitalize">${c.channel||'-'}</div></div></div>
-${c.goals?`<div class="mb-4"><div class="text-xs text-mut mb-1">Objectifs</div><p class="text-sm">${escHtml(c.goals)}</p></div>`:''}
-${(c.startDate||c.endDate)?`<div class="text-xs text-mut mb-3"><i class="fa-solid fa-calendar mr-1"></i>${c.startDate||'?'} → ${c.endDate||'?'}</div>`:''}
-${(c.budget&&c.spent)?`<div class="text-xs text-mut mb-1">Budget consommé</div>${mkProgress(Math.min(100,Math.round(Number(c.spent)/Number(c.budget)*100)),'#ff9c00')}`:''}`;}
-if(type==='emails'){meta=`${c.subject?`<div class="mb-3"><div class="text-xs text-mut mb-1">Objet</div><p class="text-sm font-medium">${escHtml(c.subject)}</p></div>`:''}
-${c.audience?`<div class="mb-3"><div class="text-xs text-mut mb-1">Audience</div><p class="text-sm">${escHtml(c.audience)}</p></div>`:''}
-${c.body?`<div class="mb-4"><div class="text-xs text-mut mb-1">Aperçu du message</div><noscrl></noscrl><div class="bg-black/40 rounded-lg p-4 text-xs whitespace-pre-wrap border border-bdr max-h-48 overflow-y-auto">${escHtml(c.body)}</div></div>`:''}
-<div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Destinataires</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.recipients)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Ouverture</div><div class="font-disp font-bold text-sm text-ok">${mkFormatPct(c.openRate)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Clics</div><div class="font-disp font-bold text-sm text-inf">${mkFormatPct(c.clickRate)}</div></div></div>
-${c.sentAt?`<div class="text-[.65rem] text-mut mb-3"><i class="fa-solid fa-clock mr-1"></i>Envoyé le ${new Date(c.sentAt).toLocaleString('fr-CH')}</div>`:''}`;}
-if(type==='social'){meta=`${c.platform?`<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf mb-3 inline-block"><i class="fa-brands fa-${c.platform==='linkedin'?'linkedin':c.platform==='twitter'?'twitter':'globe'} mr-1"></i>${escHtml(c.platform)}</span>`:''}
-${c.hashtags?`<div class="mb-3"><div class="text-xs text-mut mb-1">Hashtags</div><p class="text-sm text-inf">${escHtml(c.hashtags)}</p></div>`:''}
-${c.impressions?`<div class="grid grid-cols-4 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Impressions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.impressions)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Likes</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.likes||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Commentaires</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.comments||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Partages</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.shares||0)}</div></div></div>`:''}`;}
-if(type==='pages'){meta=`<div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Vues</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.views)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Conversions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.conversions||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Taux conv.</div><div class="font-disp font-bold text-sm">${mkFormatPct(c.convRate)}</div></div></div>
-${c.url?`<div class="mb-3"><div class="text-xs text-mut mb-1">URL</div><a href="${escHtml(c.url)}" target="_blank" rel="noopener" class="text-sm text-inf hover:underline break-all">${escHtml(c.url)}</a></div>`:''}`;}
-if(type==='ads'){meta=`<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Dépense</div><div class="font-disp font-bold text-sm">${mkFormatMoney(c.spend)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Clics</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.clicks)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Impressions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.impressions)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">Conversions</div><div class="font-disp font-bold text-sm">${mkFormatNum(c.conversions||0)}</div></div></div>
-<div class="grid grid-cols-3 gap-3 mb-3"><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">CTR</div><div class="font-disp font-bold text-sm">${mkFormatPct(c.ctr)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">CPC</div><div class="font-disp font-bold text-sm">${mkFormatMoney(c.cpc||0)}</div></div><div class="bg-sAlt rounded-lg p-2 text-center"><div class="text-[.6rem] text-mut">ROAS</div><div class="font-disp font-bold text-sm ${Number(c.roas)>=1?'text-ok':'text-acc'}">${c.roas!=null?Number(c.roas).toFixed(2)+'x':'-'}</div></div></div>`;}
-opM(`<div class="p-6 max-h-[85vh] overflow-y-auto"><div class="flex items-center justify-between mb-4"><h2 class="font-disp font-bold text-lg">${escHtml(c.name)}</h2><span class="bdg ${mkStatusColor(c.status)}">${mkStatusLabel(c.status)}</span></div>
-<div class="text-xs text-mut mb-4">${typeLabels[type]||type} &middot; Créé ${mkRelativeDate(c.createdAt)}</div>
-${c.description?`<p class="text-sm mb-4">${escHtml(c.description)}</p>`:''}
-${meta}
-<div class="flex justify-end gap-3 mt-6"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Fermer</button>
-<button onclick="clsM();editMkItem('${type}',${idx})" class="h-10 px-5 rounded-xl bg-inf hover:bg-inf/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-pen mr-1.5"></i>Modifier</button>${type==='emails'&&c.body&&c.subject?`<button onclick="clsM();mkCampaignSend(${idx})" class="h-10 px-5 rounded-xl bg-ok hover:bg-ok/80 text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-paper-plane mr-1.5"></i>Envoyer via Gmail</button>`:''}</div></div>`);
-}
-/* ===== MARKETING : REPORTS (with Chart.js) ===== */
-function rMarketingReports(){
-return`
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 af d1">
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Budget vs Dépenses (campagnes)</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartBudget"></canvas></div></div>
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Leads par campagne</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartLeads"></canvas></div></div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 af d2">
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Performance emails</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartEmail"></canvas></div></div>
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Engagement social</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartSocial"></canvas></div></div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 af d3">
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Performance publicités</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartAds"></canvas></div></div>
-<div class="bg-surface border border-bdr rounded-xl p-5"><h3 class="font-disp font-semibold text-sm mb-4">Conversions pages</h3><div class="chart-wrap" style="height:250px"><canvas id="mkChartPages"></canvas></div></div>
-</div>
-<div class="bg-surface border border-bdr rounded-xl p-5 mt-4 af d4">
-<div class="flex items-center justify-between mb-4"><h3 class="font-disp font-semibold text-sm">Résumé global</h3><button onclick="exportMkReport()" class="h-8 px-3.5 rounded-lg bg-sAlt border border-bdr flex items-center gap-2 text-mut hover:text-txt hover:border-sHov transition-all bp text-xs font-medium"><i class="fa-solid fa-download"></i>Exporter CSV</button></div>
-<div id="mkReportTable" class="overflow-x-auto"></div>
-</div>`;}
-function renderMkCharts(){if(S.mkv==='email_tracking')return renderElogCharts();
-
-const chartFont={family:"'Jost',sans-serif"};
-const gridColor='rgba(43,43,43,.6)';
-const tickColor='#c9a97e';
-const baseOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:tickColor,font:chartFont,boxWidth:10,padding:10}}},scales:{x:{ticks:{color:tickColor,font:{...chartFont,size:10}},grid:{color:gridColor}},y:{beginAtZero:true,ticks:{color:tickColor,font:{...chartFont,size:10}},grid:{color:gridColor}}}};
-const noDataOpts={...baseOpts,plugins:{...baseOpts.plugins,legend:{display:false}}};
-// Budget vs Dépenses
-const camp=MK.campaigns||[];
-const campNames=camp.map(c=>c.name.length>15?c.name.substring(0,15)+'…':c.name);
-const ctxB=document.getElementById('mkChartBudget');
-if(ctxB&&camp.length){chartInstances.mk_budget=new Chart(ctxB,{type:'bar',data:{labels:campNames,datasets:[{label:'Budget',data:camp.map(c=>Number(c.budget)||0),backgroundColor:'rgba(153,153,255,.6)',borderRadius:4},{label:'Dépensé',data:camp.map(c=>Number(c.spent)||0),backgroundColor:'rgba(255,156,0,.6)',borderRadius:4}]},options:{...baseOpts,indexAxis:'y'}});}
-else if(ctxB){ctxB.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée de campagne</div>';}
-// Leads par campagne
-const ctxL=document.getElementById('mkChartLeads');
-if(ctxL&&camp.length){chartInstances.mk_leads=new Chart(ctxL,{type:'bar',data:{labels:campNames,datasets:[{label:'Leads',data:camp.map(c=>Number(c.leads)||0),backgroundColor:camp.map((_,i)=>['#ff9c00','#9999ff','#5fbf8f','#ffcc66','#cc99cc','#66cccc'][i%6]),borderRadius:4}]},options:noDataOpts});}
-else if(ctxL){ctxL.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée</div>';}
-// Performance emails
-const ems=MK.emails||[];const ctxE=document.getElementById('mkChartEmail');
-if(ctxE&&ems.length){chartInstances.mk_email=new Chart(ctxE,{type:'bar',data:{labels:ems.map(e=>(e.name||e.subject||'?').substring(0,15)),datasets:[{label:'Ouverture %',data:ems.map(e=>Number(e.openRate)||0),backgroundColor:'rgba(95,191,143,.6)',borderRadius:4},{label:'Clics %',data:ems.map(e=>Number(e.clickRate)||0),backgroundColor:'rgba(153,153,255,.6)',borderRadius:4}]},options:{...noDataOpts,scales:{...noDataOpts.scales,y:{...noDataOpts.scales.y,max:100}}}});}
-else if(ctxE){ctxE.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée email</div>';}
-// Engagement social
-const soc=MK.social||[];const ctxS=document.getElementById('mkChartSocial');
-if(ctxS&&soc.length){chartInstances.mk_social=new Chart(ctxS,{type:'bar',data:{labels:soc.map(s=>s.name.substring(0,15)),datasets:[{label:'Impressions',data:soc.map(s=>Number(s.impressions)||0),backgroundColor:'rgba(153,153,255,.5)',borderRadius:3},{label:'Likes',data:soc.map(s=>Number(s.likes)||0),backgroundColor:'rgba(255,156,0,.5)',borderRadius:3},{label:'Commentaires',data:soc.map(s=>Number(s.comments)||0),backgroundColor:'rgba(95,191,143,.5)',borderRadius:3},{label:'Partages',data:soc.map(s=>Number(s.shares)||0),backgroundColor:'rgba(255,204,102,.5)',borderRadius:3}]},options:noDataOpts});}
-else if(ctxS){ctxS.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée sociale</div>';}
-// Performance ads
-const ads=MK.ads||[];const ctxA=document.getElementById('mkChartAds');
-if(ctxA&&ads.length){chartInstances.mk_ads=new Chart(ctxA,{type:'bar',data:{labels:ads.map(a=>a.name.substring(0,15)),datasets:[{label:'Dépense (CHF)',data:ads.map(a=>Number(a.spend)||0),backgroundColor:'rgba(204,153,204,.6)',borderRadius:4},{label:'Conversions',data:ads.map(a=>Number(a.conversions)||0),backgroundColor:'rgba(95,191,143,.6)',borderRadius:4}]},options:baseOpts});}
-else if(ctxA){ctxA.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée pubs</div>';}
-// Conversions pages
-const pgs=MK.pages||[];const ctxP=document.getElementById('mkChartPages');
-if(ctxP&&pgs.length){chartInstances.mk_pages=new Chart(ctxP,{type:'doughnut',data:{labels:pgs.map(p=>p.name.substring(0,20)),datasets:[{data:pgs.map(p=>Number(p.conversions)||0),backgroundColor:['#ff9c00','#9999ff','#5fbf8f','#ffcc66','#cc99cc','#66cccc'],borderColor:'#0d0d0d',borderWidth:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{color:tickColor,font:chartFont,boxWidth:10,padding:8}}}}});}
-else if(ctxP){ctxP.parentElement.innerHTML='<div class="flex items-center justify-center h-full text-xs text-mut">Aucune donnée de pages</div>';}
-// Report table
-renderMkReportTable();
-}
-function renderMkReportTable(){
-const rows=[];const addRows=(arr,typeLabel)=>{arr.forEach(item=>{rows.push({type:typeLabel,name:item.name,status:mkStatusLabel(item.status),budget:item.budget?mkFormatMoney(item.budget):'',spend:item.spent?mkFormatMoney(item.spent):'',leads:item.leads||'',conversions:item.conversions||'',roi:item.roas!=null?Number(item.roas).toFixed(2)+'x':''});});};
-addRows(MK.campaigns||[],'Campagne');addRows(MK.ads||[],'Publicité');
-const el=document.getElementById('mkReportTable');if(!el)return;
-if(!rows.length){el.innerHTML='<div class="text-xs text-mut text-center py-6">Aucune donnée à résumer. Créez des campagnes ou des publicités pour voir le rapport.</div>';return;}
-el.innerHTML=`<table class="w-full text-xs"><thead><tr class="border-b border-bdr"><th class="text-left py-2 text-mut font-medium">Type</th><th class="text-left py-2 text-mut font-medium">Nom</th><th class="text-left py-2 text-mut font-medium">Statut</th><th class="text-right py-2 text-mut font-medium">Budget</th><th class="text-right py-2 text-mut font-medium">Dépense</th><th class="text-right py-2 text-mut font-medium">Leads</th><th class="text-right py-2 text-mut font-medium">Conv.</th><th class="text-right py-2 text-mut font-medium">ROAS</th></tr></thead><tbody>${rows.map(r=>`<tr class="border-b border-bdr/50 hover:bg-sAlt/30"><td class="py-2 text-mut">${r.type}</td><td class="py-2">${escHtml(r.name)}</td><td class="py-2"><span class="bdg bg-sAlt text-mut text-[.5rem]">${r.status}</span></td><td class="py-2 text-right">${r.budget}</td><td class="py-2 text-right">${r.spend}</td><td class="py-2 text-right">${r.leads}</td><td class="py-2 text-right">${r.conversions}</td><td class="py-2 text-right">${r.roi}</td></tr>`).join('')}</tbody></table>`;
-}
-function exportMkReport(){
-const rows=[];const addRows=(arr,typeLabel)=>{arr.forEach(item=>{rows.push({Type:typeLabel,Nom:item.name,Statut:mkStatusLabel(item.status),Budget:item.budget||'',Depense:item.spent||'',Leads:item.leads||'',Conversions:item.conversions||''});});};
-addRows(MK.campaigns||[],'Campagne');addRows(MK.content||[],'Contenu');addRows(MK.emails||[],'Email');addRows(MK.social||[],'Social');addRows(MK.pages||[],'Page');addRows(MK.ads||[],'Publicité');
-if(!rows.length){toast('Aucune donnée à exporter','info');return;}
-const headers=Object.keys(rows[0]);const csv=[headers.join(';'),...rows.map(r=>headers.map(h=>'"'+String(r[h]).replace(/"/g,'""')+'"').join(';'))].join('\n');
-const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='marketing_report_'+todayStr()+'.csv';a.click();URL.revokeObjectURL(url);toast('Rapport exporté en CSV');
-}
+function delMkItem(type,idx){MK[type].splice(idx,1);svMk();toast('Supprimé');rMarketing();}
 
 function rAgenda(){
 const el=document.getElementById('PC');
@@ -4092,97 +3521,13 @@ ${showSelectors?`<div class="grid grid-cols-2 gap-3">
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Statut de prospection</label><select name="prospectStatus" class="fi">${PROSPECT_STAGES.map(s=>`<option value="${s.key}" ${(src.prospectStatus||'a_contacter')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Dernier contact</label><div class="flex gap-1.5"><input type="date" name="lastContactedAt" id="cLastContacted" value="${c?(c.lastContactedAt||''):''}" class="fi"><button type="button" onclick="document.getElementById('cLastContacted').value=todayStr()" class="h-10 px-2.5 rounded-xl bg-sAlt border border-bdr text-mut hover:text-txt transition-colors bp text-xs shrink-0" data-tip="Aujourd'hui"><i class="fa-solid fa-calendar-day"></i></button></div></div>
 </div>
-<div><label class="text-xs font-medium text-mut mb-1.5 block"><i class="fa-solid fa-tags mr-1"></i>Tags</label>
-<input type="hidden" name="tags" id="ctSelTags" value="${escHtml((src.tags||[]).join(', '))}">
-<div id="ctChips" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
-<div class="flex gap-1.5 mb-2"><input type="text" id="ctCustomInp" class="fi flex-1" placeholder="Ajouter un tag personnalisé..." onkeydown="if(event.key==='Enter'){event.preventDefault();ctAddCustom();}"><button type="button" onclick="ctAddCustom()" class="h-10 px-3 rounded-xl bg-acc hover:bg-accH text-black text-xs font-semibold transition-colors bp shrink-0"><i class="fa-solid fa-plus mr-1"></i>Ajouter</button></div>
-<button type="button" onclick="ctToggleSection(this)" class="flex items-center gap-1.5 text-[.65rem] text-acc hover:underline mb-2"><i class="fa-solid fa-chevron-down text-[.55rem]"></i> Voir les tags suggérés</button>
-<div id="ctCheckboxes" class="hidden max-h-52 overflow-y-auto pr-1 rounded-xl border border-bdr p-3 bg-surface/50"></div>
-</div>
+<div><label class="text-xs font-medium text-mut mb-1.5 block">Tags <span class="text-mut font-normal normal-case">(séparés par des virgules)</span></label><input name="tags" value="${escHtml((src.tags||[]).join(', '))}" placeholder="Ex : chaud, décideur, secteur santé" class="fi"></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Notes</label><textarea name="notes" rows="2" class="fi">${escHtml(src.notes||'')}</textarea></div>
 <div class="flex justify-end gap-3 mt-2">${c?`<button type="button" onclick="delContact('${folder}',${c.id})" class="h-10 px-5 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp mr-auto">Supprimer</button>`:''}<button type="button" onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:bg-sHov transition-colors bp">Annuler</button><button type="submit" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">${c?'Enregistrer':'Ajouter'}</button></div>
 </form></div>`);
-initContactTagPicker(src.tags||[]);
 if(showSelectors){fillContactProjects(folder,c?c.projectId:pid);}
 if(isVoiceMode){VC.ctx='voice_contact_form';botSay(c?"Fiche de <b>"+escHtml(contactDisplayName(c))+"</b> ouverte pour modification. Dites <b>valide</b> pour enregistrer, ou <b>annule</b> pour abandonner (vous pouvez aussi corriger les champs a l'ecran).":"Fiche pré-remplie ouverte. Dites <b>valide</b> pour enregistrer, ou <b>annule</b> pour abandonner (vous pouvez aussi corriger les champs a l'ecran).");}
 }
-
-/* ===== CONTACT TAG PICKER (tags préétablis + manuels) ===== */
-function getSuggestedTags(){
-  const cats=[];
-  /* 1) Dossiers */
-  cats.push({label:'\U0001f4c1 Dossiers',icon:'fa-folder',tags:FOLDERS.map(f=>f.name)});
-  /* 2) Projets (tous dossiers confondus) */
-  const projNames=new Set();
-  FOLDERS.forEach(fk=>{(D[fk.key]?.projects||[]).forEach(p=>{if(p.name)projNames.add(p.name);});});
-  if(projNames.size)cats.push({label:'\U0001f4bb Projets',icon:'fa-diagram-project',tags:[...projNames]});
-  /* 3) Entreprises (depuis les contacts existants) */
-  const compSet=new Set();
-  FOLDERS.forEach(fk=>{(D[fk.key]?.contacts||[]).forEach(c=>{if(c.company)compSet.add(c.company);});});
-  if(compSet.size)cats.push({label:'\U0001f3e2 Entreprises',icon:'fa-building',tags:[...compSet]});
-  /* 4) Fonctions / Titres */
-  const titleSet=new Set();
-  FOLDERS.forEach(fk=>{(D[fk.key]?.contacts||[]).forEach(c=>{if(c.title)titleSet.add(c.title);});});
-  if(titleSet.size)cats.push({label:'\U0001f4bc Fonctions',icon:'fa-user-tie',tags:[...titleSet]});
-  /* 5) Statuts de prospection */
-  cats.push({label:'\U0001f4ca Prospection',icon:'fa-chart-line',tags:PROSPECT_STAGES.map(s=>s.label)});
-  /* 6) Tags métier courants */
-  cats.push({label:'\u2b50 M\u00e9tier',icon:'fa-star',tags:['d\u00e9cideur','influenceur','prescripteur','partenaire','fournisseur','prospect chaud','prospect froid','client actif','ancien client','r\u00e9f\u00e9rence','ambassadeur','veille','concurrent','recruteur','candidat','mentor','investisseur']});
-  /* 7) Secteurs d'activit\u00e9 */
-  cats.push({label:'\U0001f3ed Secteurs',icon:'fa-industry',tags:['Sant\u00e9','Tech / IT','Finance','Industrie','Retail / Commerce','Immobilier','Conseil','Marketing','Ressources Humaines','Juridique','\u00c9ducation','Association','Startup','Grande entreprise','PME','Collectivit\u00e9']});
-  /* 8) Canaux */
-  cats.push({label:'\U0001f4e8 Canaux',icon:'fa-envelope',tags:['LinkedIn','Email','T\u00e9l\u00e9phone','Visio','Meetup','Salon','Referral','Inbound','Cold outreach']});
-  return cats;
-}
-function ctGetSel(){const el=document.getElementById('ctSelTags');return el?el.value.split(',').map(t=>t.trim()).filter(Boolean):[];}
-function ctSetSel(arr){const el=document.getElementById('ctSelTags');if(el)el.value=arr.join(', ');}
-function ctRenderChips(){
-  const sel=ctGetSel();
-  const box=document.getElementById('ctChips');if(!box)return;
-  if(!sel.length){box.innerHTML='<span class="text-[.65rem] text-mut italic">Aucun tag s\u00e9lectionn\u00e9</span>';return;}
-  box.innerHTML=sel.map(t=>'<span class="inline-flex items-center gap-1 text-[.65rem] px-2.5 py-1 rounded-full bg-accS text-acc font-medium">'+escHtml(t)+'<button type="button" onclick="ctRemoveTag(\''+escHtml(t).replace(/'/g,"\\\'")+'\')" class="ml-0.5 hover:text-red-400 transition-colors"><i class="fa-solid fa-xmark text-[.55rem]"></i></button></span>').join('');
-}
-function ctRenderCheckboxes(){
-  const sel=new Set(ctGetSel());
-  const cats=getSuggestedTags();
-  const box=document.getElementById('ctCheckboxes');if(!box)return;
-  box.innerHTML=cats.map(cat=>{
-    const catTags=cat.tags.filter(t=>t);
-    if(!catTags.length)return '';
-    return '<div class="mb-3"><div class="text-[.65rem] font-semibold text-mut mb-1.5 flex items-center gap-1.5"><i class="fa-solid '+cat.icon+' text-[.6rem]"></i>'+cat.label+' <span class="font-normal text-mut/60">('+catTags.length+')</span></div><div class="flex flex-wrap gap-1.5">'+catTags.map(t=>{
-      const checked=sel.has(t)?'checked':'';
-      const active=sel.has(t)?'bg-accS border-acc text-acc':'bg-sAlt border-bdr text-mut hover:border-acc/50 hover:text-txt';
-      return '<label class="ct-tag-cb inline-flex items-center gap-1 text-[.6rem] px-2.5 py-1 rounded-full border cursor-pointer transition-all select-none '+active+'"><input type="checkbox" class="hidden" value="'+escHtml(t)+'" '+checked+' onchange="ctToggleTag(\''+escHtml(t).replace(/'/g,"\\\'")+'\',this.checked)"><i class="fa-solid '+(sel.has(t)?'fa-check-square':'fa-square')+' text-[.55rem]"></i> '+escHtml(t)+'</label>';
-    }).join('')+'</div></div>';
-  }).join('');
-}
-function ctToggleTag(tag,checked){
-  const sel=new Set(ctGetSel());
-  if(checked)sel.add(tag);else sel.delete(tag);
-  ctSetSel([...sel]);ctRenderChips();ctRenderCheckboxes();
-}
-function ctRemoveTag(tag){
-  const sel=new Set(ctGetSel());sel.delete(tag);
-  ctSetSel([...sel]);ctRenderChips();ctRenderCheckboxes();
-}
-function ctAddCustom(){
-  const inp=document.getElementById('ctCustomInp');if(!inp)return;
-  const raw=inp.value.trim();if(!raw)return;
-  const newTags=raw.split(/[,;]/).map(t=>t.trim()).filter(Boolean);
-  const sel=new Set(ctGetSel());
-  newTags.forEach(t=>sel.add(t));
-  ctSetSel([...sel]);inp.value='';ctRenderChips();ctRenderCheckboxes();
-}
-function ctToggleSection(btn){
-  const box=document.getElementById('ctCheckboxes');
-  const arrow=btn.querySelector('i.fa-chevron-down, i.fa-chevron-up');
-  if(box.classList.contains('hidden')){box.classList.remove('hidden');if(arrow){arrow.classList.remove('fa-chevron-down');arrow.classList.add('fa-chevron-up');}}
-  else{box.classList.add('hidden');if(arrow){arrow.classList.remove('fa-chevron-up');arrow.classList.add('fa-chevron-down');}}
-}
-function initContactTagPicker(selectedTags){
-  ctSetSel(selectedTags||[]);ctRenderChips();ctRenderCheckboxes();
-}
-
 function fillContactProjects(folder,selPid){
 const sel=document.getElementById('cProject');if(!sel)return;
 const projects=(D[folder]||emptyFolderData()).projects;
