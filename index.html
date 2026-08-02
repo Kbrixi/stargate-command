@@ -274,7 +274,7 @@ function svLog(){localStorage.setItem('cdc_log',JSON.stringify(CL));}
 /* ===== MARKETING (module type HubSpot) ===== */
 function emptyMk(){return{campaigns:[],content:[],emails:[],social:[],pages:[],ads:[]};}
 function ldMk(){try{const s=localStorage.getItem('cdc_marketing');if(s)return{...emptyMk(),...JSON.parse(s)};}catch(e){}return emptyMk();}
-let MK=ldMk();MK_ELOG=ldElog();
+let MK=ldMk();
 function svMk(){localStorage.setItem('cdc_marketing',JSON.stringify(MK));}
 
 function ldSettings(){try{const s=localStorage.getItem('cdc_settings');if(s)return{followUpDays:7,...JSON.parse(s)};}catch(e){}return{logo:'Cockpit de Chasse',followUpDays:7};}
@@ -3115,7 +3115,7 @@ chartInstances.mkChartElogCamp=new Chart(c2,{type:'doughnut',data:{labels:campEn
 }
 
 /* ===== ENHANCED EMAIL SEND FLOW ===== */
-function mkCampaignSend(emailIdx){
+async function mkCampaignSend(emailIdx){
 if(!gcalHasValidToken()){toast('Connecte ton compte Google depuis l\'onglet Agenda pour envoyer des emails','err');return;}
 const emailItem=MK.emails[emailIdx];if(!emailItem){toast('Email introuvable','err');return;}
 if(!emailItem.subject){toast('L\'email n\'a pas d\'objet','err');return;}
