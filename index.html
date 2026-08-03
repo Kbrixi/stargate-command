@@ -3263,17 +3263,24 @@ function funnelMoveTo(entryId,newStage,reason){
   var entry=PIPELINE.find(function(f){return f.id===entryId;});
   if(!entry)return false;
   var oldStage=entry.stage;
-  if(oldStage===newStage)return false;
   if(!FUNNEL_STAGE_KEYS.includes(newStage))return false;
+  if(oldStage===newStage)return false;
   var now=new Date().toISOString();
-  if(entry.enteredAt){
-    entry.history.push({stage:entry.stage,from:entry.enteredAt,to:now});
+  /* Always push history if we have a valid enteredAt */
+  if(entry.enteredAt&&oldStage){
+    entry.history.push({stage:oldStage,from:entry.enteredAt,to:now});
   }
   entry.previousStage=oldStage;
   entry.stage=newStage;
   entry.enteredAt=now;
-  if(newStage==='won'&&entry.estimatedValue){entry.actualValue=entry.estimatedValue;}
+  /* When winning: auto-fill actualValue from estimatedValue if not set */
+  if(newStage==='won'&&entry.estimatedValue&&(entry.actualValue===null||entry.actualValue===undefined)){
+    entry.actualValue=entry.estimatedValue;
+  }
+  /* When leaving lost: clear lost reason fields */
   if(newStage!=='lost'){entry.lostReason=null;entry.lostReasonDetail='';}
+  /* When leaving won: keep actualValue but clear sequence link */
+  if(oldStage==='won'&&newStage!=='won'){/* keep actualValue for historical record */}
   svFunnel();
   return true;
 }
@@ -3318,7 +3325,7 @@ var SEQ2_STEP_TYPES=[
 {key:'tag',label:'Tag',icon:'fa-tag',color:'#5fbf8f',bg:'rgba(95,191,143,.12)'},
 {key:'condition',label:'Condition',icon:'fa-code-branch',color:'#c9a97e',bg:'rgba(201,169,126,.12)'}
 ];
-var SEQ2_COND_TYPES=['always','email_opened','email_replied','wa_replied','tag_present','stage_is'];
+var SEQ2_COND_TYPES=['always','email_opened','email_replied','wa_replied','link_clicked','wa_replied','tag_present','stage_is','task_completed','elapsed_days'];
 
 function ldSeq2(){try{var s=localStorage.getItem('cdc_sequences_v2');if(s)return JSON.parse(s);}catch(e){}return[];}
 function svSeq2(){localStorage.setItem('cdc_sequences_v2',JSON.stringify(SEQ2));}
@@ -7817,6 +7824,9 @@ function pipeDrop(e,newStage){
   var contact=funnelGetContact(entry);
   var cName=contact?contactDisplayName(contact):'?';
   var stgInfo=funnelStageInfo(newStage);
+  /* Close detail panel if open for this entry */
+  var overlay=document.getElementById('pipeDetailOverlay');
+  if(overlay)overlay.remove();
   if(newStage==='lost'){
     pipeOpenLostReason(entryId,function(){
       toast(cName+' \u2192 '+stgInfo.label,'ok');
@@ -7919,11 +7929,13 @@ function pipeCloseDetail(){
 function pipeQuickMove(entryId,newStage){
   var entry=PIPELINE.find(function(f){return f.id===entryId;});
   if(!entry)return;
+  /* Prevent double-move while re-rendering */
+  var overlay=document.getElementById('pipeDetailOverlay');
+  if(overlay)overlay.remove();
   var contact=funnelGetContact(entry);
   var cName=contact?contactDisplayName(contact):'?';
   if(funnelMoveTo(entryId,newStage)){
     toast(cName+' \u2192 '+funnelStageInfo(newStage).label,'ok');
-    pipeCloseDetail();
     rMarketingV2();
   }
 }
@@ -8075,10 +8087,11 @@ window.rMarketing=function(){
 
 
 /* ===== MARKETING V2 — SEQUENCE V2 EDITOR ===== */
-window.seq2EditorModal=function(seqId){
-  var isNew=!seqId;
+window.seq2EditorModal=function(seqId,isReload){
+  var isNew=!seqId&&!isReload;
   var seq;
-  if(isNew){
+  if(isReload&&window._seq2Edit){seq=window._seq2Edit;}
+  else if(isNew){
     seq={id:'',name:'',description:'',enabled:true,status:'active',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
       steps:[{id:'step_0',type:'email',delay:0,subject:'',body:'<p>Bonjour {{prenom}},</p><p>Votre message ici...</p><p>Cordialement,<br>{{signature}}</p>',waMessage:'',taskTitle:'',taskDesc:'',waitDays:3,stageTarget:'lead',tagAction:'add',tagName:'',conditionType:'always',conditionStepId:'',conditionValue:'',nextStepId:null,altStepId:null,stopIfReplied:true}],
       globalRules:{stopOnReply:true,stopOnMeetingBooked:true,stopOnStage:['won'],cooldownDays:30,maxStepsPerContact:15}
@@ -8103,7 +8116,18 @@ window.seq2EditorModal=function(seqId){
     h+='<span class="seq2-step-num">'+(si+1)+'</span>';
     h+='<span class="seq2-step-type seq2-type-'+step.type+'" id="seq2TypeBadge_'+si+'"><i class="fa-solid '+ti.icon+' mr-1"></i>'+ti.label+'</span>';
     if(step.conditionType&&step.conditionType!=='always'){
-      h+='<span class="seq2-cond-badge"><i class="fa-solid fa-code-branch mr-1"></i>'+step.conditionType.replace(/_/g,' ')+'</span>';
+      var condLabel=step.conditionType.replace(/_/g,' ');
+      if(step.conditionStepId){
+        var refIdx=-1;
+        (window._seq2Edit.steps||[]).forEach(function(ps,pi){if(ps.id===step.conditionStepId)refIdx=pi+1;});
+        if(refIdx>0)condLabel+=' \u00e9tape '+refIdx;
+      }
+      if(step.conditionValue){
+        var valDisplay=step.conditionValue;
+        if(step.conditionType==='stage_is'){var fsInfo=funnelStageInfo(step.conditionValue);if(fsInfo)valDisplay=fsInfo.label;}
+        condLabel+=' ['+valDisplay+']';
+      }
+      h+='<span class="seq2-cond-badge" title="'+escHtml(condLabel)+'"><i class="fa-solid fa-code-branch mr-1"></i>'+escHtml(condLabel)+'</span>';
     }
     h+='<div class="seq2-step-actions">';
     if(seq.steps.length>1){
@@ -8152,15 +8176,65 @@ window.seq2EditorModal=function(seqId){
       h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Type de condition</label><select id="seq2CondType_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].conditionType=this.value;seq2EditorModal(window._seq2Edit.id||null,true)">';
       SEQ2_COND_TYPES.forEach(function(c){h+='<option value="'+c+'"'+(step.conditionType===c?' selected':'')+'>'+c.replace(/_/g,' ')+'</option>';});
       h+='</select></div>';
+      /* Condition context: step reference */
+      if(step.conditionType&&step.conditionType!=='always'){
+        h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">\u00c9tape r\u00e9f\u00e9rence</label>';
+        h+='<select id="seq2CondStep_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].conditionStepId=this.value">';
+        h+='<option value=""'+(!step.conditionStepId?' selected':'')+'>-- Aucune --</option>';
+        (window._seq2Edit.steps||[]).forEach(function(prevStep,psi){
+          if(psi!==si){
+            var pti=seq2StepTypeInfo(prevStep.type);
+            var label='#'+(psi+1)+' '+pti.label+(prevStep.subject?' ('+prevStep.subject.substring(0,25)+')':'');
+            h+='<option value="'+prevStep.id+'"'+(step.conditionStepId===prevStep.id?' selected':'')+'>'+escHtml(label)+'</option>';
+          }
+        });
+        h+='</select></div>';
+        if(step.conditionType==='tag_present'){
+          h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Nom du tag</label><input type="text" id="seq2CondVal_'+si+'" class="fi text-xs" placeholder="ex: B2B" value="'+escHtml(step.conditionValue||'')+'" oninput="window._seq2Edit.steps['+si+'].conditionValue=this.value"></div>';
+        }else if(step.conditionType==='stage_is'){
+          h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Stade requis</label>';
+          h+='<select id="seq2CondVal_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].conditionValue=this.value">';
+          FUNNEL_STAGES.forEach(function(fs){h+='<option value="'+fs.key+'"'+(step.conditionValue===fs.key?' selected':'')+'>'+fs.label+'</option>';});
+          h+='</select></div>';
+        }else if(step.conditionType==='email_opened'||step.conditionType==='email_replied'||step.conditionType==='wa_replied'){
+          h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">D\u00e9lai max (jours)</label><input type="number" id="seq2CondVal_'+si+'" class="fi text-xs w-16" min="0" max="90" value="'+(step.conditionValue||'0')+'" onchange="window._seq2Edit.steps['+si+'].conditionValue=this.value"></div>';
+        }
+      }
     }
 
     /* Condition fields for any non-condition step */
     if(step.type!=='condition'){
-      h+='<div class="mt-3 pt-3 border-t border-bdr/50"><label class="text-[.55rem] text-mut block mb-1">Condition de d\u00e9clenchement (optionnel)</label>';
-      h+='<select id="seq2Cond_'+si+'" class="fi text-[.65rem] mb-2" onchange="window._seq2Edit.steps['+si+'].conditionType=this.value">';
+      h+='<div class="mt-3 pt-3 border-t border-bdr/50"><label class="text-[.55rem] text-mut block mb-1.5"><i class="fa-solid fa-code-branch mr-1"></i>Condition de d\u00e9clenchement (optionnel)</label>';
+      h+='<select id="seq2Cond_'+si+'" class="fi text-[.65rem] mb-2" onchange="window._seq2Edit.steps['+si+'].conditionType=this.value;seq2EditorModal(window._seq2Edit.id||null,true)">';
       h+='<option value="always"'+(step.conditionType==='always'?' selected':'')+'>Toujours (aucune condition)</option>';
       SEQ2_COND_TYPES.slice(1).forEach(function(c){h+='<option value="'+c+'"'+(step.conditionType===c?' selected':'')+'>'+c.replace(/_/g,' ')+'</option>';});
-      h+='</select></div>';
+      h+='</select>';
+      /* Step reference: which step does the condition check? */
+      if(step.conditionType&&step.conditionType!=='always'){
+        h+='<div class="mb-2"><label class="text-[.55rem] text-mut block mb-1">\u00c9tape r\u00e9f\u00e9rence</label>';
+        h+='<select id="seq2CondStep_'+si+'" class="fi text-[.65rem]" onchange="window._seq2Edit.steps['+si+'].conditionStepId=this.value">';
+        h+='<option value=""'+(!step.conditionStepId?' selected':'')+'>-- Aucune --</option>';
+        (window._seq2Edit.steps||[]).forEach(function(prevStep,psi){
+          if(psi!==si){
+            var pti=seq2StepTypeInfo(prevStep.type);
+            var label='#'+(psi+1)+' '+pti.label+(prevStep.subject?' ('+prevStep.subject.substring(0,25)+')':'');
+            h+='<option value="'+prevStep.id+'"'+(step.conditionStepId===prevStep.id?' selected':'')+'>'+escHtml(label)+'</option>';
+          }
+        });
+        h+='</select></div>';
+        /* Value field for tag_present, stage_is, custom_field */
+        if(step.conditionType==='tag_present'){
+          h+='<div class="mb-2"><label class="text-[.55rem] text-mut block mb-1">Nom du tag</label><input type="text" id="seq2CondVal_'+si+'" class="fi text-[.65rem]" placeholder="ex: B2B" value="'+escHtml(step.conditionValue||'')+'" oninput="window._seq2Edit.steps['+si+'].conditionValue=this.value"></div>';
+        }else if(step.conditionType==='stage_is'){
+          h+='<div class="mb-2"><label class="text-[.55rem] text-mut block mb-1">Stade requis</label>';
+          h+='<select id="seq2CondVal_'+si+'" class="fi text-[.65rem]" onchange="window._seq2Edit.steps['+si+'].conditionValue=this.value">';
+          FUNNEL_STAGES.forEach(function(fs){h+='<option value="'+fs.key+'"'+(step.conditionValue===fs.key?' selected':'')+'>'+fs.label+'</option>';});
+          h+='</select></div>';
+        }else if(step.conditionType==='email_opened'||step.conditionType==='email_replied'||step.conditionType==='wa_replied'){
+          h+='<div class="mb-2"><label class="text-[.55rem] text-mut block mb-1">D\u00e9lai max (jours, 0 = illimit\u00e9)</label><input type="number" id="seq2CondVal_'+si+'" class="fi text-[.65rem] w-16" min="0" max="90" value="'+(step.conditionValue||'0')+'" onchange="window._seq2Edit.steps['+si+'].conditionValue=this.value"></div>';
+        }
+      }
+      h+='</div>';
     }
     h+='</div>';
   });
@@ -8234,6 +8308,8 @@ window.seq2Save=function(){
     if(document.getElementById('seq2TagName_'+si))step.tagName=document.getElementById('seq2TagName_'+si).value||'';
     if(document.getElementById('seq2Cond_'+si))step.conditionType=document.getElementById('seq2Cond_'+si).value||'always';
     if(document.getElementById('seq2CondType_'+si))step.conditionType=document.getElementById('seq2CondType_'+si).value||'always';
+    if(document.getElementById('seq2CondStep_'+si))step.conditionStepId=document.getElementById('seq2CondStep_'+si).value||'';
+    if(document.getElementById('seq2CondVal_'+si))step.conditionValue=document.getElementById('seq2CondVal_'+si).value||'';
   });
   if(!seq.name.trim()){toast('Nom requis','err');return;}
   seq.updatedAt=new Date().toISOString();
@@ -8447,6 +8523,54 @@ window.seq2Scheduler=async function(){
     if(!seq||!seq.steps||run.currentStepIndex>=seq.steps.length){run.status='completed';run.nextStepAt=null;svSeqRuns2();didSomething=true;continue;}
     if(seq.enabled===false){run.status='paused';svSeqRuns2();didSomething=true;continue;}
     var step=seq.steps[run.currentStepIndex];
+    /* Per-step condition evaluation */
+    if(step.conditionType&&step.conditionType!=='always'){
+      var condMet=true;
+      var condType=step.conditionType;
+      var condStepId=step.conditionStepId||'';
+      var condValue=step.conditionValue||'';
+      var stepLog=run.stepLog||[];
+      if(condType==='email_opened'){
+        if(condStepId){
+          var refIdx=-1;seq.steps.forEach(function(s,pi){if(s.id===condStepId)refIdx=pi;});
+          var refLog=stepLog.find(function(l){return l.stepIndex===refIdx&&l.channel==='email';});
+          if(!refLog||refLog.status!=='opened')condMet=false;
+        }else{condMet=false;}
+      }else if(condType==='email_replied'){
+        if(condStepId){
+          var refIdx2=-1;seq.steps.forEach(function(s,pi){if(s.id===condStepId)refIdx2=pi;});
+          var refLog2=stepLog.find(function(l){return l.stepIndex===refIdx2&&l.channel==='email';});
+          if(!refLog2||refLog2.status!=='replied')condMet=false;
+        }else{
+          var anyReplied=stepLog.some(function(l){return l.channel==='email'&&l.status==='replied';});
+          if(!anyReplied)condMet=false;
+        }
+      }else if(condType==='wa_replied'){
+        var waLog=stepLog.find(function(l){return l.channel==='whatsapp'&&l.status==='replied';});
+        if(!waLog)condMet=false;
+      }else if(condType==='tag_present'){
+        if(condValue){
+          var c=seq2GetContact(run);
+          if(!c||!(c.tags||[]).some(function(t){return t===condValue;}))condMet=false;
+        }
+      }else if(condType==='stage_is'){
+        if(condValue){
+          var fe=PIPELINE.find(function(f){return f.contactId===run.contactId;});
+          if(!fe||fe.stage!==condValue)condMet=false;
+        }
+      }
+      if(!condMet){
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'skipped',channel:'condition',detail:'Condition non remplie: '+condType});
+        run.currentStepIndex++;
+        if(run.currentStepIndex>=seq.steps.length){run.status='completed';run.nextStepAt=null;}
+        else{
+          var skipNext=seq.steps[run.currentStepIndex];
+          var skipDelay=skipNext.type==='wait'?(skipNext.waitDays||3):(skipNext.delay||3);
+          run.nextStepAt=new Date(Date.now()+skipDelay*86400000).toISOString();
+        }
+        svSeqRuns2();didSomething=true;continue;
+      }
+    }
     /* Check global stop rules */
     if(seq.globalRules&&seq.globalRules.stopOnReply){
       var wasReplied=(window.MK_ELOG||[]).some(function(e){return e.sequenceRunId===run.id&&e.replied;});
