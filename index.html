@@ -869,7 +869,7 @@ const QUOTES=["Chaque petite action d'aujourd'hui construit le succès de demain
 function randQuote(){return QUOTES[Math.floor(Math.random()*QUOTES.length)];}
 
 /* ===== ÉTAT UI ===== */
-let S={v:'dash',folder:null,project:null,q:'',df:'all',vd:todayStr(),cf:'all',cq:'',cs:'all',ff:'all',fs:'all',tv:'list',tf:{folder:'all',pri:'all',status:'all',q:''},mkv:'overview',dtf:{pri:'all',ov:'all',rep:'all'},caf:{company:'',title:'',region:'',country:'',tags:'',stage:'all',source:'all',email:'',phone:'',linkedin:'all',notes:'',lastContactAfter:'',lastContactBefore:'',estValueMin:'',actValueMin:'',hasSequence:'all',assignedTo:'',pipeMonth:'',pipeYear:'',sort:'name_asc'}};
+let S={v:'dash',folder:null,project:null,q:'',df:'all',vd:todayStr(),cf:'all',cq:'',cs:'all',ff:'all',fs:'all',tv:'list',tf:{folder:'all',pri:'all',status:'all',q:''},mkv:'overview',dtf:{pri:'all',ov:'all',rep:'all'}};
 function localDateStr(d){const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;}
 function todayStr(){return localDateStr(new Date());}
 function fmtFr(d){if(!d)return'—';const[y,m,day]=d.split('-');return`${day}/${m}/${y}`;}
@@ -1916,7 +1916,9 @@ ${(S.ff!=='all'||S.fs!=='all')?`<button onclick="setFf('all');setFs('all')" clas
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 ${projects.map(p=>projectCard(S.folder,p)).join('')||'<div class="text-mut text-sm col-span-full text-center py-10">Aucun projet pour ce filtre</div>'}
 </div></div>`;
+_cafFilterSnapshot=cafSnapshotFilters();
 document.getElementById('PC').innerHTML=h;
+cafRestoreFilters(_cafFilterSnapshot);
 }
 function setFf(v){S.ff=v;rFolder();}
 function setFs(v){S.fs=v;rFolder();}
@@ -2019,38 +2021,68 @@ const fuCount=all.filter(x=>needsFollowUp(x.contact)).length;
 if(S.cs==='fu')all=all.filter(x=>needsFollowUp(x.contact));
 else if(S.cs!=='all')all=all.filter(x=>(x.contact.prospectStatus||'a_contacter')===S.cs);
 
-/* Advanced filters */
-var caf=S.caf||{company:'',title:'',region:'',country:'',tags:'',stage:'all',source:'all',email:'',phone:'',linkedin:'all',notes:'',lastContactAfter:'',lastContactBefore:'',estValueMin:'',actValueMin:'',hasSequence:'all',assignedTo:'',pipeMonth:'',pipeYear:'',sort:'name_asc'};
-if(caf.company){var fcLow=caf.company.toLowerCase();all=all.filter(function(x){return(x.contact.company||'').toLowerCase().indexOf(fcLow)!==-1;});}
-if(caf.title){var ftLow=caf.title.toLowerCase();all=all.filter(function(x){return(x.contact.title||'').toLowerCase().indexOf(ftLow)!==-1;});}
-if(caf.region){var frLow=caf.region.toLowerCase();all=all.filter(function(x){return(x.contact.region||'').toLowerCase().indexOf(frLow)!==-1;});}
-if(caf.country){var fcoLow=caf.country.toLowerCase();all=all.filter(function(x){return(x.contact.country||'').toLowerCase().indexOf(fcoLow)!==-1;});}
-if(caf.email){var feLow=caf.email.toLowerCase();all=all.filter(function(x){return(x.contact.email||'').toLowerCase().indexOf(feLow)!==-1;});}
-if(caf.phone){var fpLow=caf.phone.toLowerCase();all=all.filter(function(x){return(x.contact.phone||'').toLowerCase().indexOf(fpLow)!==-1;});}
-if(caf.notes){var fnLow=caf.notes.toLowerCase();all=all.filter(function(x){return(x.contact.notes||'').toLowerCase().indexOf(fnLow)!==-1;});}
-if(caf.tags){var ftArr=caf.tags.split(',').map(function(t){return t.trim().toLowerCase();}).filter(Boolean);if(ftArr.length){all=all.filter(function(x){var cTags=(x.contact.tags||[]).map(function(t){return t.toLowerCase();});return ftArr.some(function(ft){return cTags.indexOf(ft)!==-1;});});}}
-if(caf.linkedin==='yes'){all=all.filter(function(x){return!!(x.contact.linkedin);});}
-else if(caf.linkedin==='no'){all=all.filter(function(x){return!(x.contact.linkedin);});}
-if(caf.lastContactAfter){all=all.filter(function(x){return x.contact.lastContactedAt&&x.contact.lastContactedAt>=caf.lastContactAfter;});}
-if(caf.lastContactBefore){all=all.filter(function(x){return x.contact.lastContactedAt&&x.contact.lastContactedAt<=caf.lastContactBefore;});}
-if(caf.stage!=='all'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.stage===caf.stage;});}
-if(caf.source!=='all'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.source===caf.source;});}
-if(caf.estValueMin!==''&&caf.estValueMin!=null){var evMin=parseFloat(caf.estValueMin);if(!isNaN(evMin)){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.estimatedValue>=evMin;});}}
-if(caf.actValueMin!==''&&caf.actValueMin!=null){var avMin=parseFloat(caf.actValueMin);if(!isNaN(avMin)){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.actualValue!=null&&pe.actualValue>=avMin;});}}
-if(caf.hasSequence==='yes'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.activeSequenceId;});}
-else if(caf.hasSequence==='no'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return!pe||!pe.activeSequenceId;});}
-if(caf.assignedTo){var atLow=caf.assignedTo.toLowerCase();all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&(pe.assignedTo||'').toLowerCase().indexOf(atLow)!==-1;});}
-if(caf.pipeMonth){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;if(!pe||!pe.enteredAt)return false;var m=pe.enteredAt.substring(5,7);return m===caf.pipeMonth;});}
-if(caf.pipeYear){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;if(!pe||!pe.enteredAt)return false;var y=pe.enteredAt.substring(0,4);return y===caf.pipeYear;});}
+/* Advanced filters - read from DOM elements like Pipeline Marketing pattern */
+var _cafCompany=(document.getElementById('cafFilterCompany')||{}).value||'';
+var _cafTitle=(document.getElementById('cafFilterTitle')||{}).value||'';
+var _cafRegion=(document.getElementById('cafFilterRegion')||{}).value||'';
+var _cafCountry=(document.getElementById('cafFilterCountry')||{}).value||'';
+var _cafTags=(document.getElementById('cafFilterTags')||{}).value||'';
+var _cafEmail=(document.getElementById('cafFilterEmail')||{}).value||'';
+var _cafPhone=(document.getElementById('cafFilterPhone')||{}).value||'';
+var _cafLinkedin=(document.getElementById('cafFilterLinkedin')||{}).value||'all';
+var _cafNotes=(document.getElementById('cafFilterNotes')||{}).value||'';
+var _cafStage=(document.getElementById('cafFilterStage')||{}).value||'all';
+var _cafSource=(document.getElementById('cafFilterSource')||{}).value||'all';
+var _cafHasSeq=(document.getElementById('cafFilterHasSeq')||{}).value||'all';
+var _cafAssignedTo=(document.getElementById('cafFilterAssignedTo')||{}).value||'';
+var _cafEstValue=(document.getElementById('cafFilterEstValue')||{}).value||'';
+var _cafActValue=(document.getElementById('cafFilterActValue')||{}).value||'';
+var _cafLastAfter=(document.getElementById('cafFilterLastAfter')||{}).value||'';
+var _cafLastBefore=(document.getElementById('cafFilterLastBefore')||{}).value||'';
+var _cafPipeMonth=(document.getElementById('cafFilterPipeMonth')||{}).value||'all';
+var _cafPipeYear=(document.getElementById('cafFilterPipeYear')||{}).value||'all';
+var _cafSort=(document.getElementById('cafFilterSort')||{}).value||'name_asc';
+if(_cafCompany){var fcLow=_cafCompany.toLowerCase();all=all.filter(function(x){return(x.contact.company||'').toLowerCase().indexOf(fcLow)!==-1;});}
+if(_cafTitle){var ftLow=_cafTitle.toLowerCase();all=all.filter(function(x){return(x.contact.title||'').toLowerCase().indexOf(ftLow)!==-1;});}
+if(_cafRegion){var frLow=_cafRegion.toLowerCase();all=all.filter(function(x){return(x.contact.region||'').toLowerCase().indexOf(frLow)!==-1;});}
+if(_cafCountry){var fcoLow=_cafCountry.toLowerCase();all=all.filter(function(x){return(x.contact.country||'').toLowerCase().indexOf(fcoLow)!==-1;});}
+if(_cafEmail){var feLow=_cafEmail.toLowerCase();all=all.filter(function(x){return(x.contact.email||'').toLowerCase().indexOf(feLow)!==-1;});}
+if(_cafPhone){var fpLow=_cafPhone.toLowerCase();all=all.filter(function(x){return(x.contact.phone||'').toLowerCase().indexOf(fpLow)!==-1;});}
+if(_cafNotes){var fnLow=_cafNotes.toLowerCase();all=all.filter(function(x){return(x.contact.notes||'').toLowerCase().indexOf(fnLow)!==-1;});}
+if(_cafTags){var ftArr=_cafTags.split(',').map(function(t){return t.trim().toLowerCase();}).filter(Boolean);if(ftArr.length){all=all.filter(function(x){var cTags=(x.contact.tags||[]).map(function(t){return t.toLowerCase();});return ftArr.some(function(ft){return cTags.indexOf(ft)!==-1;});});}}
+if(_cafLinkedin==='yes'){all=all.filter(function(x){return!!(x.contact.linkedin);});}
+else if(_cafLinkedin==='no'){all=all.filter(function(x){return!(x.contact.linkedin);});}
+if(_cafLastAfter){all=all.filter(function(x){return x.contact.lastContactedAt&&x.contact.lastContactedAt>=_cafLastAfter;});}
+if(_cafLastBefore){all=all.filter(function(x){return x.contact.lastContactedAt&&x.contact.lastContactedAt<=_cafLastBefore;});}
+if(_cafStage!=='all'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.stage===_cafStage;});}
+if(_cafSource!=='all'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.source===_cafSource;});}
+if(_cafEstValue){var evMin=parseFloat(_cafEstValue);if(!isNaN(evMin)){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.estimatedValue>=evMin;});}}
+if(_cafActValue){var avMin=parseFloat(_cafActValue);if(!isNaN(avMin)){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.actualValue!=null&&pe.actualValue>=avMin;});}}
+if(_cafHasSeq==='yes'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&pe.activeSequenceId;});}
+else if(_cafHasSeq==='no'){all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return!pe||!pe.activeSequenceId;});}
+if(_cafAssignedTo){var atLow=_cafAssignedTo.toLowerCase();all=all.filter(function(x){var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;return pe&&(pe.assignedTo||'').toLowerCase().indexOf(atLow)!==-1;});}
+if(_cafPipeMonth!=='all'||_cafPipeYear!=='all'){
+  all=all.filter(function(x){
+    var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===x.contact.id&&p.folderKey===x.folder;}):null;
+    if(!pe||!pe.enteredAt)return false;
+    var entryDate=new Date(pe.enteredAt);
+    if(!entryDate&&pe.history&&pe.history.length)entryDate=new Date(pe.history[0].from);
+    if(entryDate){
+      if(_cafPipeMonth!=='all'&&entryDate.getMonth()!==parseInt(_cafPipeMonth)-1)return false;
+      if(_cafPipeYear!=='all'&&entryDate.getFullYear()!==parseInt(_cafPipeYear))return false;
+    }else return false;
+    return true;
+  });
+}
 /* Sort */
-if(caf.sort==='name_asc')all.sort(function(a,b){return(contactDisplayName(a.contact)||'').localeCompare(contactDisplayName(b.contact)||'');});
-else if(caf.sort==='name_desc')all.sort(function(a,b){return(b.contact.company||'').localeCompare(a.contact.company||'');});
-else if(caf.sort==='company_asc')all.sort(function(a,b){return(a.contact.company||'').localeCompare(b.contact.company||'');});
-else if(caf.sort==='company_desc')all.sort(function(a,b){return(b.contact.company||'').localeCompare(a.contact.company||'');});
-else if(caf.sort==='date_desc')all.sort(function(a,b){return(b.contact.lastContactedAt||'').localeCompare(a.contact.lastContactedAt||'');});
-else if(caf.sort==='date_asc')all.sort(function(a,b){return(a.contact.lastContactedAt||'').localeCompare(b.contact.lastContactedAt||'');});
-else if(caf.sort==='value_desc')all.sort(function(a,b){var pa=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===a.contact.id&&p.folderKey===a.folder;}):null;var pb=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===b.contact.id&&p.folderKey===b.folder;}):null;return(pb?pb.estimatedValue||0:0)-(pa?pa.estimatedValue||0:0);});
-else if(caf.sort==='created_desc')all.sort(function(a,b){return(b.contact.id||0)-(a.contact.id||0);});
+if(_cafSort==='name_asc')all.sort(function(a,b){return(contactDisplayName(a.contact)||'').localeCompare(contactDisplayName(b.contact)||'');});
+else if(_cafSort==='name_desc')all.sort(function(a,b){return(contactDisplayName(b.contact)||'').localeCompare(contactDisplayName(a.contact)||'');});
+else if(_cafSort==='company_asc')all.sort(function(a,b){return(a.contact.company||'').localeCompare(b.contact.company||'');});
+else if(_cafSort==='company_desc')all.sort(function(a,b){return(b.contact.company||'').localeCompare(a.contact.company||'');});
+else if(_cafSort==='date_desc')all.sort(function(a,b){return(b.contact.lastContactedAt||'').localeCompare(a.contact.lastContactedAt||'');});
+else if(_cafSort==='date_asc')all.sort(function(a,b){return(a.contact.lastContactedAt||'').localeCompare(b.contact.lastContactedAt||'');});
+else if(_cafSort==='value_desc')all.sort(function(a,b){var pa=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===a.contact.id&&p.folderKey===a.folder;}):null;var pb=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===b.contact.id&&p.folderKey===b.folder;}):null;return(pb?pb.estimatedValue||0:0)-(pa?pa.estimatedValue||0:0);});
+else if(_cafSort==='created_desc')all.sort(function(a,b){return(b.contact.id||0)-(a.contact.id||0);});
 
 
 let h=`<div class="max-w-7xl mx-auto">
@@ -2066,43 +2098,41 @@ ${FOLDERS.map(f=>`<button onclick="setCf('${f.key}')" class="px-3 py-1.5 rounded
 <button onclick="S.cs='all';rContacts()" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium border ${S.cs==='all'?'bg-acc text-black border-acc':'bg-sAlt border-bdr text-mut hover:text-txt'} transition-colors bp">Tous</button>
 ${PROSPECT_STAGES.map(s=>`<button onclick="S.cs='${s.key}';rContacts()" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium border ${S.cs===s.key?'border-acc':'border-bdr hover:text-txt'} transition-colors bp" style="${S.cs===s.key?'':`color:${s.color};background:${s.bg}`}">${s.label}</button>`).join('')}
 ${fuCount>0?`<button onclick="S.cs='fu';rContacts()" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium border ${S.cs==='fu'?'bg-acc text-black border-acc':'border-bdr text-acc bg-accS hover:text-txt'} transition-colors bp"><i class="fa-solid fa-clock-rotate-left"></i> À relancer</button>`:''}
-<button type="button" onclick="S._cafOpen=!S._cafOpen;rContacts()" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium border border-bdr text-mut hover:text-txt transition-colors bp ml-1"><i class="fa-solid fa-sliders text-[.5rem] mr-1"></i>Filtres avanc\u00e9s</button>
+<button type="button" onclick="cafToggleAdvFilters()" class="px-2.5 py-1 rounded-full text-[.65rem] font-medium border border-bdr text-mut hover:text-txt transition-colors bp ml-1"><i class="fa-solid fa-sliders text-[.5rem] mr-1"></i>Filtres avanc\u00e9s</button>
 </div>
-${S._cafOpen?`
-<div class="bg-sAlt/50 border border-bdr rounded-xl p-3 mb-6 af d3">
+<div id="cafAdvFilters" style="display:${typeof _cafAdvOpen!=='undefined'&&_cafAdvOpen?'block':'none'}" class="bg-sAlt/50 border border-bdr rounded-xl p-3 mb-6 af d3">
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
-<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="cafCompany" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.company||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.company=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="cafTitle" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.title||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.title=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">R\u00e9gion</label><input type="text" id="cafRegion" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.region||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.region=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Pays</label><input type="text" id="cafCountry" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.country||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.country=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Tags</label><input type="text" id="cafTags" class="fi text-xs" placeholder="tag1, tag2..." value="${escHtml(S.caf.tags||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.tags=this.value;rContacts();}"></div>
-</div>
-<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
-<div><label class="text-[.6rem] text-mut block mb-1">Email</label><input type="text" id="cafEmail" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.email||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.email=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">T\u00e9l\u00e9phone</label><input type="text" id="cafPhone" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.phone||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.phone=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">LinkedIn</label><select id="cafLinkedin" class="fi text-xs" onchange="S.caf.linkedin=this.value;rContacts()"><option value="all"${(S.caf.linkedin||'all')==='all'?' selected':''}>Tous</option><option value="yes"${(S.caf.linkedin||'all')==='yes'?' selected':''}>Avec LinkedIn</option><option value="no"${(S.caf.linkedin||'all')==='no'?' selected':''}>Sans LinkedIn</option></select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Notes</label><input type="text" id="cafNotes" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.notes||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.notes=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Tri</label><select id="cafSort" class="fi text-xs" onchange="S.caf.sort=this.value;rContacts()"><option value="name_asc"${(S.caf.sort||'name_asc')==='name_asc'?' selected':''}>Nom A-Z</option><option value="name_desc"${(S.caf.sort||'name_asc')==='name_desc'?' selected':''}>Nom Z-A</option><option value="company_asc"${(S.caf.sort||'name_asc')==='company_asc'?' selected':''}>Entreprise A-Z</option><option value="company_desc"${(S.caf.sort||'name_asc')==='company_desc'?' selected':''}>Entreprise Z-A</option><option value="date_desc"${(S.caf.sort||'name_asc')==='date_desc'?' selected':''}>Dernier contact r\u00e9cent</option><option value="date_asc"${(S.caf.sort||'name_asc')==='date_asc'?' selected':''}>Dernier contact ancien</option><option value="value_desc"${(S.caf.sort||'name_asc')==='value_desc'?' selected':''}>Valeur estim\u00e9e \u2193</option><option value="created_desc"${(S.caf.sort||'name_asc')==='created_desc'?' selected':''}>Cr\u00e9ation r\u00e9cent</option></select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="cafFilterCompany" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="cafFilterTitle" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">R\u00e9gion</label><input type="text" id="cafFilterRegion" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Pays</label><input type="text" id="cafFilterCountry" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Tags</label><input type="text" id="cafFilterTags" class="fi text-xs" placeholder="tag1, tag2..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
 </div>
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
-<div><label class="text-[.6rem] text-mut block mb-1">Stade pipeline</label><select id="cafStage" class="fi text-xs" onchange="S.caf.stage=this.value;rContacts()"><option value="all"${(S.caf.stage||'all')==='all'?' selected':''}>Tous</option>${typeof FUNNEL_STAGES!=='undefined'?FUNNEL_STAGES.map(function(s){return '<option value="'+s.key+'"'+((S.caf.stage||'all')===s.key?' selected':'')+'>'+s.label+'</option>';}).join(''):''}</select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Source</label><select id="cafSource" class="fi text-xs" onchange="S.caf.source=this.value;rContacts()"><option value="all"${(S.caf.source||'all')==='all'?' selected':''}>Toutes</option><option value="website"${(S.caf.source||'all')==='website'?' selected':''}>Website</option><option value="referral"${(S.caf.source||'all')==='referral'?' selected':''}>Referral</option><option value="linkedin"${(S.caf.source||'all')==='linkedin'?' selected':''}>LinkedIn</option><option value="cold"${(S.caf.source||'all')==='cold'?' selected':''}>Cold</option><option value="event"${(S.caf.source||'all')==='event'?' selected':''}>Event</option><option value="other"${(S.caf.source||'all')==='other'?' selected':''}>Other</option></select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">S\u00e9quence active</label><select id="cafHasSeq" class="fi text-xs" onchange="S.caf.hasSequence=this.value;rContacts()"><option value="all"${(S.caf.hasSequence||'all')==='all'?' selected':''}>Tous</option><option value="yes"${(S.caf.hasSequence||'all')==='yes'?' selected':''}>Avec s\u00e9quence</option><option value="no"${(S.caf.hasSequence||'all')==='no'?' selected':''}>Sans s\u00e9quence</option></select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Assign\u00e9 \u00e0</label><input type="text" id="cafAssignedTo" class="fi text-xs" placeholder="Rechercher..." value="${escHtml(S.caf.assignedTo||'')}" onkeydown="if(event.key===\x27Enter\x27){S.caf.assignedTo=this.value;rContacts();}"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Valeur min (\u20ac)</label><input type="number" id="cafEstValue" class="fi text-xs" placeholder="0" value="${S.caf.estValueMin||''}" onkeydown="if(event.key===\x27Enter\x27){S.caf.estValueMin=this.value;rContacts();}"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Email</label><input type="text" id="cafFilterEmail" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">T\u00e9l\u00e9phone</label><input type="text" id="cafFilterPhone" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">LinkedIn</label><select id="cafFilterLinkedin" class="fi text-xs" onchange="rContacts()"><option value="all">Tous</option><option value="yes">Avec LinkedIn</option><option value="no">Sans LinkedIn</option></select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Notes</label><input type="text" id="cafFilterNotes" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Tri</label><select id="cafFilterSort" class="fi text-xs" onchange="rContacts()"><option value="name_asc">Nom A-Z</option><option value="name_desc">Nom Z-A</option><option value="company_asc">Entreprise A-Z</option><option value="company_desc">Entreprise Z-A</option><option value="date_desc">Dernier contact r\u00e9cent</option><option value="date_asc">Dernier contact ancien</option><option value="value_desc">Valeur estim\u00e9e \u2193</option><option value="created_desc">Cr\u00e9ation r\u00e9cent</option></select></div>
 </div>
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
-<div><label class="text-[.6rem] text-mut block mb-1">Dernier contact apr\u00e8s</label><input type="date" id="cafLastAfter" class="fi text-xs" value="${S.caf.lastContactAfter||''}" onchange="S.caf.lastContactAfter=this.value;rContacts()"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Dernier contact avant</label><input type="date" id="cafLastBefore" class="fi text-xs" value="${S.caf.lastContactBefore||''}" onchange="S.caf.lastContactBefore=this.value;rContacts()"></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Entr\u00e9e pipeline (mois)</label><select id="cafPipeMonth" class="fi text-xs" onchange="S.caf.pipeMonth=this.value;rContacts()"><option value=""${!S.caf.pipeMonth?' selected':''}>Tous</option>${['01','02','03','04','05','06','07','08','09','10','11','12'].map(function(m){var months=['Janvier','F\u00e9vrier','Mars','Avril','Mai','Juin','Juillet','Ao\u00fbt','Septembre','Octobre','Novembre','D\u00e9cembre'];return '<option value="'+m+'"'+(S.caf.pipeMonth===m?' selected':'')+'>'+months[parseInt(m)-1]+'</option>';}).join('')}</select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Entr\u00e9e pipeline (ann\u00e9e)</label><select id="cafPipeYear" class="fi text-xs" onchange="S.caf.pipeYear=this.value;rContacts()"><option value=""${!S.caf.pipeYear?' selected':''}>Toutes</option>${(()=>{var years=[];var cy=new Date().getFullYear();for(var y=cy;y>=cy-5;y--)years.push(y);return years.map(function(y){return '<option value="'+y+'"'+(S.caf.pipeYear==y?' selected':'')+'>'+y+'</option>';}).join('');})()}</select></div>
-<div><label class="text-[.6rem] text-mut block mb-1">Valeur r\u00e9elle min (\u20ac)</label><input type="number" id="cafActValue" class="fi text-xs" placeholder="0" value="${S.caf.actValueMin||''}" onkeydown="if(event.key===\x27Enter\x27){S.caf.actValueMin=this.value;rContacts();}"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Stade pipeline</label><select id="cafFilterStage" class="fi text-xs" onchange="rContacts()"><option value="all">Tous</option>${typeof FUNNEL_STAGES!=='undefined'?FUNNEL_STAGES.map(function(s){return '<option value="'+s.key+'">'+s.label+'</option>';}).join(''):''}</select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Source</label><select id="cafFilterSource" class="fi text-xs" onchange="rContacts()"><option value="all">Toutes</option><option value="website">Website</option><option value="referral">Referral</option><option value="linkedin">LinkedIn</option><option value="cold">Cold</option><option value="event">Event</option><option value="other">Other</option></select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">S\u00e9quence active</label><select id="cafFilterHasSeq" class="fi text-xs" onchange="rContacts()"><option value="all">Tous</option><option value="yes">Avec s\u00e9quence</option><option value="no">Sans s\u00e9quence</option></select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Assign\u00e9 \u00e0</label><input type="text" id="cafFilterAssignedTo" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Valeur min (\u20ac)</label><input type="number" id="cafFilterEstValue" class="fi text-xs" placeholder="0" onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+<div><label class="text-[.6rem] text-mut block mb-1">Dernier contact apr\u00e8s</label><input type="date" id="cafFilterLastAfter" class="fi text-xs" onchange="rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Dernier contact avant</label><input type="date" id="cafFilterLastBefore" class="fi text-xs" onchange="rContacts()"></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Mois entr\u00e9e pipeline</label><select id="cafFilterPipeMonth" class="fi text-xs" onchange="rContacts()"><option value="all">Tous</option>${(()=>{var ml=['Janvier','F\u00e9vrier','Mars','Avril','Mai','Juin','Juillet','Ao\u00fbt','Septembre','Octobre','Novembre','D\u00e9cembre'];var h='';for(var mi=0;mi<12;mi++)h+='<option value="'+(mi+1)+'">'+ml[mi]+'</option>';return h;})()}</select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Ann\u00e9e entr\u00e9e pipeline</label><select id="cafFilterPipeYear" class="fi text-xs" onchange="rContacts()"><option value="all">Toutes</option>${(()=>{var years=[];var cy=new Date().getFullYear();for(var yi=cy;yi>=cy-5;yi--)years.push(yi);return years.map(function(y){return '<option value="'+y+'">'+y+'</option>';}).join('');})()}</select></div>
+<div><label class="text-[.6rem] text-mut block mb-1">Valeur r\u00e9elle min (\u20ac)</label><input type="number" id="cafFilterActValue" class="fi text-xs" placeholder="0" onkeydown="if(event.key===\x27Enter\x27)rContacts()"></div>
 </div>
 <div class="flex items-center gap-2 justify-end">
-<button type="button" onclick="S.caf={company:'',title:'',region:'',country:'',tags:'',stage:'all',source:'all',email:'',phone:'',linkedin:'all',notes:'',lastContactAfter:'',lastContactBefore:'',estValueMin:'',actValueMin:'',hasSequence:'all',assignedTo:'',pipeMonth:'',pipeYear:'',sort:'name_asc'};rContacts()" class="px-2.5 py-1 rounded-full text-[.55rem] font-medium bp bg-accS text-acc hover:bg-accS/70"><i class="fa-solid fa-xmark mr-1"></i>R\u00e9initialiser</button>
+<button type="button" onclick="cafResetFilters()" class="px-2.5 py-1 rounded-full text-[.55rem] font-medium bp bg-accS text-acc hover:bg-accS/70"><i class="fa-solid fa-xmark mr-1"></i>R\u00e9initialiser</button>
 </div>
 </div>
-`:''}
 
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 ${all.map(x=>{const st=prospectStage(x.contact);const fu=needsFollowUp(x.contact);return`<div class="bg-surface border border-bdr rounded-xl p-5 cl af cursor-pointer" onclick="openCM('${x.folder}',${x.contact.projectId??'null'},${x.contact.id})" style="border-left:3px solid #cc99cc">
@@ -2117,6 +2147,35 @@ ${x.contact.phone?`<div class="text-xs text-mut mb-1.5"><i class="fa-solid fa-ph
 document.getElementById('PC').innerHTML=h;
 }
 function setCf(v){S.cf=v;rContacts();}
+var _cafFilterSnapshot=null;
+function cafSnapshotFilters(){
+  var ids=['cafFilterCompany','cafFilterTitle','cafFilterRegion','cafFilterCountry','cafFilterTags','cafFilterEmail','cafFilterPhone','cafFilterLinkedin','cafFilterNotes','cafFilterStage','cafFilterSource','cafFilterHasSeq','cafFilterAssignedTo','cafFilterEstValue','cafFilterActValue','cafFilterLastAfter','cafFilterLastBefore','cafFilterPipeMonth','cafFilterPipeYear','cafFilterSort'];
+  var snap={};
+  ids.forEach(function(id){var el=document.getElementById(id);if(el)snap[id]=el.value;});
+  snap._cafOpen=typeof _cafAdvOpen!=='undefined'&&_cafAdvOpen;
+  return snap;
+}
+function cafRestoreFilters(snap){
+  if(!snap)return;
+  Object.keys(snap).forEach(function(id){
+    if(id==='_cafOpen')return;
+    var el=document.getElementById(id);
+    if(el)el.value=snap[id];
+  });
+  var panel=document.getElementById('cafAdvFilters');
+  if(panel)panel.style.display=snap._cafOpen?'block':'none';
+}
+function cafToggleAdvFilters(){
+  var panel=document.getElementById('cafAdvFilters');
+  _cafAdvOpen=!_cafAdvOpen;
+  panel.style.display=_cafAdvOpen?'block':'none';
+}
+function cafResetFilters(){
+  var ids=['cafFilterCompany','cafFilterTitle','cafFilterRegion','cafFilterCountry','cafFilterTags','cafFilterEmail','cafFilterPhone','cafFilterLinkedin','cafFilterNotes','cafFilterStage','cafFilterSource','cafFilterHasSeq','cafFilterAssignedTo','cafFilterEstValue','cafFilterActValue','cafFilterLastAfter','cafFilterLastBefore','cafFilterPipeMonth','cafFilterPipeYear','cafFilterSort'];
+  ids.forEach(function(id){var el=document.getElementById(id);if(el)el.value=id==='cafFilterSort'?'name_asc':(id==='cafFilterLinkedin'||id==='cafFilterStage'||id==='cafFilterSource'||id==='cafFilterHasSeq'||id==='cafFilterPipeMonth'||id==='cafFilterPipeYear'?'all':'');});
+  rContacts();
+}
+var _cafAdvOpen=false;
 
 /* ===== VUE TÂCHES (liste / kanban / timeline) ===== */
 function getFilteredTasks(){
