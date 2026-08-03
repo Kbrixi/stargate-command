@@ -1,4 +1,4 @@
-<!-- ===== VERSION STABLE v10 — sauvegardée le 2026-07-27 =====
+<!-- ===== VERSION STABLE v11 — sauvegardée le 2026-08-03 =====
 Ne pas modifier les fonctionnalités validées de cette version sans
 demande explicite et validation préalable (cf. règle Cockpit de Chasse). -->
 <!DOCTYPE html>
@@ -525,13 +525,23 @@ if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;N
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
 /* Valider que S.folder pointe toujours vers un dossier existant */
 if(S.v==='folder'&&S.folder&&!FOLDERS.some(function(f){return f.key===S.folder;})){S.v='dash';S.folder=null;}
+/* Valider que S.mkv pointe vers un onglet marketing valide */
+if(S.v==='marketing'&&S.mkv){
+  var validMkv=['overview','campaigns','content','emails','social','whatsapp'];
+  if(!validMkv.includes(S.mkv))S.mkv='overview';
+}
 /* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur */
 if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
   updateNavActive();
   NS._pendingSyncRender=true;
 }else{
-  ren();
-  toast('Données synchronisées depuis le cloud','info');
+  /* Si on est sur la page booking, ne pas re-render le CRM */
+  if(window.location.hash&&window.location.hash.indexOf('#booking=')===0){
+    updateNavActive();
+  }else{
+    ren();
+    toast('Données synchronisées depuis le cloud','info');
+  }
 }
 }
 
@@ -3124,7 +3134,7 @@ function rMarketing(){
 const el=document.getElementById('PC');
 let body='';
 if(S.mkv==='overview')body=rMarketingOverview();
-else if(S.mkv==='whatsapp')body=mkTabsBar()+rWhatsAppView();
+else if(S.mkv==='whatsapp'){try{body=mkTabsBar()+(typeof window.rWhatsAppView==='function'?window.rWhatsAppView():'<div class="text-mut text-sm text-center py-8">Module WhatsApp en cours de chargement…</div>');}catch(e){console.error('[WhatsApp]',e);body=mkTabsBar()+'<div class="text-mut text-sm text-center py-8">Erreur WhatsApp: '+e.message+'</div>';}}
 else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucune campagne','Nouvelle campagne');
 else if(S.mkv==='content')body=mkTabsBar()+rMarketingSection('content','Aucun contenu','Nouveau contenu');
 else if(S.mkv==='emails')body=mkTabsBar()+rMarketingSection('emails','Aucun email','Nouvel email');
@@ -5215,7 +5225,20 @@ console.log('[Notes Module] Loaded —', ND.notes.length, 'notes,', ND.categorie
 
 /* ===== INIT ===== */
 applyLogo();
-ren();
+/* Check booking hash BEFORE first render — if #booking=xxx is in URL, show booking page directly */
+if(window.location.hash&&window.location.hash.indexOf('#booking=')===0){
+  /* Delay booking check to ensure second script block has loaded and defined mkRenderBookingPage */
+  setTimeout(function(){
+    if(typeof window.mkRenderBookingPage==='function'){
+      var linkId=window.location.hash.replace('#booking=','');
+      window.mkRenderBookingPage(linkId);
+    }else{
+      ren();
+    }
+  },50);
+}else{
+  ren();
+}
 /* Auto-connect Firebase : config par défaut intégrée à l'app (ou config custom sauvegardée si présente) */
 var _fbCfg=fbLoadConfig();
 if(_fbCfg&&_fbCfg.apiKey&&_fbCfg.projectId){fbInit(_fbCfg);}
@@ -6285,7 +6308,7 @@ window.svWaCampaigns=function(){localStorage.setItem('cdc_wa_campaigns',JSON.str
 window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();
 
 window.ldWaLog=function(){try{var s=localStorage.getItem('cdc_wa_log');if(s)return JSON.parse(s);}catch(e){}return[];};
-window.svWaLog=function(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));};
+window.svWaLog=function(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
 window.MK_WA_LOG=window.ldWaLog();
 
 window.mkWaFilter='all';
@@ -6583,6 +6606,8 @@ window._onDataSynced=function(){
   try{window.MK_SEQUENCES=ldSeqs();}catch(e){}
   try{window.MK_SEQ_RUNS=ldSeqRuns();}catch(e){}
   try{window.MK_MEETINGS=window.ldMeetings();}catch(e){}
+  try{window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();}catch(e){}
+  try{window.MK_WA_LOG=window.ldWaLog();}catch(e){}
 };
 
 /* --- Intercepter les sauvegardes du module email pour push Firebase --- */
