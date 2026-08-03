@@ -281,7 +281,7 @@ body.vc-panel-open #MO{right:0}
 <button onclick="nav('tasks')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-warn hover:brightness-110 w-full text-left" data-v="tasks">Tâches<span id="sTC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="navContacts()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#cc99cc] hover:brightness-110 w-full text-left" data-v="contacts">Contacts<span id="sCC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="navNotes()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#ff9966] hover:brightness-110 w-full text-left" data-v="notes"><i class="fa-solid fa-note-sticky"></i>Notes<span id="sNC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
-<div id="mkNavWrap"><button onclick="toggleMkNav()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-ok hover:brightness-110 w-full text-left" data-v="marketing"><span>Marketing</span><i class="fa-solid fa-chevron-down text-[.55rem] ml-auto mr-1 transition-transform" id="mkNavChev"></i></button><div id="mkSubNav" class="hidden pl-6 flex flex-col gap-1 mt-1"></div></div>
+<div id="mkNavWrap"><button onclick="toggleMkNav()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-ok hover:brightness-110 w-full text-left" data-v="marketing"><span>Marketing</span><i class="fa-solid fa-chevron-down text-[.55rem] ml-auto mr-1 transition-transform" id="mkNavChev"></i></button><div id="mkSubNav" class="pl-6 flex flex-col gap-1 mt-1" style="display:none"></div></div>
 <button onclick="nav('gcal')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-acc hover:brightness-110 w-full text-left" data-v="gcal">Agenda Google<span id="sGC" class="ml-auto w-1.5 h-1.5 rounded-full bg-black/30"></span></button>
 <button onclick="nav('gmail')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-inf hover:brightness-110 w-full text-left" data-v="gmail">Gmail<span id="sGM" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="nav('meetings')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#cc99cc] hover:brightness-110 w-full text-left" data-v="meetings"><i class="fa-solid fa-calendar-check"></i>Meeting Scheduler</button>
@@ -3268,10 +3268,10 @@ function toggleMkNav(){
   var sub=document.getElementById('mkSubNav');
   var chev=document.getElementById('mkNavChev');
   if(!sub)return;
-  var isHidden=sub.classList.contains('hidden');
-  sub.classList.toggle('hidden');
+  var isHidden=sub.style.display==='none';
+  sub.style.display=isHidden?'flex':'none';
   if(chev)chev.style.transform=isHidden?'rotate(180deg)':'';
-  if(isHidden)renderMkSubNav();
+  if(isHidden){renderMkSubNav();navMkV2('pipeline');}
 }
 function renderMkSubNav(){
   var sub=document.getElementById('mkSubNav');
