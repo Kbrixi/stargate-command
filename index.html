@@ -246,6 +246,7 @@ body.vc-panel-open #MO{right:0}
 <button onclick="nav('marketing')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-ok hover:brightness-110 w-full text-left" data-v="marketing">Marketing</button>
 <button onclick="nav('gcal')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-acc hover:brightness-110 w-full text-left" data-v="gcal">Agenda Google<span id="sGC" class="ml-auto w-1.5 h-1.5 rounded-full bg-black/30"></span></button>
 <button onclick="nav('gmail')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-inf hover:brightness-110 w-full text-left" data-v="gmail">Gmail<span id="sGM" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
+<button onclick="nav('meetings')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#cc99cc] hover:brightness-110 w-full text-left" data-v="meetings"><i class="fa-solid fa-calendar-check"></i>Meeting Scheduler</button>
 </nav>
 <div class="pl-8 pr-4 py-2 flex flex-col gap-1.5">
 <button onclick="openPM()" class="flex items-center gap-3 px-3 py-2 rounded-l-full text-xs uppercase font-disp tracking-wide text-mut hover:text-txt hover:bg-sHov w-full text-left transition-colors"><i class="fa-solid fa-folder-plus w-5 text-center text-xs"></i>Nouveau projet</button>
@@ -398,7 +399,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -1559,6 +1560,7 @@ else if(S.v==='tasks'){const b=document.querySelector('#SN .ni[data-v="tasks"]')
 else if(S.v==='marketing'){const b=document.querySelector('#SN .ni[data-v="marketing"]');if(b)b.classList.add('act');}
 else if(S.v==='gcal'){const b=document.querySelector('#SN .ni[data-v="gcal"]');if(b)b.classList.add('act');}
 else if(S.v==='gmail'){const b=document.querySelector('#SN .ni[data-v="gmail"]');if(b)b.classList.add('act');}
+else if(S.v==='meetings'){const b=document.querySelector('#SN .ni[data-v="meetings"]');if(b)b.classList.add('act');}
 else if(S.v==='notes'){const b=document.querySelector('#SN .ni[data-v="notes"]');if(b)b.classList.add('act');}
 document.getElementById('sCC').textContent=FOLDERS.reduce((n,f)=>n+(D[f.key]?.contacts||[]).length,0);
 document.getElementById('sTC').textContent=FOLDERS.reduce((n,f)=>n+(D[f.key]?.tasks||[]).filter(t=>!t.completed).length,0);
@@ -1582,6 +1584,7 @@ else if(S.v==='tasks')rTasks();
 else if(S.v==='marketing')rMarketing();
 else if(S.v==='gcal')rAgenda();
 else if(S.v==='gmail')rGmail();
+else if(S.v==='meetings')rMeetings();
 else if(S.v==='notes'){if(NS.isEditorOpen&&NS.selectedNoteId)rNoteEditor();else rNotes();}
 else{S.v='dash';rDash();}
 }
@@ -3505,8 +3508,9 @@ ${c.notes?`<div class="mb-6"><div class="text-[.65rem] text-mut uppercase tracki
 
 ${proj?`<div class="mb-6"><button onclick="clsM();openProject('${folder}',${proj.id})" class="px-4 py-2 rounded-xl bg-infS text-inf text-sm font-medium hover:bg-inf/20 transition-colors bp"><i class="fa-solid fa-folder-open mr-2"></i>Voir le projet ${escHtml(proj.name)}</button></div>`:''}
 
-<div class="flex gap-3 mt-4">
+<div class="flex flex-wrap gap-3 mt-4">
 <button onclick="clsM();markContactedToday('${folder}',${c.id});showContactCard('${folder}',${c.id})" class="h-10 px-4 rounded-xl bg-okS text-ok text-sm font-medium hover:bg-ok/20 transition-colors bp"><i class="fa-solid fa-calendar-check mr-2"></i>Marquer contacte</button>
+<button onclick="clsM();mkMeetingModal(null,'${folder}',${c.id})" class="h-10 px-4 rounded-xl bg-infS text-inf text-sm font-medium hover:bg-inf/20 transition-colors bp"><i class="fa-solid fa-calendar-plus mr-2"></i>Proposer un RDV</button>
 <button onclick="clsM();openCM('${folder}',${c.projectId??'null'},${c.id})" class="h-10 px-4 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-pen mr-2"></i>Modifier</button>
 <button onclick="delContact('${folder}',${c.id})" class="h-10 px-4 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp ml-auto"><i class="fa-solid fa-trash mr-2"></i>Supprimer</button>
 </div>
@@ -5483,6 +5487,10 @@ window.mkCampaignComposeModal=function(existingItem,existingIdx){
   h+='<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">'+(isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'\U0001f4e7 Rédiger & Envoyer')+'</h2><span class="bdg '+sigBadge+' text-[.6rem]"><i class="fa-solid fa-'+sigIcon+' mr-1"></i>'+sigText+'</span></div>';
 
   if(!isExisting){
+    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Campagne</label><select id="mkeCampaign" class="fi" onchange="window._mkCampSend.item.campaignName=this.value||\'\'"'><option value="">-- Aucune campagne --</option>';
+    var campaigns=MK.campaigns||[];
+    campaigns.forEach(function(c){var sel=(send.item.campaignName||'')===c.name?' selected':'';h+='<option value="'+escHtml(c.name)+'"'+sel+'>'+escHtml(c.name)+(c.status?' ('+c.status+')':'')+'</option>';});
+    h+='</select></div>';
     h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Objet</label><input type="text" id="mkeSubject" class="fi" placeholder="Objet de l\'email" value="'+escHtml(send.item.subject)+'" oninput="window._mkCampSend.item.subject=this.value"></div>';
     h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Corps du message</label>';
     h+='<div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div>';
@@ -5565,6 +5573,8 @@ window.mkExecuteEnhancedSend=async function(){
   var allContacts=contacts.concat(manualContacts);
   if(!allContacts.length&&!send._testMode){toast('Aucun contact avec email','err');return;}
   var subject=send.item.subject||document.getElementById('mkeSubject')?.value||'';
+  var campSel=document.getElementById('mkeCampaign');if(campSel)send.item.campaignName=campSel.value||'';
+  var campaignName=send.item.campaignName||send.item.name||subject;
   var bodyTemplate=mkGetQuillHTML();
   var signature=window.MK_SIGNATURE||'';
   var recipients=[];
@@ -5580,24 +5590,29 @@ window.mkExecuteEnhancedSend=async function(){
   if(send._bccMode&&!send._testMode){
     try{
       var bccList=recipients.map(function(r){return r.email}).join(', ');
+      var _bLogId=Date.now();
+      var _trackPixel='<img src="https://tracking.crm.local/px.gif?eid='+_bLogId+'" width="1" height="1" style="display:none" alt="">';
+      var bccBody=bodyTemplate.replace(/\{\{signature\}\}/g,signature)+_trackPixel;
       var mimeLines=['To: undisclosed-recipients:;','Bcc: '+bccList,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
-      var rawBody=mimeLines.join('\r\n')+bodyTemplate.replace(/\{\{signature\}\}/g,signature);
+      var rawBody=mimeLines.join('\r\n')+bccBody;
       var encoded=btoa(unescape(encodeURIComponent(rawBody))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
       var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded})});
-      if(r.ok){var _sd=await r.json();var _tid=_sd&&_sd.threadId?_sd.threadId:'';sent=recipients.length;recipients.forEach(function(rcpt,i){window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt),gmailMessageId:_sd&&_sd.id?_sd.id:'',threadId:_tid,mode:'bcc',campaignName:send.item.name||subject});});}else{errors=recipients.length;try{var errData=await r.json();console.error('[mkSend BCC error]',errData);toast('Erreur API: '+(errData.error&&errData.error.message?errData.error.message:'HTTP '+r.status),'err');}catch(ex){toast('Erreur envoi BCC (HTTP '+r.status+')','err');}}
+      if(r.ok){var _sd=await r.json();var _tid=_sd&&_sd.threadId?_sd.threadId:'';sent=recipients.length;recipients.forEach(function(rcpt,i){window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt),gmailMessageId:_sd&&_sd.id?_sd.id:'',threadId:_tid,mode:'bcc',campaignName:campaignName});});}else{errors=recipients.length;try{var errData=await r.json();console.error('[mkSend BCC error]',errData);toast('Erreur API: '+(errData.error&&errData.error.message?errData.error.message:'HTTP '+r.status),'err');}catch(ex){toast('Erreur envoi BCC (HTTP '+r.status+')','err');}}
     }catch(e){errors=recipients.length;console.error('[mkSend BCC exception]',e);toast('Erreur envoi: '+e.message,'err');}
   }else{
     for(var i=0;i<recipients.length;i++){
       try{
         var rcpt=recipients[i];
-        var personalized=mkPersonalizeBody(bodyTemplate.replace(/\{\{signature\}\}/g,signature),rcpt);
+        var _iLogId=Date.now()+i;
+        var _iTrackPixel='<img src="https://tracking.crm.local/px.gif?eid='+_iLogId+'" width="1" height="1" style="display:none" alt="">';
+        var personalized=mkPersonalizeBody(bodyTemplate.replace(/\{\{signature\}\}/g,signature),rcpt)+_iTrackPixel;
         var mimeLines2=['To: '+rcpt.email,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
         var rawBody2=mimeLines2.join('\r\n')+personalized;
         var encoded2=btoa(unescape(encodeURIComponent(rawBody2))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
         var r2=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded2})});
         if(r2.ok){
           var _sd2=await r2.json();sent++;
-          window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt),gmailMessageId:_sd2&&_sd2.id?_sd2.id:'',threadId:_sd2&&_sd2.threadId?_sd2.threadId:'',mode:'individual',campaignName:send.item.name||subject});
+          window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt),gmailMessageId:_sd2&&_sd2.id?_sd2.id:'',threadId:_sd2&&_sd2.threadId?_sd2.threadId:'',mode:'individual',campaignName:campaignName});
         }else{errors++;try{var errData2=await r2.json();console.error('[mkSend error]',errData2);if(i===0)toast('Erreur API: '+(errData2.error&&errData2.error.message?errData2.error.message:'HTTP '+r2.status),'err');}catch(ex2){if(i===0)toast('Erreur envoi (HTTP '+r2.status+')','err');}}
       }catch(e){errors++;console.error('[mkSend exception]',e);if(i===0)toast('Erreur: '+e.message,'err');}
       if(i<recipients.length-1)await new Promise(function(r){setTimeout(r,200)});
@@ -5671,12 +5686,9 @@ window.checkEmailReplies=async function(){
           replyMatch=window.MK_ELOG.find(function(e){return e.gmailMessageId&&e.gmailMessageId===refIds[j]&&!e.replied&&!e.bounced;});
         }
       }
-      if(!replyMatch&&/^\s*re:\s*/i.test(subject)){
+      if(!replyMatch&&/^(\s*(re|fwd?|tr|re\u0300?)\s*[:\u00a0\u200f]\s*)/i.test(subject)){
         var candidates=elogByEmail[fromEmail];
-        if(candidates)replyMatch=candidates.find(function(e){return !e.replied&&!e.bounced&&(e.subject&&subject.toLowerCase().indexOf(e.subject.toLowerCase().replace(/^\s*fwd?:\s*/i,''))!==-1);});
-      }
-      if(!replyMatch){
-        replyMatch=window.MK_ELOG.find(function(e){return fromEmail===e.to.toLowerCase()&&!e.replied&&!e.bounced;});
+        if(candidates)replyMatch=candidates.find(function(e){return !e.replied&&!e.bounced&&(e.subject&&subject.toLowerCase().indexOf(e.subject.toLowerCase().replace(/^(\s*(re|fwd?|tr|re\u0300?)\s*[:\u00a0\u200f]\s*)/i,''))!==-1);});
       }
       if(replyMatch){replyMatch.replyDate=new Date(msg.internalDate?Number(msg.internalDate):Date.now()).toISOString();replyMatch.replied=true;updated=true;}
     }
@@ -5690,8 +5702,10 @@ setInterval(function(){if(gcalHasValidToken()&&window.MK_ELOG&&window.MK_ELOG.le
 /* --- Email Tracking UI --- */
 window.mkElogFilter='all';
 window.mkElogSearch='';
+window.mkElogCampFilter='';
 window.mkSetElogFilter=function(f){window.mkElogFilter=f;if(S.mkv==='emails')rMarketing();};
 window.mkSetElogSearch=function(v){window.mkElogSearch=v;if(S.mkv==='emails')rMarketing();};
+window.mkSetElogCampFilter=function(v){window.mkElogCampFilter=v;if(S.mkv==='emails')rMarketing();};
 window.mkToggleElogOpened=function(id){var e=window.MK_ELOG.find(function(x){return x.id===id;});if(e){e.opened=!e.opened;e.openDate=e.opened?new Date().toISOString():null;svElog();if(S.mkv==='emails')rMarketing();}};
 window.mkToggleElogReplied=function(id){var e=window.MK_ELOG.find(function(x){return x.id===id;});if(e){e.replied=!e.replied;e.replyDate=e.replied?new Date().toISOString():null;if(e.replied){e.bounced=false;e.bounceDate=null;e.status='sent';}svElog();if(S.mkv==='emails')rMarketing();}};
 window.mkToggleElogBounced=function(id){var e=window.MK_ELOG.find(function(x){return x.id===id;});if(e){e.bounced=!e.bounced;e.bounceDate=e.bounced?new Date().toISOString():null;if(e.bounced){e.status='bounced';e.opened=false;e.openDate=null;e.replied=false;e.replyDate=null;}else{e.status='sent';}svElog();if(S.mkv==='emails')rMarketing();}};
@@ -5704,20 +5718,22 @@ function mkTrackingPanelHtml(){
 var elog=window.MK_ELOG||[];
 var filter=window.mkElogFilter||'all';
 var search=(window.mkElogSearch||'').toLowerCase().trim();
+var campFilter=window.mkElogCampFilter||'';
 var filtered=elog.slice();
+if(campFilter){filtered=filtered.filter(function(e){return(e.campaignName||'')===campFilter;});}
 if(filter==='replied')filtered=filtered.filter(function(e){return e.replied;});
 else if(filter==='opened')filtered=filtered.filter(function(e){return e.opened&&!e.replied;});
 else if(filter==='bounced')filtered=filtered.filter(function(e){return e.bounced;});
 else if(filter==='sent')filtered=filtered.filter(function(e){return !e.replied&&!e.opened&&!e.bounced;});
 if(search){filtered=filtered.filter(function(e){return(e.contactName||'').toLowerCase().indexOf(search)!==-1||(e.to||'').toLowerCase().indexOf(search)!==-1||(e.subject||'').toLowerCase().indexOf(search)!==-1||(e.campaignName||'').toLowerCase().indexOf(search)!==-1;});}
 filtered.sort(function(a,b){return new Date(b.date).getTime()-new Date(a.date).getTime();});
-var totalSent=elog.length;
-var totalOpened=elog.filter(function(e){return e.opened;}).length;
-var totalReplied=elog.filter(function(e){return e.replied;}).length;
-var totalBounced=elog.filter(function(e){return e.bounced;}).length;
+var totalSent=filtered.length;
+var totalOpened=filtered.filter(function(e){return e.opened;}).length;
+var totalReplied=filtered.filter(function(e){return e.replied;}).length;
+var totalBounced=filtered.filter(function(e){return e.bounced;}).length;
 var replyRate=totalSent?Math.round(totalReplied/totalSent*100):0;
 var openRate=totalSent?Math.round(totalOpened/totalSent*100):0;
-var replyTimes=elog.filter(function(e){return e.replied&&e.replyDate;}).map(function(e){return new Date(e.replyDate).getTime()-new Date(e.date).getTime();});
+var replyTimes=filtered.filter(function(e){return e.replied&&e.replyDate;}).map(function(e){return new Date(e.replyDate).getTime()-new Date(e.date).getTime();});
 var avgReplyH=replyTimes.length?Math.round(replyTimes.reduce(function(a,b){return a+b;},0)/replyTimes.length/3600000):0;
 var avgReplyStr=avgReplyH>=24?Math.floor(avgReplyH/24)+'j '+(avgReplyH%24)+'h':avgReplyH?avgReplyH+'h':'';
 var h='';
@@ -5735,12 +5751,20 @@ h+='<div class="bg-warnS/50 border border-warn/20 rounded-lg p-2.5 text-center">
 h+='<div class="bg-accS/50 border border-acc/20 rounded-lg p-2.5 text-center"><div class="text-lg font-bold font-disp text-acc">'+replyRate+'%</div><div class="text-[.55rem] text-mut">Taux rép.</div></div>';
 h+='<div class="bg-sAlt/50 border border-bdr rounded-lg p-2.5 text-center"><div class="text-lg font-bold font-disp">'+(avgReplyStr||'-')+'</div><div class="text-[.55rem] text-mut">Délai moy.</div></div>';
 h+='</div>';
+var campNames=new Set();elog.forEach(function(e){if(e.campaignName)campNames.add(e.campaignName);});
+var campArr=Array.from(campNames).sort();
+if(campArr.length){
+  h+='<div class="mb-3"><div class="flex items-center gap-2"><i class="fa-solid fa-filter text-acc text-[.6rem]"></i><select class="fi text-xs flex-1 max-w-xs" onchange="mkSetElogCampFilter(this.value)"><option value=""'+(campFilter?'':' selected')+'>Toutes les campagnes</option>';
+  campArr.forEach(function(cn){h+='<option value="'+escHtml(cn)+'"'+(campFilter===cn?' selected':'')+'>'+escHtml(cn)+'</option>';});
+  h+='</select>'+(campFilter?'<button onclick="mkSetElogCampFilter(\'\')" class="text-[.6rem] text-acc hover:underline bp"><i class="fa-solid fa-xmark mr-0.5"></i>Réinitialiser</button>':'')+'</div></div>';
+}
+var campBase=campFilter?elog.filter(function(e){return(e.campaignName||'')===campFilter;}):elog;
 var filters=[
-  {key:'all',label:'Tous',count:elog.length,icon:'fa-layer-group'},
-  {key:'sent',label:'En attente',count:elog.filter(function(e){return !e.replied&&!e.opened&&!e.bounced;}).length,icon:'fa-paper-plane'},
-  {key:'opened',label:'Ouverts',count:totalOpened-totalReplied,icon:'fa-envelope-open'},
-  {key:'replied',label:'Répondus',count:totalReplied,icon:'fa-reply'},
-  {key:'bounced',label:'Rebonds',count:totalBounced,icon:'fa-circle-exclamation'}
+  {key:'all',label:'Tous',count:campBase.length,icon:'fa-layer-group'},
+  {key:'sent',label:'En attente',count:campBase.filter(function(e){return !e.replied&&!e.opened&&!e.bounced;}).length,icon:'fa-paper-plane'},
+  {key:'opened',label:'Ouverts',count:campBase.filter(function(e){return e.opened&&!e.replied;}).length,icon:'fa-envelope-open'},
+  {key:'replied',label:'Répondus',count:campBase.filter(function(e){return e.replied;}).length,icon:'fa-reply'},
+  {key:'bounced',label:'Rebonds',count:campBase.filter(function(e){return e.bounced;}).length,icon:'fa-circle-exclamation'}
 ];
 h+='<div class="flex flex-wrap gap-1.5 mb-3">';
 filters.forEach(function(f){
@@ -5749,6 +5773,17 @@ filters.forEach(function(f){
 });
 h+='</div>';
 h+='<div class="mb-4"><input type="text" class="fi text-xs" placeholder="Rechercher contact, email, sujet..." value="'+escHtml(window.mkElogSearch||'')+'" oninput="mkSetElogSearch(this.value)"></div>';
+if(!campFilter&&campArr.length){
+  h+='<div class="mb-4"><h3 class="text-xs text-mut uppercase tracking-wide font-semibold mb-2"><i class="fa-solid fa-chart-bar mr-1.5"></i>Statistiques par campagne</h3><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">';
+  campArr.forEach(function(cn){
+    var ce=elog.filter(function(e){return(e.campaignName||'')===cn;});
+    var cs=ce.length,co=ce.filter(function(e){return e.opened;}).length,cr=ce.filter(function(e){return e.replied;}).length,cb=ce.filter(function(e){return e.bounced;}).length;
+    var cOr=cs?Math.round(co/cs*100):0,cRr=cs?Math.round(cr/cs*100):0,cBr=cs?Math.round(cb/cs*100):0;
+    h+='<div class="bg-sAlt/50 border border-bdr rounded-lg p-3 cursor-pointer hover:border-acc/40 transition-colors" onclick="mkSetElogCampFilter(\''+escHtml(cn).replace(/'/g,"\\\'")+'\')"><div class="text-[.7rem] font-medium truncate mb-2">'+escHtml(cn)+'</div>';
+    h+='<div class="grid grid-cols-4 gap-1 text-center"><div><div class="text-sm font-bold font-disp">'+cs+'</div><div class="text-[.45rem] text-mut">Envoyés</div></div><div><div class="text-sm font-bold font-disp text-ok">'+cOr+'%</div><div class="text-[.45rem] text-mut">Ouverts</div></div><div><div class="text-sm font-bold font-disp text-inf">'+cRr+'%</div><div class="text-[.45rem] text-mut">Répondus</div></div><div><div class="text-sm font-bold font-disp text-warn">'+cBr+'%</div><div class="text-[.45rem] text-mut">Rebonds</div></div></div></div>';
+  });
+  h+='</div></div>';
+}
 if(!filtered.length){
   h+='<div class="text-mut text-sm text-center py-8">'+(elog.length?(search||filter!=='all'?'Aucun résultat pour ce filtre.':''):'Aucun email suivi. Envoye un email marketing pour commencer le suivi.')+'</div>';
 }else{
@@ -5807,6 +5842,23 @@ window.rMarketing=function(){
     h+='<div class="kpi" style="background:rgba(255,204,102,0.15)"><i class="fa-solid fa-circle-exclamation text-2xl opacity-80 mb-3" style="color:#ffcc66"></i><div class="text-2xl font-disp font-bold">'+bouncedCount+'</div><div class="text-xs opacity-90 mt-1">Rebonds</div></div>';
     h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-file text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+emails.filter(function(e){return e.status==='draft'}).length+'</div><div class="text-xs opacity-90 mt-1">Brouillons</div></div>';
     h+='</div>';
+    var campNames=new Set();elog.forEach(function(e){if(e.campaignName)campNames.add(e.campaignName);});
+    var campArr=Array.from(campNames).sort();
+    if(campArr.length){
+      h+='<div class="mb-6"><h3 class="text-xs text-mut uppercase tracking-wide font-semibold mb-3"><i class="fa-solid fa-chart-bar mr-1.5"></i>Performance par campagne</h3>';
+      h+='<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">';
+      campArr.forEach(function(cn){
+        var ce=elog.filter(function(e){return(e.campaignName||'')===cn;});
+        var cs=ce.length,co=ce.filter(function(e){return e.opened;}).length,cr=ce.filter(function(e){return e.replied;}).length,cb=ce.filter(function(e){return e.bounced;}).length;
+        var cOr=cs?Math.round(co/cs*100):0,cRr=cs?Math.round(cr/cs*100):0;
+        h+='<div class="bg-sAlt/50 border border-bdr rounded-lg p-3"><div class="text-[.7rem] font-medium truncate mb-2">'+escHtml(cn)+'</div>';
+        h+='<div class="text-[.6rem] text-mut space-y-1"><div class="flex justify-between"><span>Envoyés</span><span class="text-txt font-semibold">'+cs+'</span></div>';
+        h+='<div class="flex justify-between"><span>Ouverts</span><span class="text-ok font-semibold">'+cOr+'%</span></div>';
+        h+='<div class="flex justify-between"><span>Répondus</span><span class="text-inf font-semibold">'+cRr+'%</span></div>';
+        h+='<div class="flex justify-between"><span>Rebonds</span><span class="text-warn font-semibold">'+cb+'</span></div></div></div>';
+      });
+      h+='</div></div>';
+    }
     h+='<div class="flex flex-wrap gap-2 mb-6">'+mkTabsBar()+'</div>';
     h+='<div class="flex justify-end mb-4 af d2"><button onclick="window._mkCampSend=null;mkCampaignComposeModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Rédiger un email</button></div>';
     if(emails.length){
@@ -6210,12 +6262,18 @@ function mkSequencesPanelHtml(){
   return h;
 }
 
+/* --- Meeting Scheduler Data Layer --- */
+function ldMeetings(){try{var s=localStorage.getItem('cdc_meetings');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svMeetings(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();}
+window.MK_MEETINGS=ldMeetings();
+
 /* --- Firebase sync hook : recharge les données email depuis localStorage après un sync cloud --- */
 window._onDataSynced=function(){
   try{window.MK_ELOG=ldElog();}catch(e){}
   try{window.MK_GROUPS=ldGroups();}catch(e){}
   try{window.MK_SEQUENCES=ldSeqs();}catch(e){}
   try{window.MK_SEQ_RUNS=ldSeqRuns();}catch(e){}
+  try{window.MK_MEETINGS=ldMeetings();}catch(e){}
 };
 
 /* --- Intercepter les sauvegardes du module email pour push Firebase --- */
@@ -6227,6 +6285,244 @@ svSeqRuns=function(){_origSvSeqRuns();if(typeof fbIsReady==='function'&&fbIsRead
 
 console.log('[CRM] Email enhancement module loaded');
 })();
+
+/* ===== MEETING SCHEDULER ===== */
+window.MK_MFILTER='all';
+window.mkSetMFilter=function(f){window.MK_MFILTER=f;if(S.v==='meetings')rMeetings();};
+
+function mkMeetingStatusBadge(s){
+var m={proposed:{label:'Proposé',bg:'bg-warnS',tx:'text-warn',icon:'fa-clock'},confirmed:{label:'Confirmé',bg:'bg-okS',tx:'text-ok',icon:'fa-check'},cancelled:{label:'Annulé',bg:'bg-accS',tx:'text-acc',icon:'fa-xmark'},completed:{label:'Terminé',bg:'bg-infS',tx:'text-inf',icon:'fa-flag-checkered'}};
+var c=m[s]||m.proposed;
+return '<span class="text-[.6rem] px-2 py-0.5 rounded-full font-medium '+c.bg+' '+c.tx+'"><i class="fa-solid '+c.icon+' mr-1"></i>'+c.label+'</span>';
+}
+
+function mkGetAllContactsFlat(){
+var r=[];FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){if(c.email)r.push({email:c.email,name:contactDisplayName(c),folderKey:f.key,folderName:f.name,contactId:c.id,firstName:c.firstName,lastName:c.lastName,company:c.company,title:c.title});});});return r;
+}
+
+function rMeetings(){
+var el=document.getElementById('PC');if(!el)return;
+var mts=window.MK_MEETINGS||[];
+var filter=window.MK_MFILTER||'all';
+var now=new Date();var todayStr2=now.toISOString().slice(0,10);
+var weekEnd=new Date(now.getTime()+7*86400000).toISOString().slice(0,10);
+var upcoming=mts.filter(function(m){return m.date>=todayStr2&&m.status!=='cancelled';});
+var proposed=mts.filter(function(m){return m.status==='proposed';});
+var confirmedWeek=mts.filter(function(m){return m.status==='confirmed'&&m.date>=todayStr2&&m.date<=weekEnd;});
+var completed=mts.filter(function(m){return m.status==='completed';});
+var filtered=mts.slice();
+if(filter==='proposed')filtered=filtered.filter(function(m){return m.status==='proposed';});
+else if(filter==='confirmed')filtered=filtered.filter(function(m){return m.status==='confirmed';});
+else if(filter==='completed')filtered=filtered.filter(function(m){return m.status==='completed';});
+else if(filter==='cancelled')filtered=filtered.filter(function(m){return m.status==='cancelled';});
+filtered.sort(function(a,b){return b.date.localeCompare(a.date)||b.startTime.localeCompare(a.startTime);});
+var h='<div class="af">';
+h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-calendar-check text-acc"></i>Meeting Scheduler</h1><button onclick="mkMeetingModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau meeting</button></div>';
+h+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">';
+h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-calendar-day text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+upcoming.length+'</div><div class="text-xs opacity-90 mt-1">A venir</div></div>';
+h+='<div class="kpi" style="background:rgba(255,204,102,0.15)"><i class="fa-solid fa-clock text-2xl opacity-80 mb-3" style="color:#ffcc66"></i><div class="text-2xl font-disp font-bold">'+proposed.length+'</div><div class="text-xs opacity-90 mt-1">En attente</div></div>';
+h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-check-circle text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+confirmedWeek.length+'</div><div class="text-xs opacity-90 mt-1">Confirmés cette semaine</div></div>';
+h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-flag-checkered text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+completed.length+'</div><div class="text-xs opacity-90 mt-1">Terminés</div></div>';
+h+='</div>';
+var filters=[{key:'all',label:'Tous',count:mts.length},{key:'proposed',label:'Proposés',count:proposed.length},{key:'confirmed',label:'Confirmés',count:mts.filter(function(m){return m.status==='confirmed';}).length},{key:'completed',label:'Terminés',count:completed.length},{key:'cancelled',label:'Annulés',count:mts.filter(function(m){return m.status==='cancelled';}).length}];
+h+='<div class="flex flex-wrap gap-1.5 mb-4">';
+filters.forEach(function(f){
+  var active=filter===f.key;
+  h+='<button onclick="mkSetMFilter(\''+f.key+'\')" class="h-7 px-3 rounded-full text-[.6rem] font-medium transition-colors bp '+(active?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'">'+f.label+' <span class="opacity-60">('+f.count+')</span></button>';
+});
+h+='</div>';
+if(!filtered.length){
+  h+='<div class="text-mut text-sm text-center py-12"><i class="fa-solid fa-calendar-check text-3xl mb-3 block opacity-30"></i>'+(mts.length?'Aucun meeting pour ce filtre':'Aucun meeting planifié. Clique sur « Nouveau meeting » pour commencer.')+'</div>';
+}else{
+  h+='<div class="flex flex-col gap-3">';
+  filtered.forEach(function(m){
+    var dateLabel='',timeLabel='';
+    try{dateLabel=new Date(m.date+'T00:00:00').toLocaleDateString('fr-CH',{day:'2-digit',month:'short',weekday:'short'});}catch(e){}
+    timeLabel=(m.startTime||'')+(m.endTime?' - '+m.endTime:'');
+    h+='<div class="bg-surface border border-bdr rounded-xl p-4 af group">';
+    h+='<div class="flex items-start gap-4">';
+    h+='<div class="w-10 h-10 rounded-lg '+(m.status==='confirmed'?'bg-okS text-ok':m.status==='completed'?'bg-infS text-inf':m.status==='cancelled'?'bg-accS text-acc':'bg-warnS text-warn')+' flex items-center justify-center shrink-0"><i class="fa-solid '+(m.status==='confirmed'?'fa-check':m.status==='completed'?'fa-flag-checkered':m.status==='cancelled'?'fa-xmark':'fa-clock')+'"></i></div>';
+    h+='<div class="flex-1 min-w-0">';
+    h+='<div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-medium">'+escHtml(m.title||'Sans titre')+'</span>'+mkMeetingStatusBadge(m.status);
+    if(m.gcalEventId)h+='<span class="text-[.5rem] px-1.5 py-0.5 rounded-full bg-infS text-inf"><i class="fa-brands fa-google mr-0.5"></i>Sync</span>';
+    h+='</div>';
+    h+='<div class="text-xs text-mut mt-1"><i class="fa-solid fa-user mr-1"></i>'+escHtml(m.contactName||m.contactEmail||'Contact inconnu')+(m.company?' · '+escHtml(m.company):'')+'</div>';
+    h+='<div class="text-xs text-mut mt-0.5 flex items-center gap-3"><span><i class="fa-solid fa-calendar mr-1"></i>'+dateLabel+'</span>'+(timeLabel?'<span><i class="fa-solid fa-clock mr-1"></i>'+timeLabel+'</span>':'')+(m.duration?'<span><i class="fa-solid fa-hourglass-half mr-1"></i>'+m.duration+'min</span>':'')+'</div>';
+    if(m.location)h+='<div class="text-xs text-mut mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>'+escHtml(m.location)+'</div>';
+    if(m.conferenceLink)h+='<div class="text-xs text-inf mt-0.5"><i class="fa-solid fa-video mr-1"></i><a href="'+escHtml(m.conferenceLink)+'" target="_blank" rel="noopener" class="hover:underline">'+escHtml(m.conferenceLink)+'</a></div>';
+    if((m.proposedSlots||[]).length&&m.status==='proposed'){h+='<div class="flex flex-wrap gap-1 mt-2">';m.proposedSlots.forEach(function(s){h+='<span class="text-[.55rem] px-2 py-0.5 rounded-full bg-sAlt border border-bdr text-mut">'+escHtml(s.date)+' '+escHtml(s.time||'')+'</span>';});h+='</div>';}
+    if(m.notes)h+='<div class="text-[.6rem] text-mut/60 mt-1 line-clamp-1">'+escHtml(m.notes)+'</div>';
+    h+='</div>';
+    h+='<div class="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">';
+    if(m.status==='proposed'){h+='<button onclick="mkConfirmMeeting('+m.id+')" class="w-8 h-8 rounded-lg bg-okS text-ok flex items-center justify-center bp" data-tip="Confirmer"><i class="fa-solid fa-check text-xs"></i></button>';h+='<button onclick="mkProposeMeetingSlots('+m.id+')" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt flex items-center justify-center bp" data-tip="Créneaux"><i class="fa-solid fa-clock text-xs"></i></button>';}
+    if(m.status==='confirmed'){h+='<button onclick="mkMeetingModal('+m.id+')" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt flex items-center justify-center bp" data-tip="Modifier"><i class="fa-solid fa-pen text-xs"></i></button>';h+='<button onclick="mkCompleteMeeting('+m.id+')" class="w-8 h-8 rounded-lg bg-infS text-inf flex items-center justify-center bp" data-tip="Terminer"><i class="fa-solid fa-flag-checkered text-xs"></i></button>';}
+    if(m.status!=='cancelled'&&m.status!=='completed'){h+='<button onclick="mkCancelMeeting('+m.id+')" class="w-8 h-8 rounded-lg bg-accS text-acc flex items-center justify-center bp" data-tip="Annuler"><i class="fa-solid fa-xmark text-xs"></i></button>';}
+    if(m.gcalEventId)h+='<a href="https://calendar.google.com/calendar/event?eid='+m.gcalEventId+'" target="_blank" rel="noopener" class="w-8 h-8 rounded-lg bg-infS text-inf flex items-center justify-center bp" data-tip="Ouvrir dans Google Agenda"><i class="fa-brands fa-google text-xs"></i></a>';
+    if(!m.gcalEventId&&m.status!=='cancelled')h+='<button onclick="mkSyncMeetingToGCal('+m.id+')" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-inf flex items-center justify-center bp" data-tip="Sync Google Agenda"><i class="fa-solid fa-arrows-rotate text-xs"></i></button>';
+    h+='<button onclick="mkDeleteMeeting('+m.id+')" class="w-8 h-8 rounded-lg text-mut hover:text-red-400 flex items-center justify-center bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-xs"></i></button>';
+    h+='</div></div></div>';
+  });
+  h+='</div>';
+}
+h+='</div>';
+el.innerHTML=h;
+}
+
+window.mkMeetingModal=function(meetingId,prefFolder,prefContactId){
+  var m=meetingId?window.MK_MEETINGS.find(function(x){return x.id===meetingId;}):null;
+  var isNew=!m;
+  if(isNew){m={id:Date.now(),title:'',contactEmail:'',contactName:'',date:localDateStr(new Date(Date.now()+7*86400000)),startTime:'14:00',endTime:'14:30',duration:30,status:'proposed',gcalEventId:null,notes:'',location:'',conferenceLink:'',proposedSlots:[],campaignName:'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};if(prefContactId){var fc=null;FOLDERS.forEach(function(f){if(fc)return;(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){if(c.id===prefContactId)fc={c:c,fk:f.key};});});if(fc){m.contactEmail=fc.c.email||'';m.contactName=contactDisplayName(fc.c);m.title='Meeting avec '+m.contactName;}}}
+  window._mkMeetEdit=JSON.parse(JSON.stringify(m));
+  var me=window._mkMeetEdit;
+  var contacts=mkGetAllContactsFlat();
+  var campaigns=MK.campaigns||[];
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-5">'+(isNew?'<i class="fa-solid fa-calendar-plus text-acc mr-2"></i>Nouveau meeting':'Modifier : '+escHtml(me.title))+'</h2>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Titre</label><input type="text" id="mkTitle" class="fi" placeholder="Meeting avec..." value="'+escHtml(me.title)+'"></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Contact</label><select id="mkContact" class="fi" onchange="mkMeetingContactChanged()"><option value="">-- Sélectionner un contact --</option>';
+  contacts.forEach(function(c){var sel=me.contactEmail&&c.email.toLowerCase()===me.contactEmail.toLowerCase()?' selected':'';h+='<option value="'+c.email+'" data-name="'+escHtml(c.name)+'" data-company="'+escHtml(c.company||'')+'"'+sel+'>'+escHtml(c.name)+' ('+escHtml(c.email)+')'+(c.company?' · '+escHtml(c.company):'')+'</option>';});
+  h+='</select></div>';
+  h+='<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="text-xs text-mut block mb-1.5">Date</label><input type="date" id="mkDate" class="fi" value="'+me.date+'" onchange="mkMeetingCalcDuration()"></div><div><label class="text-xs text-mut block mb-1.5">Campagne</label><select id="mkCampaign" class="fi"><option value="">-- Aucune --</option>';
+  campaigns.forEach(function(c){var sel=me.campaignName===c.name?' selected':'';h+='<option value="'+escHtml(c.name)+'"'+sel+'>'+escHtml(c.name)+'</option>';});
+  h+='</select></div></div>';
+  h+='<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="text-xs text-mut block mb-1.5">Heure début</label><input type="time" id="mkStart" class="fi" value="'+me.startTime+'" onchange="mkMeetingCalcDuration()"></div><div><label class="text-xs text-mut block mb-1.5">Heure fin</label><input type="time" id="mkEnd" class="fi" value="'+me.endTime+'" onchange="mkMeetingCalcDuration()"></div></div>';
+  h+='<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="text-xs text-mut block mb-1.5">Lieu</label><input type="text" id="mkLocation" class="fi" placeholder="Visio, bureau..." value="'+escHtml(me.location)+'"></div><div><label class="text-xs text-mut block mb-1.5">Lien visio</label><input type="url" id="mkConfLink" class="fi" placeholder="https://meet.google.com/..." value="'+escHtml(me.conferenceLink)+'"></div></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Notes</label><textarea id="mkNotes" class="fi" rows="3" placeholder="Ordre du jour, notes...">'+escHtml(me.notes)+'</textarea></div>';
+  h+='<div class="mb-4" id="mkSlotsSection"><div class="flex items-center justify-between mb-2"><label class="text-xs text-mut"><i class="fa-solid fa-clock mr-1"></i>Créneaux proposés</label><button type="button" onclick="mkMeetingAddSlot()" class="text-[.6rem] text-acc hover:underline bp">+ Ajouter</button></div>';
+  var slots=window._mkMeetEdit.proposedSlots||[];
+  if(slots.length){h+='<div class="flex flex-col gap-1.5">';slots.forEach(function(s,i){h+='<div class="flex items-center gap-2"><input type="date" class="fi text-xs flex-1" value="'+escHtml(s.date)+'" onchange="window._mkMeetEdit.proposedSlots['+i+'].date=this.value"><input type="time" class="fi text-xs w-28" value="'+escHtml(s.time||'')+'" onchange="window._mkMeetEdit.proposedSlots['+i+'].time=this.value"><button type="button" onclick="window._mkMeetEdit.proposedSlots.splice('+i+',1);mkMeetingModal(meetingId||null)" class="w-7 h-7 rounded text-mut hover:text-red-400 bp"><i class="fa-solid fa-trash text-[.5rem]"></i></button></div>';});h+='</div>';}else{h+='<div class="text-[.6rem] text-mut text-center py-2 bg-sAlt/30 rounded-lg">Aucun créneau proposé</div>';}
+  h+='</div>';
+  h+='<label class="flex items-center gap-2 text-[.6rem] text-mut cursor-pointer select-none mb-4"><input type="checkbox" id="mkSyncGCal" class="w-3.5 h-3.5 accent-acc" '+(gcalHasValidToken()?'':'disabled')+'><span>Synchroniser avec Google Agenda</span>'+(gcalHasValidToken()?'':' <span class="text-warn">(non connecté)</span>')+'</label>';
+  h+='<div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:bg-sHov transition-colors bp">Annuler</button><button onclick="mkSaveMeetingFromModal('+(meetingId||'null')+')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-check mr-1.5"></i>'+(isNew?'Créer':'Enregistrer')+'</button></div>';
+  h+='</div>';
+  opM(h);
+};
+
+window.mkMeetingContactChanged=function(){
+  var sel=document.getElementById('mkContact');if(!sel)return;
+  var opt=sel.options[sel.selectedIndex];
+  window._mkMeetEdit.contactEmail=sel.value;
+  window._mkMeetEdit.contactName=opt.getAttribute('data-name')||'';
+  window._mkMeetEdit.company=opt.getAttribute('data-company')||'';
+};
+
+window.mkMeetingCalcDuration=function(){
+  var s=document.getElementById('mkStart');var e=document.getElementById('mkEnd');
+  if(s&&e&&s.value&&e.value){var sh=parseInt(s.value.split(':')[0])*60+parseInt(s.value.split(':')[1]);var eh=parseInt(e.value.split(':')[0])*60+parseInt(e.value.split(':')[1]);window._mkMeetEdit.duration=Math.max(0,eh-sh);}
+};
+
+window.mkMeetingAddSlot=function(){
+  if(!window._mkMeetEdit.proposedSlots)window._mkMeetEdit.proposedSlots=[];
+  window._mkMeetEdit.proposedSlots.push({date:localDateStr(new Date(Date.now()+7*86400000)),time:'10:00'});
+  var mid=window._mkMeetEdit.id;mkMeetingModal(mid);
+};
+
+window.mkSaveMeetingFromModal=async function(existingId){
+  var me=window._mkMeetEdit;if(!me)return;
+  me.title=(document.getElementById('mkTitle')||{}).value||'';
+  me.date=(document.getElementById('mkDate')||{}).value||localDateStr(new Date());
+  me.startTime=(document.getElementById('mkStart')||{}).value||'09:00';
+  me.endTime=(document.getElementById('mkEnd')||{}).value||'10:00';
+  me.location=(document.getElementById('mkLocation')||{}).value||'';
+  me.conferenceLink=(document.getElementById('mkConfLink')||{}).value||'';
+  me.notes=(document.getElementById('mkNotes')||{}).value||'';
+  var campEl=document.getElementById('mkCampaign');if(campEl)me.campaignName=campEl.value||'';
+  var syncGCal=(document.getElementById('mkSyncGCal')||{}).checked;
+  if(!me.title){toast('Titre requis','err');return;}
+  var sTime=me.startTime?me.startTime.split(':'):['9','0'];var eTime=me.endTime?me.endTime.split(':'):['10','0'];
+  me.duration=Math.max(1,Math.round((parseInt(eTime[0])*60+parseInt(eTime[1])-parseInt(sTime[0])*60-parseInt(sTime[1]))));
+  me.updatedAt=new Date().toISOString();
+  var idx=-1;if(existingId){idx=window.MK_MEETINGS.findIndex(function(x){return x.id===existingId;});}
+  if(idx>=0){
+    var old=window.MK_MEETINGS[idx];
+    Object.assign(old,me);old.id=existingId;
+    if(syncGCal&&gcalHasValidToken()){await mkSyncMeetingToGCal(existingId);}
+  }else{
+    me.id=Date.now();me.createdAt=me.updatedAt;
+    window.MK_MEETINGS.push(me);
+    if(syncGCal&&gcalHasValidToken()){await mkSyncMeetingToGCal(me.id);}
+  }
+  svMeetings();clsM();
+  toast(existingId?'Meeting mis à jour':'Meeting créé','ok');
+  if(S.v==='meetings')rMeetings();
+};
+
+window.mkConfirmMeeting=async function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  m.status='confirmed';m.updatedAt=new Date().toISOString();
+  if(m.gcalEventId&&gcalHasValidToken()){try{await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/'+m.gcalEventId,{method:'PATCH',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({summary:m.status+' : '+m.title})});}catch(e){}}
+  svMeetings();toast('Meeting confirmé','ok');if(S.v==='meetings')rMeetings();
+};
+
+window.mkCancelMeeting=async function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  m.status='cancelled';m.updatedAt=new Date().toISOString();
+  if(m.gcalEventId&&gcalHasValidToken()){try{await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/'+m.gcalEventId,{method:'PATCH',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({summary:'[ANNULÉ] '+m.title,status:'cancelled'})});}catch(e){}}
+  svMeetings();toast('Meeting annulé','info');if(S.v==='meetings')rMeetings();
+};
+
+window.mkCompleteMeeting=function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  m.status='completed';m.updatedAt=new Date().toISOString();
+  svMeetings();toast('Meeting marqué comme terminé','ok');if(S.v==='meetings')rMeetings();
+};
+
+window.mkDeleteMeeting=function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  if(m.gcalEventId&&gcalHasValidToken()){try{fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events/'+m.gcalEventId,{method:'DELETE',headers:{Authorization:'Bearer '+GCAL.token}});}catch(e){}}
+  window.MK_MEETINGS=window.MK_MEETINGS.filter(function(x){return x.id!==id;});
+  svMeetings();toast('Meeting supprimé','info');if(S.v==='meetings')rMeetings();
+};
+
+window.mkSyncMeetingToGCal=async function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  if(!gcalHasValidToken()){toast('Connecte ton compte Google Agenda d\'abord','err');return;}
+  if(!m.date||!m.startTime){toast('Date et heure requises','err');return;}
+  var startDt=new Date(m.date+'T'+m.startTime+':00');
+  var endDt=m.endTime?new Date(m.date+'T'+m.endTime+':00'):new Date(startDt.getTime()+(m.duration||30)*60000);
+  var body={
+    summary:m.title,
+    description:'Meeting avec '+(m.contactName||m.contactEmail||'')+(m.notes?'\n\n'+m.notes:''),
+    start:{dateTime:startDt.toISOString()},
+    end:{dateTime:endDt.toISOString()}
+  };
+  if(m.location)body.location=m.location;
+  if(m.conferenceLink)body.description+='\nVisio : '+m.conferenceLink;
+  if(m.contactEmail)body.attendees=[{email:m.contactEmail}];
+  try{
+    var url='https://www.googleapis.com/calendar/v3/calendars/primary/events';
+    var method='POST';
+    if(m.gcalEventId){url+='/'+m.gcalEventId;method='PATCH';}
+    var r=await fetch(url,{method:method,headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){GCAL.connected=false;GCAL.token=null;toast('Session Google expirée','err');return;}
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    var ev=await r.json();
+    m.gcalEventId=ev.id;m.updatedAt=new Date().toISOString();
+    svMeetings();
+    toast(m.gcalEventId?'Meeting synchronisé':'Meeting créé dans Google Agenda','ok');
+    if(S.v==='meetings')rMeetings();
+  }catch(e){toast('Erreur de synchronisation : '+e.message,'err');}
+};
+
+window.mkProposeMeetingSlots=function(id){
+  var m=window.MK_MEETINGS.find(function(x){return x.id===id;});if(!m)return;
+  var baseDate=new Date(m.date+'T00:00:00');
+  var slots=[];var hours=['09:00','10:00','11:00','14:00','15:00','16:00'];
+  for(var d=0;d<5;d++){
+    var dd=new Date(baseDate.getTime()+d*86400000);
+    if(dd.getDay()===0||dd.getDay()===6)continue;
+    var ds=localDateStr(dd);
+    for(var h=0;h<hours.length;h++){
+      if(slots.length>=5)break;
+      slots.push({date:ds,time:hours[h]});
+    }
+    if(slots.length>=5)break;
+  }
+  m.proposedSlots=slots;
+  m.status='proposed';m.updatedAt=new Date().toISOString();
+  svMeetings();toast(slots.length+' créneaux proposés','ok');
+  mkMeetingModal(id);
+};
 
 </script>
 </body>
