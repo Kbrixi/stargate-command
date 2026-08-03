@@ -202,6 +202,44 @@ body.vc-panel-open #MO{right:0}
 .mke-ql-wrap{position:relative;}
 .mke-ql-wrap .ql-toolbar.ql-snow{border-radius:12px!important;}
 .mke-ql-wrap .ql-container.ql-snow{border-radius:12px!important;}
+
+/* ===== MARKETING V2 — PIPELINE KANBAN ===== */
+.pipe-wrap{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;min-height:400px}
+.pipe-col{min-width:260px;max-width:300px;flex-shrink:0;background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 340px)}
+.pipe-col-hdr{padding:12px 14px;border-bottom:1px solid #2b2b2b;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pipe-col-hdr .stg-name{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.75rem;font-weight:600;display:flex;align-items:center;gap:6px}
+.pipe-col-hdr .stg-dot{width:10px;height:10px;border-radius:50%}
+.pipe-col-hdr .stg-cnt{font-size:.65rem;background:#1f1f1f;border:1px solid #2b2b2b;border-radius:6px;padding:1px 7px;color:#c9a97e;font-weight:600}
+.pipe-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px}
+.pipe-col-body.drag-over{background:rgba(255,156,0,.06);border-color:rgba(255,156,0,.3)}
+.pipe-col.drop-target .pipe-col-body{background:rgba(255,156,0,.08);border-color:rgba(255,156,0,.4)}
+.pipe-card{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s,opacity .15s,border-color .15s}
+.pipe-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3);border-color:#4a4a4a}
+.pipe-card.dragging{opacity:.35;transform:rotate(1.5deg)}
+.pipe-card .pc-name{font-size:.8rem;font-weight:600;color:#f2ead8;margin-bottom:4px}
+.pipe-card .pc-folder{font-size:.6rem;color:#c9a97e;margin-bottom:6px}
+.pipe-card .pc-meta{display:flex;justify-content:space-between;align-items:center}
+.pipe-card .pc-value{font-size:.7rem;font-weight:600;color:#ff9c00}
+.pipe-card .pc-time{font-size:.6rem;color:#8a7a5a}
+.pipe-card .pc-seq{font-size:.6rem;color:#9999ff;margin-top:4px;display:flex;align-items:center;gap:3px}
+.pipe-stats-bar{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+.pipe-stat{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#c9a97e}
+.pipe-stat .ps-val{font-weight:700;color:#f2ead8;font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.03em}
+.pipe-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:6000;display:flex;justify-content:flex-end;animation:fi .2s ease}
+.pipe-detail-panel{width:480px;max-width:95vw;background:#0d0d0d;border-left:1px solid #2b2b2b;overflow-y:auto;padding:0;height:100vh}
+.pipe-detail-hdr{padding:20px;border-bottom:1px solid #2b2b2b;background:rgba(255,156,0,.04);display:flex;align-items:center;justify-content:space-between}
+.pipe-detail-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.pipe-detail-section{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:14px}
+.pipe-detail-section h4{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.7rem;color:#c9a97e;margin-bottom:8px}
+.pipe-hist-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid rgba(43,43,43,.5);font-size:.7rem}
+.pipe-hist-item:last-child{border-bottom:none}
+.pipe-hist-dot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.pipe-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pipe-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.pipe-filter-bar select{background:#141414;border:1px solid #2b2b2b;border-radius:999px;padding:6px 12px;color:#c9a97e;font-size:.7rem;outline:none;cursor:pointer;font-family:'Jost',sans-serif}
+.pipe-filter-bar select:focus{border-color:#ff9c00}
+@media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
+
 </style>
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
@@ -243,7 +281,7 @@ body.vc-panel-open #MO{right:0}
 <button onclick="nav('tasks')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-warn hover:brightness-110 w-full text-left" data-v="tasks">Tâches<span id="sTC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="navContacts()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#cc99cc] hover:brightness-110 w-full text-left" data-v="contacts">Contacts<span id="sCC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="navNotes()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#ff9966] hover:brightness-110 w-full text-left" data-v="notes"><i class="fa-solid fa-note-sticky"></i>Notes<span id="sNC" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
-<button onclick="nav('marketing')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-ok hover:brightness-110 w-full text-left" data-v="marketing">Marketing</button>
+<div id="mkNavWrap"><button onclick="toggleMkNav()" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-ok hover:brightness-110 w-full text-left" data-v="marketing"><span>Marketing</span><i class="fa-solid fa-chevron-down text-[.55rem] ml-auto mr-1 transition-transform" id="mkNavChev"></i></button><div id="mkSubNav" class="hidden pl-6 flex flex-col gap-1 mt-1"></div></div>
 <button onclick="nav('gcal')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-acc hover:brightness-110 w-full text-left" data-v="gcal">Agenda Google<span id="sGC" class="ml-auto w-1.5 h-1.5 rounded-full bg-black/30"></span></button>
 <button onclick="nav('gmail')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-inf hover:brightness-110 w-full text-left" data-v="gmail">Gmail<span id="sGM" class="navcnt ml-auto text-[.7rem] px-2 py-0.5 rounded-full">0</span></button>
 <button onclick="nav('meetings')" class="ni flex items-center gap-3 px-3 py-2.5 text-sm text-black bg-[#cc99cc] hover:brightness-110 w-full text-left" data-v="meetings"><i class="fa-solid fa-calendar-check"></i>Meeting Scheduler</button>
@@ -399,7 +437,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log','cdc_funnel_stages','cdc_funnel_settings'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -527,7 +565,7 @@ FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
 if(S.v==='folder'&&S.folder&&!FOLDERS.some(function(f){return f.key===S.folder;})){S.v='dash';S.folder=null;}
 /* Valider que S.mkv pointe vers un onglet marketing valide */
 if(S.v==='marketing'&&S.mkv){
-  var validMkv=['overview','campaigns','content','emails','social','whatsapp'];
+  var validMkv=['overview','campaigns','content','emails','social','whatsapp','pipeline','sequences'];
   if(!validMkv.includes(S.mkv))S.mkv='overview';
 }
 /* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur */
@@ -2907,6 +2945,44 @@ const bodyHtml=parts.html?`<iframe class="w-full rounded-xl border-0" style="hei
 .md-preview th{background:#141414;font-weight:600;color:#ff9c00}
 .md-preview .cb{display:inline-flex;align-items:center;gap:4px;color:#c9a97e}
 .md-preview .cb input[type=checkbox]{accent-color:#ff9c00}
+
+/* ===== MARKETING V2 — PIPELINE KANBAN ===== */
+.pipe-wrap{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;min-height:400px}
+.pipe-col{min-width:260px;max-width:300px;flex-shrink:0;background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 340px)}
+.pipe-col-hdr{padding:12px 14px;border-bottom:1px solid #2b2b2b;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pipe-col-hdr .stg-name{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.75rem;font-weight:600;display:flex;align-items:center;gap:6px}
+.pipe-col-hdr .stg-dot{width:10px;height:10px;border-radius:50%}
+.pipe-col-hdr .stg-cnt{font-size:.65rem;background:#1f1f1f;border:1px solid #2b2b2b;border-radius:6px;padding:1px 7px;color:#c9a97e;font-weight:600}
+.pipe-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px}
+.pipe-col-body.drag-over{background:rgba(255,156,0,.06);border-color:rgba(255,156,0,.3)}
+.pipe-col.drop-target .pipe-col-body{background:rgba(255,156,0,.08);border-color:rgba(255,156,0,.4)}
+.pipe-card{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s,opacity .15s,border-color .15s}
+.pipe-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3);border-color:#4a4a4a}
+.pipe-card.dragging{opacity:.35;transform:rotate(1.5deg)}
+.pipe-card .pc-name{font-size:.8rem;font-weight:600;color:#f2ead8;margin-bottom:4px}
+.pipe-card .pc-folder{font-size:.6rem;color:#c9a97e;margin-bottom:6px}
+.pipe-card .pc-meta{display:flex;justify-content:space-between;align-items:center}
+.pipe-card .pc-value{font-size:.7rem;font-weight:600;color:#ff9c00}
+.pipe-card .pc-time{font-size:.6rem;color:#8a7a5a}
+.pipe-card .pc-seq{font-size:.6rem;color:#9999ff;margin-top:4px;display:flex;align-items:center;gap:3px}
+.pipe-stats-bar{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+.pipe-stat{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#c9a97e}
+.pipe-stat .ps-val{font-weight:700;color:#f2ead8;font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.03em}
+.pipe-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:6000;display:flex;justify-content:flex-end;animation:fi .2s ease}
+.pipe-detail-panel{width:480px;max-width:95vw;background:#0d0d0d;border-left:1px solid #2b2b2b;overflow-y:auto;padding:0;height:100vh}
+.pipe-detail-hdr{padding:20px;border-bottom:1px solid #2b2b2b;background:rgba(255,156,0,.04);display:flex;align-items:center;justify-content:space-between}
+.pipe-detail-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.pipe-detail-section{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:14px}
+.pipe-detail-section h4{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.7rem;color:#c9a97e;margin-bottom:8px}
+.pipe-hist-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid rgba(43,43,43,.5);font-size:.7rem}
+.pipe-hist-item:last-child{border-bottom:none}
+.pipe-hist-dot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.pipe-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pipe-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.pipe-filter-bar select{background:#141414;border:1px solid #2b2b2b;border-radius:999px;padding:6px 12px;color:#c9a97e;font-size:.7rem;outline:none;cursor:pointer;font-family:'Jost',sans-serif}
+.pipe-filter-bar select:focus{border-color:#ff9c00}
+@media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
+
 </style></head><body>${gmailSanitizeHtml(parts.html)}</body></html>`)}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-1"><h2 class="font-disp font-bold text-lg">${escHtml(subject)}</h2></div>
@@ -3044,6 +3120,174 @@ ${gmailMessagesListHtml()}
 </div>
 ${GMAIL.nextPageToken?`<div class="text-center mt-4 af d3"><button onclick="gmailFetchMessages(false)" class="h-9 px-4 rounded-xl bg-sAlt border border-bdr text-xs font-medium hover:bg-sHov transition-colors bp" ${GMAIL.loading?'disabled':''}>Charger plus</button></div>`:''}
 </div>`;
+}
+
+/* ===== MARKETING V2 — PIPELINE / FUNNEL DATA ===== */
+const FUNNEL_STAGES=[
+{key:'lead',label:'Lead',color:'#c9a97e',bg:'rgba(201,169,126,.15)',icon:'fa-user-plus'},
+{key:'prospect',label:'Prospect',color:'#9999ff',bg:'rgba(153,153,255,.15)',icon:'fa-user'},
+{key:'relanced',label:'Relanc\u00e9',color:'#ffcc66',bg:'rgba(255,204,102,.15)',icon:'fa-rotate'},
+{key:'qualified',label:'Qualifi\u00e9',color:'#5fbf8f',bg:'rgba(95,191,143,.15)',icon:'fa-star'},
+{key:'proposal',label:'Proposition',color:'#ff9c00',bg:'rgba(255,156,0,.15)',icon:'fa-file-invoice'},
+{key:'negotiation',label:'N\u00e9gociation',color:'#cc99cc',bg:'rgba(204,153,204,.15)',icon:'fa-handshake'},
+{key:'won',label:'Gagn\u00e9',color:'#5fbf8f',bg:'rgba(95,191,143,.2)',icon:'fa-trophy'},
+{key:'lost',label:'Perdu',color:'#c9a97e',bg:'rgba(201,169,126,.1)',icon:'fa-circle-xmark'}
+];
+const FUNNEL_STAGE_KEYS=FUNNEL_STAGES.map(s=>s.key);
+const FUNNEL_ACTIVE_STAGES=FUNNEL_STAGES.filter(s=>s.key!=='won'&&s.key!=='lost');
+
+function ldFunnel(){try{var s=localStorage.getItem('cdc_funnel_stages');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svFunnel(){localStorage.setItem('cdc_funnel_stages',JSON.stringify(PIPELINE));}
+var PIPELINE=ldFunnel();
+
+function ldFunnelSettings(){try{var s=localStorage.getItem('cdc_funnel_settings');if(s)return{autoTransitions:true,...JSON.parse(s)};}catch(e){}return{autoTransitions:true};}
+function svFunnelSettings(){localStorage.setItem('cdc_funnel_settings',JSON.stringify(FUNNEL_SETTINGS));}
+var FUNNEL_SETTINGS=ldFunnelSettings();
+
+function funnelNewId(){return 'fun_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);}
+
+function funnelStageInfo(key){return FUNNEL_STAGES.find(s=>s.key===key)||FUNNEL_STAGES[0];}
+
+function funnelDaysInStage(entry){
+  if(!entry||!entry.enteredAt)return null;
+  var d=new Date(entry.enteredAt);
+  if(isNaN(d.getTime()))return null;
+  return Math.floor((Date.now()-d.getTime())/86400000);
+}
+
+/* Migrate existing contacts: assign funnel stage based on prospectStatus */
+function funnelMigrateContacts(){
+  var changed=false;
+  FOLDERS.forEach(function(folder){
+    var contacts=(D[folder.key]&&D[folder.key].contacts)||[];
+    contacts.forEach(function(c){
+      var existing=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===folder.key;});
+      if(!existing){
+        var stage='lead';
+        var ps=c.prospectStatus;
+        if(ps==='contacte'||ps==='relance1'||ps==='relance2')stage='relanced';
+        else if(ps==='reponse')stage='qualified';
+        else if(ps==='rdv')stage='proposal';
+        else if(ps==='perdu')stage='lost';
+        else if(c.lastContactedAt)stage='prospect';
+        PIPELINE.push({
+          id:funnelNewId(),
+          contactId:c.id,
+          folderKey:folder.key,
+          stage:stage,
+          previousStage:null,
+          enteredAt:c.lastContactedAt?c.lastContactedAt+'T12:00:00Z':new Date().toISOString(),
+          history:[],
+          activeSequenceId:null,
+          activeSequenceRunId:null,
+          estimatedValue:0,
+          actualValue:null,
+          lostReason:null,
+          lostReasonDetail:'',
+          tags:(c.tags||[]).slice(),
+          source:'other',
+          assignedTo:'moi',
+          notes:c.notes||''
+        });
+        changed=true;
+      }
+    });
+  });
+  if(changed)svFunnel();
+}
+
+funnelMigrateContacts();
+
+function funnelGetContact(entry){
+  if(!entry)return null;
+  var folder=D[entry.folderKey];
+  if(!folder)return null;
+  return(folder.contacts||[]).find(function(c){return c.id===entry.contactId;});
+}
+
+function funnelMoveTo(entryId,newStage,reason){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry)return false;
+  var oldStage=entry.stage;
+  if(oldStage===newStage)return false;
+  if(!FUNNEL_STAGE_KEYS.includes(newStage))return false;
+  var now=new Date().toISOString();
+  if(entry.enteredAt){
+    entry.history.push({stage:entry.stage,from:entry.enteredAt,to:now});
+  }
+  entry.previousStage=oldStage;
+  entry.stage=newStage;
+  entry.enteredAt=now;
+  if(newStage==='won'&&entry.estimatedValue){entry.actualValue=entry.estimatedValue;}
+  if(newStage!=='lost'){entry.lostReason=null;entry.lostReasonDetail='';}
+  svFunnel();
+  return true;
+}
+
+function funnelSetField(entryId,field,value){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry)return false;
+  entry[field]=value;
+  svFunnel();
+  return true;
+}
+
+function funnelGetTotalValue(){return PIPELINE.filter(function(f){return f.stage!=='won'&&f.stage!=='lost';}).reduce(function(n,f){return n+(Number(f.estimatedValue)||0);},0);}
+function funnelGetClosedWonValue(){return PIPELINE.filter(function(f){return f.stage==='won';}).reduce(function(n,f){return n+(Number(f.actualValue)||Number(f.estimatedValue)||0);},0);}
+function funnelGetStageCount(key){return PIPELINE.filter(function(f){return f.stage===key;}).length;}
+function funnelGetConversionRate(){
+  var total=PIPELINE.length;if(total<2)return 0;
+  var won=PIPELINE.filter(function(f){return f.stage==='won';}).length;
+  return Math.round(won/total*100);
+}
+function funnelGetAvgDays(){
+  var entries=PIPELINE.filter(function(f){return f.stage==='won'&&f.history.length>0;});
+  if(!entries.length)return 0;
+  var totalDays=entries.reduce(function(n,f){
+    var first=f.history[0];
+    if(!first||!first.from)return n;
+    var d=new Date(first.from);
+    if(isNaN(d.getTime()))return n;
+    return n+Math.floor((Date.now()-d.getTime())/86400000);
+  },0);
+  return Math.round(totalDays/entries.length);
+}
+
+/* ===== MARKETING V2 — SIDEBAR SOUS-NAVIGATION ===== */
+var MKV2_TABS=[
+  {key:'pipeline',label:'Pipeline',icon:'fa-columns'},
+  {key:'sequences',label:'S\u00e9quences',icon:'fa-diagram-project'},
+  {key:'campaigns',label:'Campagnes',icon:'fa-rocket'},
+  {key:'content',label:'Contenu',icon:'fa-pen-nib'},
+  {key:'whatsapp',label:'WhatsApp',icon:'fa-brands fa-whatsapp'},
+  {key:'social',label:'R\u00e9seaux sociaux',icon:'fa-share-nodes'}
+];
+var MKV2_BUILT=['pipeline','campaigns','content','emails','social','whatsapp'];
+
+function toggleMkNav(){
+  var sub=document.getElementById('mkSubNav');
+  var chev=document.getElementById('mkNavChev');
+  if(!sub)return;
+  var isHidden=sub.classList.contains('hidden');
+  sub.classList.toggle('hidden');
+  if(chev)chev.style.transform=isHidden?'rotate(180deg)':'';
+  if(isHidden)renderMkSubNav();
+}
+function renderMkSubNav(){
+  var sub=document.getElementById('mkSubNav');
+  if(!sub)return;
+  var h='';
+  MKV2_TABS.forEach(function(t){
+    var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;
+    var act=S.mkv===t.key?' text-acc font-bold':'';
+    h+='<button onclick="navMkV2(\''+t.key+'\')" class="flex items-center gap-2 px-3 py-1.5 text-xs text-left rounded-l-full transition-colors text-black/80 hover:bg-ok/80'+act+'"><i class="'+ico+' w-3.5 text-center"></i>'+t.label+'</button>';
+  });
+  sub.innerHTML=h;
+}
+function navMkV2(tab){
+  S.mkv=tab;
+  if(S.v!=='marketing')nav('marketing');
+  else rMarketingV2();
 }
 
 /* ===== MARKETING : VUE D'ENSEMBLE (Fonction 1/8) ===== */
@@ -4998,7 +5242,45 @@ function nPrintNote(id) {
   const tags = (n.tagIds||[]).map(tid=>ND.tags.find(t=>t.id===tid)).filter(Boolean);
   const w = window.open('','_blank','width=800,height=600');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escH(n.title||'Note')}</title>
-    <style>body{font-family:'Segoe UI',Jost,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#222;line-height:1.7}h1{font-size:1.6rem;margin-bottom:4px;border-bottom:2px solid #ff9c00;padding-bottom:8px}h2{font-size:1.3rem;margin-top:24px}h3{font-size:1.1rem}pre{background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto}code{background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:0.9em}blockquote{border-left:3px solid #ff9c00;margin-left:0;padding-left:16px;color:#555}.meta{color:#888;font-size:0.85rem;margin-top:4px}.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.tag{padding:2px 8px;border-radius:12px;font-size:0.75rem;background:#f0f0f0;color:#555}ul,ol{padding-left:24px}li{margin-bottom:4px}@media print{body{margin:0;padding:20px}}</style></head><body>
+    <style>body{font-family:'Segoe UI',Jost,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#222;line-height:1.7}h1{font-size:1.6rem;margin-bottom:4px;border-bottom:2px solid #ff9c00;padding-bottom:8px}h2{font-size:1.3rem;margin-top:24px}h3{font-size:1.1rem}pre{background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto}code{background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:0.9em}blockquote{border-left:3px solid #ff9c00;margin-left:0;padding-left:16px;color:#555}.meta{color:#888;font-size:0.85rem;margin-top:4px}.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.tag{padding:2px 8px;border-radius:12px;font-size:0.75rem;background:#f0f0f0;color:#555}ul,ol{padding-left:24px}li{margin-bottom:4px}@media print{body{margin:0;padding:20px}}
+/* ===== MARKETING V2 — PIPELINE KANBAN ===== */
+.pipe-wrap{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;min-height:400px}
+.pipe-col{min-width:260px;max-width:300px;flex-shrink:0;background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 340px)}
+.pipe-col-hdr{padding:12px 14px;border-bottom:1px solid #2b2b2b;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pipe-col-hdr .stg-name{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.75rem;font-weight:600;display:flex;align-items:center;gap:6px}
+.pipe-col-hdr .stg-dot{width:10px;height:10px;border-radius:50%}
+.pipe-col-hdr .stg-cnt{font-size:.65rem;background:#1f1f1f;border:1px solid #2b2b2b;border-radius:6px;padding:1px 7px;color:#c9a97e;font-weight:600}
+.pipe-col-body{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px}
+.pipe-col-body.drag-over{background:rgba(255,156,0,.06);border-color:rgba(255,156,0,.3)}
+.pipe-col.drop-target .pipe-col-body{background:rgba(255,156,0,.08);border-color:rgba(255,156,0,.4)}
+.pipe-card{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:10px 12px;cursor:grab;transition:transform .15s,box-shadow .15s,opacity .15s,border-color .15s}
+.pipe-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3);border-color:#4a4a4a}
+.pipe-card.dragging{opacity:.35;transform:rotate(1.5deg)}
+.pipe-card .pc-name{font-size:.8rem;font-weight:600;color:#f2ead8;margin-bottom:4px}
+.pipe-card .pc-folder{font-size:.6rem;color:#c9a97e;margin-bottom:6px}
+.pipe-card .pc-meta{display:flex;justify-content:space-between;align-items:center}
+.pipe-card .pc-value{font-size:.7rem;font-weight:600;color:#ff9c00}
+.pipe-card .pc-time{font-size:.6rem;color:#8a7a5a}
+.pipe-card .pc-seq{font-size:.6rem;color:#9999ff;margin-top:4px;display:flex;align-items:center;gap:3px}
+.pipe-stats-bar{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+.pipe-stat{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#c9a97e}
+.pipe-stat .ps-val{font-weight:700;color:#f2ead8;font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.03em}
+.pipe-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:6000;display:flex;justify-content:flex-end;animation:fi .2s ease}
+.pipe-detail-panel{width:480px;max-width:95vw;background:#0d0d0d;border-left:1px solid #2b2b2b;overflow-y:auto;padding:0;height:100vh}
+.pipe-detail-hdr{padding:20px;border-bottom:1px solid #2b2b2b;background:rgba(255,156,0,.04);display:flex;align-items:center;justify-content:space-between}
+.pipe-detail-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.pipe-detail-section{background:#141414;border:1px solid #2b2b2b;border-radius:10px;padding:14px}
+.pipe-detail-section h4{font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:.7rem;color:#c9a97e;margin-bottom:8px}
+.pipe-hist-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid rgba(43,43,43,.5);font-size:.7rem}
+.pipe-hist-item:last-child{border-bottom:none}
+.pipe-hist-dot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.pipe-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pipe-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.pipe-filter-bar select{background:#141414;border:1px solid #2b2b2b;border-radius:999px;padding:6px 12px;color:#c9a97e;font-size:.7rem;outline:none;cursor:pointer;font-family:'Jost',sans-serif}
+.pipe-filter-bar select:focus{border-color:#ff9c00}
+@media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
+
+</style></head><body>
     <h1>${escH(n.title||'Sans titre')}</h1>
     <div class="meta">${cat?'<span style="color:'+cat.color+'">'+escH(cat.name)+'</span> · ':''}Créée ${new Date(n.createdAt).toLocaleDateString('fr-FR')} · Modifiée ${new Date(n.updatedAt).toLocaleDateString('fr-FR')} · ${n.wordCount||0} mots</div>
     ${tags.length?'<div class="tags">'+tags.map(t=>'<span class="tag" style="border-left:3px solid '+t.color+'">'+escH(t.name)+'</span>').join('')+'</div>':''}
@@ -7168,6 +7450,381 @@ window.mkRestoreCrmUI=function(){
   var mobl=document.getElementById('mobl');if(mobl)mobl.style.display='';
   document.title='Cockpit de Chasse \u2014 CRM Pro';
 };
+
+
+/* ===== MARKETING V2 — PIPELINE RENDER ===== */
+var PIPE_DRAG={contactId:null,folderKey:null,entryId:null};
+
+function rMarketingV2(){
+  var el=document.getElementById('PC');
+  if(!el)return;
+  var body='';
+  if(S.mkv==='pipeline'){
+    body=rPipelineView();
+  }else if(S.mkv==='sequences'){
+    body=rSequencesV2View();
+  }else{
+    body=rMarketingV2Fallback();
+  }
+  el.innerHTML='<div class="af"><div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Marketing</h1></div>'+body+'</div>';
+}
+
+function rPipelineView(){
+  var h='';
+  /* KPIs */
+  var totalVal=funnelGetTotalValue();
+  var wonVal=funnelGetClosedWonValue();
+  var convRate=funnelGetConversionRate();
+  var avgDays=funnelGetAvgDays();
+  h+='<div class="pipe-kpi-grid mb-6">';
+  h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-coins text-2xl opacity-80 mb-2"></i><div class="text-xl font-disp font-bold">'+totalVal.toLocaleString('fr-CH')+' CHF</div><div class="text-[.65rem] opacity-90 mt-1">Pipeline total</div></div>';
+  h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-trophy text-2xl opacity-80 mb-2"></i><div class="text-xl font-disp font-bold">'+wonVal.toLocaleString('fr-CH')+' CHF</div><div class="text-[.65rem] opacity-90 mt-1">Gagn\u00e9 (cl\u00f4tur\u00e9)</div></div>';
+  h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-percent text-2xl opacity-80 mb-2"></i><div class="text-xl font-disp font-bold">'+convRate+'%</div><div class="text-[.65rem] opacity-90 mt-1">Taux Lead\u2192Won</div></div>';
+  h+='<div class="kpi" style="background:#cc99cc"><i class="fa-solid fa-clock text-2xl opacity-80 mb-2"></i><div class="text-xl font-disp font-bold">'+avgDays+' j</div><div class="text-[.65rem] opacity-90 mt-1">Dur\u00e9e moy. cycle</div></div>';
+  h+='</div>';
+
+  /* Tabs bar (Marketing V2) */
+  h+=mkV2TabsBar();
+
+  /* Filters */
+  h+='<div class="pipe-filter-bar">';
+  h+='<select id="pipeFilterFolder" onchange="rMarketingV2()"><option value="all">Tous dossiers</option>';
+  FOLDERS.forEach(function(f){h+='<option value="'+f.key+'">'+escHtml(f.name)+'</option>';});
+  h+='</select>';
+  h+='<select id="pipeFilterSource" onchange="rMarketingV2()"><option value="all">Toutes sources</option>';
+  h+='<option value="website">Website</option><option value="referral">Referral</option><option value="linkedin">LinkedIn</option><option value="cold">Cold</option><option value="event">Event</option><option value="other">Other</option>';
+  h+='</select>';
+  h+='<button onclick="pipeOpenAddModal()" class="h-8 px-3 rounded-lg bg-acc hover:bg-accH text-black text-[.65rem] font-semibold flex items-center gap-1.5 transition-colors bp ml-auto"><i class="fa-solid fa-plus text-[.55rem]"></i>Ajouter au pipeline</button>';
+  h+='</div>';
+
+  /* Kanban columns */
+  h+='<div class="pipe-wrap" id="pipeBoard">';
+  FUNNEL_STAGES.forEach(function(stg){
+    h+='<div class="pipe-col" data-stage="'+stg.key+'" ondragover="pipeDragOver(event)" ondrop="pipeDrop(event,\''+stg.key+'\')" ondragleave="pipeDragLeave(event)">';
+    h+='<div class="pipe-col-hdr"><div class="stg-name"><span class="stg-dot" style="background:'+stg.color+'"></span>'+stg.label+'</div><span class="stg-cnt" id="pipeCnt_'+stg.key+'">0</span></div>';
+    h+='<div class="pipe-col-body" id="pipeBody_'+stg.key+'"></div>';
+    h+='</div>';
+  });
+  h+='</div>';
+
+  /* Bottom stats bar */
+  h+='<div class="pipe-stats-bar">';
+  h+='<div class="pipe-stat"><span>Total contacts:</span><span class="ps-val">'+PIPELINE.length+'</span></div>';
+  var active=PIPELINE.filter(function(f){return f.stage!=='won'&&f.stage!=='lost';}).length;
+  h+='<div class="pipe-stat"><span>En cours:</span><span class="ps-val">'+active+'</span></div>';
+  h+='<div class="pipe-stat"><span>Gagn\u00e9s:</span><span class="ps-val" style="color:#5fbf8f">'+funnelGetStageCount('won')+'</span></div>';
+  h+='<div class="pipe-stat"><span>Perdus:</span><span class="ps-val" style="color:#c9a97e">'+funnelGetStageCount('lost')+'</span></div>';
+  h+='</div>';
+
+  /* Defer card rendering to after DOM is ready */
+  setTimeout(function(){pipeRenderCards();},10);
+
+  return h;
+}
+
+function mkV2TabsBar(){
+  var tabs='';
+  MKV2_TABS.forEach(function(t){
+    var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;
+    var act=S.mkv===t.key?'act':'';
+    tabs+='<button onclick="navMkV2(\''+t.key+'\')" class="chip '+act+'"><i class="'+ico+' mr-1.5"></i>'+t.label+'</button>';
+  });
+  return '<div class="flex flex-wrap gap-2 mb-6">'+tabs+'</div>';
+}
+
+function pipeRenderCards(){
+  var filterFolder=document.getElementById('pipeFilterFolder');
+  var filterSource=document.getElementById('pipeFilterSource');
+  var fFolder=filterFolder?filterFolder.value:'all';
+  var fSource=filterSource?filterSource.value:'all';
+
+  /* Clear all columns */
+  FUNNEL_STAGES.forEach(function(stg){
+    var body=document.getElementById('pipeBody_'+stg.key);
+    if(body)body.innerHTML='';
+    var cnt=document.getElementById('pipeCnt_'+stg.key);
+    if(cnt)cnt.textContent='0';
+  });
+
+  PIPELINE.forEach(function(entry){
+    if(fFolder!=='all'&&entry.folderKey!==fFolder)return;
+    if(fSource!=='all'&&entry.source!==fSource)return;
+    var body=document.getElementById('pipeBody_'+entry.stage);
+    if(!body)return;
+
+    var contact=funnelGetContact(entry);
+    var cName=contact?contactDisplayName(contact):'Contact #'+entry.contactId;
+    var folder=FOLDERS.find(function(f){return f.key===entry.folderKey;});
+    var fName=folder?folder.name:'?';
+    var days=funnelDaysInStage(entry);
+    var seqName='';
+    if(entry.activeSequenceId){
+      var seqs=window.MK_SEQUENCES||[];
+      var seq=seqs.find(function(s){return s.id===entry.activeSequenceId;});
+      seqName=seq?seq.name:'';
+    }
+
+    var card=document.createElement('div');
+    card.className='pipe-card';
+    card.draggable=true;
+    card.setAttribute('data-entry-id',entry.id);
+    card.setAttribute('data-contact-id',entry.contactId);
+    card.setAttribute('data-folder-key',entry.folderKey);
+    card.ondragstart=function(e){pipeDragStart(e,entry.id,entry.contactId,entry.folderKey);};
+    card.ondragend=function(e){pipeDragEnd(e);};
+    card.onclick=function(e){if(!e.target.closest('button'))pipeOpenDetail(entry.id);};
+    card.innerHTML='<div class="pc-name">'+escHtml(cName)+'</div>'+
+      '<div class="pc-folder">'+escHtml(fName)+'</div>'+
+      '<div class="pc-meta"><span class="pc-value">'+(entry.estimatedValue?entry.estimatedValue.toLocaleString('fr-CH')+' CHF':'\u2014')+'</span><span class="pc-time">'+(days!==null?days+'j':'')+'</span></div>'+
+      (seqName?'<div class="pc-seq"><i class="fa-solid fa-diagram-project"></i>'+escHtml(seqName)+'</div>':'');
+    body.appendChild(card);
+
+    var cnt=document.getElementById('pipeCnt_'+entry.stage);
+    if(cnt)cnt.textContent=body.children.length;
+  });
+}
+
+/* Drag & Drop handlers */
+function pipeDragStart(e,entryId,contactId,folderKey){
+  PIPE_DRAG={entryId:entryId,contactId:contactId,folderKey:folderKey};
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',entryId);
+  e.target.classList.add('dragging');
+}
+function pipeDragEnd(e){
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.pipe-col').forEach(function(c){c.classList.remove('drop-target');});
+}
+function pipeDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  var body=e.currentTarget.querySelector('.pipe-col-body');
+  if(body)body.classList.add('drag-over');
+}
+function pipeDragLeave(e){
+  var body=e.currentTarget.querySelector('.pipe-col-body');
+  if(!body)return;
+  if(!body.contains(e.relatedTarget)){
+    body.classList.remove('drag-over');
+    e.currentTarget.classList.remove('drop-target');
+  }
+}
+function pipeDrop(e,newStage){
+  e.preventDefault();
+  var body=e.currentTarget.querySelector('.pipe-col-body');
+  if(body)body.classList.remove('drag-over');
+  e.currentTarget.classList.remove('drop-target');
+  var entryId=e.dataTransfer.getData('text/plain')||PIPE_DRAG.entryId;
+  if(!entryId)return;
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry)return;
+  var contact=funnelGetContact(entry);
+  var cName=contact?contactDisplayName(contact):'?';
+  var stgInfo=funnelStageInfo(newStage);
+  if(newStage==='lost'){
+    pipeOpenLostReason(entryId,function(){
+      toast(cName+' \u2192 '+stgInfo.label,'ok');
+      rMarketingV2();
+    });
+    return;
+  }
+  if(funnelMoveTo(entryId,newStage)){
+    toast(cName+' \u2192 '+stgInfo.label,'ok');
+    rMarketingV2();
+  }
+}
+
+/* Lost reason modal */
+function pipeOpenLostReason(entryId,callback){
+  var op='<div class="p-6"><h2 class="font-disp font-bold text-lg mb-4">Raison de la perte</h2>'+
+    '<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Raison</label><select id="pipeLostReason" class="fi"><option value="prix">Prix</option><option value="timing">Timing</option><option value="concurrence">Concurrence</option><option value="autre">Autre</option></select></div>'+
+    '<div class="mb-4"><label class="text-xs text-mut block mb-1.5">D\u00e9tail (optionnel)</label><textarea id="pipeLostDetail" class="fi" rows="2"></textarea></div>'+
+    '<div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>'+
+    '<button onclick="pipeConfirmLost(\''+entryId+'\')" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Confirmer</button></div></div>';
+  opM(op);
+  window._pipeLostCb=callback;
+}
+function pipeConfirmLost(entryId){
+  var reason=document.getElementById('pipeLostReason').value;
+  var detail=document.getElementById('pipeLostDetail').value||'';
+  funnelSetField(entryId,'lostReason',reason);
+  funnelSetField(entryId,'lostReasonDetail',detail);
+  funnelMoveTo(entryId,'lost');
+  clsM();
+  toast('Marqu\u00e9 comme perdu','info');
+  if(window._pipeLostCb)window._pipeLostCb();
+}
+
+/* Detail panel */
+function pipeOpenDetail(entryId){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry)return;
+  var contact=funnelGetContact(entry);
+  var cName=contact?contactDisplayName(contact):'Contact #'+entry.contactId;
+  var folder=FOLDERS.find(function(f){return f.key===entry.folderKey;});
+  var fName=folder?folder.name:'?';
+  var stgInfo=funnelStageInfo(entry.stage);
+  var days=funnelDaysInStage(entry);
+
+  var seqName='';
+  if(entry.activeSequenceId){
+    var seqs=window.MK_SEQUENCES||[];
+    var seq=seqs.find(function(s){return s.id===entry.activeSequenceId;});
+    seqName=seq?seq.name:'Aucune';
+  }else{seqName='Aucune';}
+
+  /* History */
+  var histH='';
+  if(entry.history&&entry.history.length){
+    entry.history.forEach(function(hi){
+      var si=funnelStageInfo(hi.stage);
+      var fromStr=hi.from?new Date(hi.from).toLocaleDateString('fr-CH'):'?';
+      var toStr=hi.to?new Date(hi.to).toLocaleDateString('fr-CH'):'';
+      histH+='<div class="pipe-hist-item"><span class="pipe-hist-dot" style="background:'+si.color+'"></span><div><span class="text-txt font-medium">'+si.label+'</span><span class="text-mut ml-2">'+fromStr+' \u2192 '+toStr+'</span></div></div>';
+    });
+  }else{histH='<div class="text-xs text-mut">Aucun historique</div>';}
+
+  /* Stage transition buttons */
+  var stageBtns='';
+  FUNNEL_ACTIVE_STAGES.forEach(function(s){
+    if(s.key!==entry.stage){
+      stageBtns+='<button onclick="pipeQuickMove(\''+entryId+'\',\''+s.key+'\')" class="h-7 px-2.5 rounded-lg text-[.6rem] font-medium transition-colors bp" style="background:'+s.bg+';color:'+s.color+';border:1px solid '+s.color+'33">'+s.label+'</button>';
+    }
+  });
+  stageBtns+='<button onclick="pipeOpenLostReason(\''+entryId+'\',function(){pipeOpenDetail(\''+entryId+'\')})" class="h-7 px-2.5 rounded-lg text-[.6rem] font-medium transition-colors bp" style="background:rgba(201,169,126,.1);color:#c9a97e;border:1px solid rgba(201,169,126,.2)">Perdu</button>';
+
+  var overlay=document.createElement('div');
+  overlay.className='pipe-detail-overlay';
+  overlay.id='pipeDetailOverlay';
+  overlay.onclick=function(e){if(e.target===overlay)pipeCloseDetail();};
+  overlay.innerHTML='<div class="pipe-detail-panel"><div class="pipe-detail-hdr"><div><div class="font-disp font-bold text-lg">'+escHtml(cName)+'</div><div class="text-xs text-mut mt-1">'+escHtml(fName)+' \xb7 <span style="color:'+stgInfo.color+'">'+stgInfo.label+'</span>'+(days!==null?' \xb7 '+days+'j dans ce stade':'')+'</div></div><button onclick="pipeCloseDetail()" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr flex items-center justify-center text-mut hover:text-txt bp"><i class="fa-solid fa-xmark text-xs"></i></button></div>'+
+  '<div class="pipe-detail-body">'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-arrows-rotate mr-1.5"></i>Transition de stade</h4><div class="flex flex-wrap gap-2">'+stageBtns+'</div></div>'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Historique</h4>'+histH+'</div>'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-coins mr-1.5"></i>Valeur</h4>'+
+      '<div class="grid grid-cols-2 gap-3"><div><label class="text-[.65rem] text-mut block mb-1">Valeur estim\u00e9e (CHF)</label><input type="number" class="fi text-sm" value="'+(entry.estimatedValue||0)+'" onchange="funnelSetField(\''+entryId+'\',\'estimatedValue\',Number(this.value));toast(\'Valeur mise \u00e0 jour\')"></div>'+
+      '<div><label class="text-[.65rem] text-mut block mb-1">Valeur r\u00e9elle (CHF)</label><input type="number" class="fi text-sm" value="'+(entry.actualValue||'')+'" onchange="funnelSetField(\''+entryId+'\',\'actualValue\',Number(this.value)||null);toast(\'Valeur mise \u00e0 jour\')"></div></div></div>'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-diagram-project mr-1.5"></i>S\u00e9quence active</h4><div class="text-sm text-txt">'+escHtml(seqName)+'</div></div>'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-tags mr-1.5"></i>Source & Tags</h4>'+
+      '<div class="mb-3"><label class="text-[.65rem] text-mut block mb-1">Source</label><select class="fi text-sm" onchange="funnelSetField(\''+entryId+'\',\'source\',this.value)"><option value="website"'+(entry.source==='website'?' selected':'')+'>Website</option><option value="referral"'+(entry.source==='referral'?' selected':'')+'>Referral</option><option value="linkedin"'+(entry.source==='linkedin'?' selected':'')+'>LinkedIn</option><option value="cold"'+(entry.source==='cold'?' selected':'')+'>Cold</option><option value="event"'+(entry.source==='event'?' selected':'')+'>Event</option><option value="other"'+(entry.source==='other'?' selected':'')+'>Other</option></select></div>'+
+      '<div><label class="text-[.65rem] text-mut block mb-1">Tags</label><input class="fi text-sm" value="'+escHtml((entry.tags||[]).join(', '))+'" onchange="funnelSetField(\''+entryId+'\',\'tags\',this.value.split(\',\').map(function(t){return t.trim();}).filter(Boolean))"></div></div>'+
+    '<div class="pipe-detail-section"><h4><i class="fa-solid fa-note-sticky mr-1.5"></i>Notes</h4><textarea class="fi text-sm" rows="3" onchange="funnelSetField(\''+entryId+'\',\'notes\',this.value)">'+escHtml(entry.notes||'')+'</textarea></div>'+
+    (contact?'<div class="pipe-detail-section"><h4><i class="fa-solid fa-address-card mr-1.5"></i>Contact</h4><div class="text-xs space-y-1"><div class="text-txt">'+escHtml(cName)+'</div>'+(contact.company?'<div class="text-mut">'+escHtml(contact.company)+'</div>':'')+(contact.email?'<div class="text-mut"><a href="mailto:'+escHtml(contact.email)+'" class="text-inf hover:underline">'+escHtml(contact.email)+'</a></div>':'')+(contact.phone?'<div class="text-mut">'+escHtml(contact.phone)+'</div>':'')+'</div></div>':'')+
+  '</div></div>';
+
+  var existing=document.getElementById('pipeDetailOverlay');
+  if(existing)existing.remove();
+  document.body.appendChild(overlay);
+}
+function pipeCloseDetail(){
+  var overlay=document.getElementById('pipeDetailOverlay');
+  if(overlay)overlay.remove();
+}
+function pipeQuickMove(entryId,newStage){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry)return;
+  var contact=funnelGetContact(entry);
+  var cName=contact?contactDisplayName(contact):'?';
+  if(funnelMoveTo(entryId,newStage)){
+    toast(cName+' \u2192 '+funnelStageInfo(newStage).label,'ok');
+    pipeCloseDetail();
+    rMarketingV2();
+  }
+}
+
+/* Add to pipeline modal */
+function pipeOpenAddModal(){
+  var opts='';
+  FOLDERS.forEach(function(f){
+    var contacts=(D[f.key]&&D[f.key].contacts)||[];
+    contacts.forEach(function(c){
+      var inPipeline=PIPELINE.find(function(p){return p.contactId===c.id&&p.folderKey===f.key;});
+      if(!inPipeline){
+        opts+='<option value="'+f.key+'|'+c.id+'">'+escHtml(contactDisplayName(c))+' \u2014 '+escHtml(f.name)+'</option>';
+      }
+    });
+  });
+  if(!opts){toast('Tous les contacts sont d\u00e9j\u00e0 dans le pipeline','info');return;}
+  opM('<div class="p-6"><h2 class="font-disp font-bold text-lg mb-4">Ajouter au pipeline</h2>'+
+    '<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Contact</label><select id="pipeAddContact" class="fi"><option value="">-- S\u00e9lectionner --</option>'+opts+'</select></div>'+
+    '<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Stade initial</label><select id="pipeAddStage" class="fi">'+
+    '<option value="lead">Lead</option><option value="prospect">Prospect</option><option value="relanced">Relanc\u00e9</option><option value="qualified">Qualifi\u00e9</option><option value="proposal">Proposition</option><option value="negotiation">N\u00e9gociation</option></select></div>'+
+    '<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Valeur estim\u00e9e (CHF)</label><input type="number" id="pipeAddValue" class="fi" value="0"></div>'+
+    '<div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>'+
+    '<button onclick="pipeConfirmAdd()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Ajouter</button></div></div>');
+}
+function pipeConfirmAdd(){
+  var val=document.getElementById('pipeAddContact').value;
+  if(!val){toast('S\u00e9lectionne un contact','err');return;}
+  var parts=val.split('|');
+  var folderKey=parts[0],contactId=Number(parts[1]);
+  var stage=document.getElementById('pipeAddStage').value||'lead';
+  var value=Number(document.getElementById('pipeAddValue').value)||0;
+  PIPELINE.push({
+    id:funnelNewId(),
+    contactId:contactId,
+    folderKey:folderKey,
+    stage:stage,
+    previousStage:null,
+    enteredAt:new Date().toISOString(),
+    history:[],
+    activeSequenceId:null,
+    activeSequenceRunId:null,
+    estimatedValue:value,
+    actualValue:null,
+    lostReason:null,
+    lostReasonDetail:'',
+    tags:[],
+    source:'other',
+    assignedTo:'moi',
+    notes:''
+  });
+  svFunnel();
+  clsM();
+  toast('Contact ajout\u00e9 au pipeline','ok');
+  rMarketingV2();
+}
+
+/* Sequences V2 placeholder */
+function rSequencesV2View(){
+  return '<div class="mb-4">'+mkV2TabsBar()+'</div><div class="bg-surface border border-bdr rounded-2xl p-10 text-center"><i class="fa-solid fa-diagram-project text-3xl text-mut mb-3 block opacity-40"></i><p class="text-mut text-sm">Les s\u00e9quences multi-canal arrivent en Phase 2.</p><p class="text-mut text-sm mt-2">Pour l\u2019instant, utilise l\u2019onglet Emails pour g\u00e9rer tes s\u00e9quences email.</p><button onclick="S.mkv=\'emails\';rMarketing();" class="mt-4 h-9 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Voir les s\u00e9quences email</button></div>';
+}
+
+/* Fallback for other tabs (campaigns, content, whatsapp, social) */
+function rMarketingV2Fallback(){
+  if(S.mkv==='campaigns'||S.mkv==='content'||S.mkv==='whatsapp'||S.mkv==='social'){
+    return mkTabsBar()+(function(){
+      var labels={campaigns:'Aucune campagne',content:'Aucun contenu',social:'Aucun post social'};
+      var newLabels={campaigns:'Nouvelle campagne',content:'Nouveau contenu',social:'Nouveau post'};
+      if(S.mkv==='whatsapp'){
+        try{return typeof window.rWhatsAppView==='function'?window.rWhatsAppView():'';}catch(e){return '';}
+      }
+      return rMarketingSection(S.mkv,labels[S.mkv]||'',newLabels[S.mkv]||'');
+    })();
+  }
+  if(S.mkv==='emails')return mkTabsBar()+'<div class="text-center py-8 text-mut text-sm">Utilise le gestionnaire d\u2019emails ci-dessous.</div>';
+  return '<div class="bg-surface border border-bdr rounded-2xl p-8 text-center text-mut text-sm">Section non impl\u00e9ment\u00e9e.</div>';
+}
+
+/* ===== OVERRIDE nav() to default marketing to pipeline ===== */
+var _origNavMarketing=nav;
+nav=function(v,folder){
+  if(v==='marketing'&&!folder){
+    if(!S.mkv||S.mkv==='overview')S.mkv='pipeline';
+  }
+  _origNavMarketing(v,folder);
+};
+
+/* ===== OVERRIDE rMarketing to route Pipeline/Sequences to V2 ===== */
+var _prevRMarketingOverride=window.rMarketing;
+window.rMarketing=function(){
+  if(S.mkv==='pipeline'||S.mkv==='sequences'){
+    rMarketingV2();
+    return;
+  }
+  _prevRMarketingOverride();
+};
+
 
 /* --- Booking page URL handler --- */
 window.mkCheckBookingHash=function(){
