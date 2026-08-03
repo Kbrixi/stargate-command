@@ -7740,10 +7740,10 @@ function rPipelineView(){
   /* Advanced filter panel (hidden by default) */
   h+='<div id="pipeAdvFilters" style="display:'+(typeof _pipeAdvOpen!=='undefined'&&_pipeAdvOpen?'block':'none')+'" class="pipe-adv-filters">';
   h+='<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">';
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="pipeFilterCompany" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="pipeFilterTitle" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">R\u00e9gion</label><input type="text" id="pipeFilterRegion" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">Pays</label><input type="text" id="pipeFilterCountry" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="pipeFilterCompany" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="pipeFilterTitle" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">R\u00e9gion</label><input type="text" id="pipeFilterRegion" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Pays</label><input type="text" id="pipeFilterCountry" class="fi text-xs" placeholder="Rechercher..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
   h+='<div><label class="text-[.6rem] text-mut block mb-1">Stade pipeline</label><select id="pipeFilterStage" class="fi text-xs" onchange="rMarketingV2()"><option value="all">Tous</option>';
   FUNNEL_STAGES.forEach(function(s){h+='<option value="'+s.key+'">'+s.label+'</option>';});
   h+='</select></div>';
@@ -7759,9 +7759,9 @@ function rPipelineView(){
   for(var yi=cy;yi>=cy-5;yi--){h+='<option value="'+yi+'">'+yi+'</option>';}
   h+='</select></div>';
   /* Tags filter */
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">Tags</label><input type="text" id="pipeFilterTags" class="fi text-xs" placeholder="tag1, tag2..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Tags</label><input type="text" id="pipeFilterTags" class="fi text-xs" placeholder="tag1, tag2..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
   /* Text search */
-  h+='<div><label class="text-[.6rem] text-mut block mb-1">Recherche</label><input type="text" id="pipeFilterSearch" class="fi text-xs" placeholder="Nom, email..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Recherche</label><input type="text" id="pipeFilterSearch" class="fi text-xs" placeholder="Nom, email..." onkeydown="if(event.key===\x27Enter\x27)rMarketingV2()"></div>';
   h+='</div></div>';
 
   /* Kanban columns */
@@ -8457,6 +8457,17 @@ window.seq2LaunchModal=function(seqId){
 
   /* Build candidate list: contacts matching selected tags (or all if no tags) */
   var candidates=seq2GetLaunchCandidates(selTags);
+
+  /* Auto-select contacts matching first step's trigger condition (stage_is) */
+  if(!selIds.size&&seq.steps&&seq.steps.length){
+    var trigger=seq.steps[0];
+    if(trigger.conditionType==='stage_is'&&trigger.conditionValue){
+      candidates.forEach(function(c){
+        var pe=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===c.folderKey;});
+        if(pe&&pe.stage===trigger.conditionValue){selIds.add(c.folderKey+'|'+c.id);}
+      });
+    }
+  }
 
   var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
   h+='<h2 class="font-disp font-bold text-lg mb-2"><i class="fa-solid fa-play text-ok mr-2"></i>Lancer : '+escHtml(seq.name)+'</h2>';
