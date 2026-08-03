@@ -5870,9 +5870,12 @@ window.mkDuplicateSequence=function(id){
 window.mkSeqEditorModal=function(seqId,reuseEdit){
   var isNew,seq;
   if(reuseEdit&&window._mkSeqEdit){seq=window._mkSeqEdit;isNew=!seq.id;}
-  else if(!seqId){isNew=true;seq={id:'',name:'',description:'',enabled:true,steps:[
-    {delay:0,subject:'',body:'<p>Bonjour {{prenom}},</p><p>Votre message ici...</p><p>Cordialement,<br>{{signature}}</p>',stopIfReplied:true}
-  }]};else{isNew=false;seq=JSON.parse(JSON.stringify(window.MK_SEQUENCES.find(function(s){return s.id===seqId;})));}
+  else if(!seqId){
+    isNew=true;
+    seq={id:'',name:'',description:'',enabled:true,steps:[
+      {delay:0,subject:'',body:'<p>Bonjour {{prenom}},</p><p>Votre message ici...</p><p>Cordialement,<br>{{signature}}</p>',stopIfReplied:true}
+    ]};
+  }else{isNew=false;seq=JSON.parse(JSON.stringify(window.MK_SEQUENCES.find(function(s){return s.id===seqId;})));}
   if(!seq){toast('Séquence introuvable','err');return;}
   window._mkSeqEdit=seq;
   var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
