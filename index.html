@@ -399,7 +399,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -513,11 +513,18 @@ localStorage.setItem(k,JSON.stringify(parsed));
 });
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
+/* Recharger les données WhatsApp */
+if(typeof window.MK_WA_CAMPAIGNS!=='undefined')window.MK_WA_CAMPAIGNS=ldWaCampaigns();
+if(typeof window.MK_WA_LOG!=='undefined')window.MK_WA_LOG=ldWaLog();
+if(typeof window.MK_MEETINGS!=='undefined')window.MK_MEETINGS=ldMeetings();
+if(typeof window.MK_BOOKING!=='undefined')window.MK_BOOKING=ldBookingSettings();
 /* Recharger les données du module email si déjà initialisé */
 if(typeof window._onDataSynced==='function')window._onDataSynced();
 /* Recharger aussi les notes si le module existe */
 if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}}
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
+/* Valider que S.folder pointe toujours vers un dossier existant */
+if(S.v==='folder'&&S.folder&&!FOLDERS.some(function(f){return f.key===S.folder;})){S.v='dash';S.folder=null;}
 /* Si l'utilisateur est en train d'éditer une note, ne PAS re-render l'éditeur */
 if(typeof NS!=='undefined'&&NS.isEditorOpen&&NS.selectedNoteId){
   updateNavActive();
@@ -3047,7 +3054,7 @@ if(!MK_BUILT.includes(tab)){toast('Cette section arrive dans une prochaine étap
 S.mkv=tab;rMarketing();
 }
 function mkTabsBar(){
-return`<div class="flex flex-wrap gap-2 mb-6">${MK_TABS.map(t=>`<button onclick="navMk('${t.key}')" class="chip ${S.mkv===t.key?'act':''} ${!MK_BUILT.includes(t.key)?'opacity-50':''}"><i class="fa-solid ${t.icon} mr-1.5"></i>${t.label}${!MK_BUILT.includes(t.key)?' <span class="text-[.6rem] opacity-70">(bientôt)</span>':''}</button>`).join('')}</div>`;
+return`<div class="flex flex-wrap gap-2 mb-6">${MK_TABS.map(t=>{var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;return`<button onclick="navMk('${t.key}')" class="chip ${S.mkv===t.key?'act':''} ${!MK_BUILT.includes(t.key)?'opacity-50':''}"><i class="${ico} mr-1.5"></i>${t.label}${!MK_BUILT.includes(t.key)?' <span class="text-[.6rem] opacity-70">(bientôt)</span>':''}</button>`;}).join('')}</div>`;
 }
 function mkKpi(label,value,icon,color){
 return`<div class="kpi" style="background:${color}"><i class="fa-solid ${icon} text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">${value}</div><div class="text-xs opacity-90 mt-1">${label}</div></div>`;
@@ -3492,7 +3499,7 @@ ${c.company?`<div class="text-sm text-inf">${escHtml(c.company)}</div>`:''}
 
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 ${c.email?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Email</div><a href="mailto:${escHtml(c.email)}" onclick="gmailComposeToContact(event,'${escHtml(c.email).replace(/'/g,"\\'")}')" class="text-inf hover:underline text-sm font-medium break-all"><i class="fa-solid fa-paper-plane mr-1.5 text-xs"></i>${escHtml(c.email)}</a></div>`:''}
-${c.phone?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Telephone</div><div class="text-sm font-medium">${escHtml(c.phone)}</div></div>`:''}
+${c.phone?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Telephone</div><div class="flex items-center gap-2"><span class="text-sm font-medium">${escHtml(c.phone)}</span><a href="https://wa.me/${escHtml(c.phone.replace(/[^0-9]/g,''))}" target="_blank" rel="noopener" class="w-7 h-7 rounded-lg bg-[#25d366]/20 text-[#25d366] hover:bg-[#25d366]/30 flex items-center justify-center bp shrink-0" data-tip="Envoyer un WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a></div></div>`:''}
 ${c.linkedin?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">LinkedIn</div><a href="${escHtml(c.linkedin)}" target="_blank" rel="noopener" class="text-inf hover:underline text-sm font-medium break-all"><i class="fa-brands fa-linkedin mr-1"></i>Profil LinkedIn</a></div>`:''}
 </div>
 
@@ -6615,9 +6622,16 @@ else if(filter==='cancelled')filtered=filtered.filter(function(m){return m.statu
 else if(filter==='booked')filtered=filtered.filter(function(m){return m.bookedViaLink;});
 filtered.sort(function(a,b){return b.date.localeCompare(a.date)||b.startTime.localeCompare(a.startTime);});
 var h='<div class="af">';
-h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-calendar-check text-acc"></i>Meeting Scheduler</h1><div class="flex gap-2">';
+h+='<div class="flex items-center justify-between mb-2"><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-calendar-check text-acc"></i>Meeting Scheduler</h1><div class="flex gap-2">';
 h+='<button onclick="mkBookingSettingsModal()" class="h-10 px-4 rounded-xl '+(window.MK_BOOKING.enabled?'bg-ok hover:bg-ok/80':'bg-sAlt border border-bdr text-mut hover:text-txt')+' text-sm font-medium flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-link text-xs"></i>'+(window.MK_BOOKING.enabled?'Réservation en ligne':'Lien de réservation')+'</button>';
+if(window.MK_BOOKING.enabled){
+h+='<button onclick="mkCopyBookingLink()" class="h-10 px-3 rounded-xl bg-sAlt border border-bdr text-mut hover:text-txt text-xs font-medium flex items-center gap-1.5 transition-colors bp" data-tip="Copier le lien"><i class="fa-solid fa-copy text-[.6rem]"></i>Copier le lien</button>';
+}
 h+='<button onclick="mkMeetingModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau meeting</button></div></div>';
+if(window.MK_BOOKING.enabled){
+  var bookingLink=mkGenBookingLink();
+  h+='<div class="bg-okS border border-ok/30 rounded-xl p-3 mb-4 flex items-center gap-3"><i class="fa-solid fa-circle-check text-ok text-sm"></i><div class="flex-1 min-w-0"><div class="text-xs font-medium">Réservation en ligne active</div><div class="text-[.6rem] text-mut truncate">'+escHtml(bookingLink)+'</div></div><button onclick="mkCopyBookingLink()" class="h-7 px-3 rounded-lg bg-ok text-black text-[.6rem] font-semibold bp shrink-0">Copier</button></div>';
+}
 h+='<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">';
 h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-calendar-day text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+upcoming.length+'</div><div class="text-xs opacity-90 mt-1">A venir</div></div>';
 h+='<div class="kpi" style="background:rgba(255,204,102,0.15)"><i class="fa-solid fa-clock text-2xl opacity-80 mb-3" style="color:#ffcc66"></i><div class="text-2xl font-disp font-bold">'+proposed.length+'</div><div class="text-xs opacity-90 mt-1">En attente</div></div>';
@@ -6875,9 +6889,17 @@ window.mkGetAvailableSlots=function(dateStr){
 window.mkBookingSettingsModal=function(){
   var bs=window.MK_BOOKING;var link=bs.bookingLink?mkGenBookingLink():'';
   var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
-  h+='<h2 class="font-disp font-bold text-lg mb-5"><i class="fa-solid fa-link text-acc mr-2"></i>Paramètres du lien de réservation</h2>';
-  h+='<div class="mb-4"><label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input type="checkbox" id="bkEnabled" '+(bs.enabled?'checked':'')+' onchange="window.MK_BOOKING.enabled=this.checked;svBookingSettings()" class="w-4 h-4 accent-acc"><span class="font-medium">Activer la réservation en ligne</span></label>';
-  if(bs.enabled)h+='<p class="text-xs text-mut mt-1 ml-6">Vos contacts pourront réserver un créneau directement via le lien ci-dessous.</p>';
+  h+='<h2 class="font-disp font-bold text-lg mb-3"><i class="fa-solid fa-link text-acc mr-2"></i>Lien de réservation</h2>';
+  h+='<div class="bg-sAlt border border-bdr rounded-xl p-4 mb-5"><div class="text-[.65rem] text-mut uppercase tracking-wide font-semibold mb-2"><i class="fa-solid fa-circle-info mr-1"></i>Comment ça marche</div>';
+  h+='<div class="flex flex-col gap-2 text-xs text-mut">';
+  h+='<div class="flex items-start gap-2"><span class="w-5 h-5 rounded-full bg-acc text-black flex items-center justify-center text-[.55rem] font-bold shrink-0">1</span><span>Configure tes disponibilités ci-dessous (heures, jours, durée)</span></div>';
+  h+='<div class="flex items-start gap-2"><span class="w-5 h-5 rounded-full bg-acc text-black flex items-center justify-center text-[.55rem] font-bold shrink-0">2</span><span>Active la réservation et copie le lien unique</span></div>';
+  h+='<div class="flex items-start gap-2"><span class="w-5 h-5 rounded-full bg-acc text-black flex items-center justify-center text-[.55rem] font-bold shrink-0">3</span><span>Envoie le lien à tes contacts (email, WhatsApp, LinkedIn...)</span></div>';
+  h+='<div class="flex items-start gap-2"><span class="w-5 h-5 rounded-full bg-acc text-black flex items-center justify-center text-[.55rem] font-bold shrink-0">4</span><span>Ils choisissent un créneau libre et remplissent leurs coordonnées</span></div>';
+  h+='<div class="flex items-start gap-2"><span class="w-5 h-5 rounded-full bg-ok text-black flex items-center justify-center text-[.55rem] font-bold shrink-0">5</span><span>Le meeting apparaît automatiquement dans ton Meeting Scheduler</span></div>';
+  h+='</div></div>';
+  h+='<div class="mb-4"><label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input type="checkbox" id="bkEnabled" '+(bs.enabled?'checked':'')+' onchange="window.MK_BOOKING.enabled=this.checked;svBookingSettings();mkBookingSettingsModal()" class="w-4 h-4 accent-acc"><span class="font-medium">Activer la réservation en ligne</span></label>';
+  if(bs.enabled)h+='<p class="text-xs text-ok mt-1 ml-6"><i class="fa-solid fa-circle-check mr-1"></i>Réservation activée — le lien est accessible par tes contacts.</p>';
   h+='</div>';
   if(bs.enabled||bs.bookingLink){
     h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-link mr-1"></i>Lien de réservation</label>';
