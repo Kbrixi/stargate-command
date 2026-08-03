@@ -398,7 +398,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -512,6 +512,8 @@ localStorage.setItem(k,JSON.stringify(parsed));
 });
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
+/* Recharger les données du module email si déjà initialisé */
+if(typeof window._onDataSynced==='function')window._onDataSynced();
 /* Recharger aussi les notes si le module existe */
 if(typeof ND!=='undefined'){var newND=ldNotes();if(newND){ND.notes=newND.notes;ND.categories=newND.categories;ND.tags=newND.tags;}}
 FOLDERS.forEach(function(f){if(!D[f.key])D[f.key]=emptyFolderData();});
@@ -691,13 +693,14 @@ toast('Cloud sync déconnecté','info');
 }
 
 /* Intercepter les sauvegardes pour push Firebase */
-var _origSvData=svData,_origSvFolders=svFolders,_origSvLog=svLog,_origSvMk=svMk,_origSvSettings=svSettings,_origSvTemplates=svTemplates;
+var _origSvData=svData,_origSvFolders=svFolders,_origSvLog=svLog,_origSvMk=svMk,_origSvSettings=svSettings,_origSvTemplates=svTemplates,_origSvSounds=svSounds;
 svData=function(){_origSvData();if(fbIsReady())fbQueuePush();};
 svFolders=function(){_origSvFolders();if(fbIsReady())fbQueuePush();};
 svLog=function(){_origSvLog();if(fbIsReady())fbQueuePush();};
 svMk=function(){_origSvMk();if(fbIsReady())fbQueuePush();};
 svSettings=function(){_origSvSettings();if(fbIsReady())fbQueuePush();};
 svTemplates=function(){_origSvTemplates();if(fbIsReady())fbQueuePush();};
+svSounds=function(){_origSvSounds();if(fbIsReady())fbQueuePush();};
 function fbOnSignedIn(user){
 /* DEBUG supprimé */
 var wasExplicit=FB.signingIn;FB.signingIn=false;
@@ -6201,6 +6204,21 @@ function mkSequencesPanelHtml(){
   }
   return h;
 }
+
+/* --- Firebase sync hook : recharge les données email depuis localStorage après un sync cloud --- */
+window._onDataSynced=function(){
+  try{window.MK_ELOG=ldElog();}catch(e){}
+  try{window.MK_GROUPS=ldGroups();}catch(e){}
+  try{window.MK_SEQUENCES=ldSeqs();}catch(e){}
+  try{window.MK_SEQ_RUNS=ldSeqRuns();}catch(e){}
+};
+
+/* --- Intercepter les sauvegardes du module email pour push Firebase --- */
+var _origSvElog=svElog,_origSvGroups=svGroups,_origSvSeqs=svSeqs,_origSvSeqRuns=svSeqRuns;
+svElog=function(){_origSvElog();if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+svGroups=function(){_origSvGroups();if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+svSeqs=function(){_origSvSeqs();if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+svSeqRuns=function(){_origSvSeqRuns();if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
 
 console.log('[CRM] Email enhancement module loaded');
 })();
