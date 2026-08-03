@@ -5867,11 +5867,12 @@ window.mkDuplicateSequence=function(id){
 };
 
 /* --- Sequence Editor Modal --- */
-window.mkSeqEditorModal=function(seqId){
-  var isNew=!seqId;
-  var seq=isNew?{id:'',name:'',description:'',enabled:true,steps:[
+window.mkSeqEditorModal=function(seqId,reuseEdit){
+  var isNew,seq;
+  if(reuseEdit&&window._mkSeqEdit){seq=window._mkSeqEdit;isNew=!seq.id;}
+  else if(!seqId){isNew=true;seq={id:'',name:'',description:'',enabled:true,steps:[
     {delay:0,subject:'',body:'<p>Bonjour {{prenom}},</p><p>Votre message ici...</p><p>Cordialement,<br>{{signature}}</p>',stopIfReplied:true}
-  ]}:JSON.parse(JSON.stringify(window.MK_SEQUENCES.find(function(s){return s.id===seqId;})));
+  }]};else{isNew=false;seq=JSON.parse(JSON.stringify(window.MK_SEQUENCES.find(function(s){return s.id===seqId;})));}
   if(!seq){toast('Séquence introuvable','err');return;}
   window._mkSeqEdit=seq;
   var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
@@ -5918,17 +5919,17 @@ window.mkSeqAddStep=function(){
   if(!window._mkSeqEdit)return;
   var lastDelay=window._mkSeqEdit.steps.length?Math.max(window._mkSeqEdit.steps[window._mkSeqEdit.steps.length-1].delay,3):3;
   window._mkSeqEdit.steps.push({delay:lastDelay,subject:'',body:'<p>Bonjour {{prenom}},</p><p>...</p><p>Cordialement,<br>{{signature}}</p>',stopIfReplied:true});
-  mkSeqEditorModal(window._mkSeqEdit.id||null);
+  mkSeqEditorModal(null,true);
 };
 window.mkSeqDeleteStep=function(si){
   if(!window._mkSeqEdit||window._mkSeqEdit.steps.length<=1)return;
-  window._mkSeqEdit.steps.splice(si,1);mkSeqEditorModal(window._mkSeqEdit.id||null);
+  window._mkSeqEdit.steps.splice(si,1);mkSeqEditorModal(null,true);
 };
 window.mkSeqMoveStep=function(si,dir){
   if(!window._mkSeqEdit)return;
   var nsi=si+dir;if(nsi<0||nsi>=window._mkSeqEdit.steps.length)return;
   var tmp=window._mkSeqEdit.steps[si];window._mkSeqEdit.steps[si]=window._mkSeqEdit.steps[nsi];window._mkSeqEdit.steps[nsi]=tmp;
-  mkSeqEditorModal(window._mkSeqEdit.id||null);
+  mkSeqEditorModal(null,true);
 };
 window.mkSeqSaveFromModal=function(existingId){
   var seq=window._mkSeqEdit;if(!seq)return;
