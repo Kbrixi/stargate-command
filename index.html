@@ -399,7 +399,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -3033,6 +3033,7 @@ ${GMAIL.nextPageToken?`<div class="text-center mt-4 af d3"><button onclick="gmai
 const MK_TABS=[
 {key:'overview',label:'Vue d\u2019ensemble',icon:'fa-gauge'},
 {key:'campaigns',label:'Campagnes',icon:'fa-rocket'},
+{key:'whatsapp',label:'WhatsApp',icon:'fa-brands fa-whatsapp'},
 {key:'content',label:'Contenu',icon:'fa-pen-nib'},
 {key:'emails',label:'Emails',icon:'fa-envelope'},
 {key:'social',label:'Réseaux sociaux',icon:'fa-share-nodes'},
@@ -3040,7 +3041,7 @@ const MK_TABS=[
 {key:'ads',label:'Publicités',icon:'fa-bullseye'},
 {key:'reports',label:'Rapports',icon:'fa-chart-line'}
 ];
-const MK_BUILT=['overview','campaigns','content','emails','social'];
+const MK_BUILT=['overview','campaigns','content','emails','social','whatsapp'];
 function navMk(tab){
 if(!MK_BUILT.includes(tab)){toast('Cette section arrive dans une prochaine étape','info');return;}
 S.mkv=tab;rMarketing();
@@ -3108,6 +3109,7 @@ function rMarketing(){
 const el=document.getElementById('PC');
 let body='';
 if(S.mkv==='overview')body=rMarketingOverview();
+else if(S.mkv==='whatsapp')body=mkTabsBar()+rWhatsAppView();
 else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucune campagne','Nouvelle campagne');
 else if(S.mkv==='content')body=mkTabsBar()+rMarketingSection('content','Aucun contenu','Nouveau contenu');
 else if(S.mkv==='emails')body=mkTabsBar()+rMarketingSection('emails','Aucun email','Nouvel email');
@@ -6262,6 +6264,298 @@ function mkSequencesPanelHtml(){
   return h;
 }
 
+/* ===== WHATSAPP CAMPAIGNS ===== */
+function ldWaCampaigns(){try{var s=localStorage.getItem('cdc_wa_campaigns');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svWaCampaigns(){localStorage.setItem('cdc_wa_campaigns',JSON.stringify(window.MK_WA_CAMPAIGNS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();}
+window.MK_WA_CAMPAIGNS=ldWaCampaigns();
+
+function ldWaLog(){try{var s=localStorage.getItem('cdc_wa_log');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svWaLog(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));}
+window.MK_WA_LOG=ldWaLog();
+
+window.mkWaFilter='all';
+window.mkWaCampFilter='';
+window.mkWaSearch='';
+window.mkSetWaFilter=function(f){window.mkWaFilter=f;if(S.mkv==='whatsapp')rMarketing();};
+window.mkSetWaCampFilter=function(v){window.mkWaCampFilter=v;if(S.mkv==='whatsapp')rMarketing();};
+window.mkSetWaSearch=function(v){window.mkWaSearch=v;if(S.mkv==='whatsapp')rMarketing();};
+
+window.mkWaStatusColor=function(s){
+  if(s==='replied')return{bg:'bg-infS',tx:'text-inf',icon:'fa-reply'};
+  if(s==='read')return{bg:'bg-okS',tx:'text-ok',icon:'fa-eye'};
+  if(s==='delivered')return{bg:'bg-[#25d366]/20',tx:'text-[#25d366]',icon:'fa-check-double'};
+  if(s==='sent')return{bg:'bg-sAlt',tx:'text-mut',icon:'fa-check'};
+  if(s==='failed')return{bg:'bg-warnS',tx:'text-warn',icon:'fa-circle-exclamation'};
+  return{bg:'bg-sAlt',tx:'text-mut',icon:'fa-clock'};
+};
+
+function rWhatsAppView(){
+  var camps=window.MK_WA_CAMPAIGNS||[];
+  var log=window.MK_WA_LOG||[];
+  var totalSent=log.length;
+  var totalReplied=log.filter(function(e){return e.status==='replied'}).length;
+  var totalRead=log.filter(function(e){return e.status==='read'||e.status==='replied'}).length;
+  var totalDelivered=log.filter(function(e){return e.status==='delivered'||e.status==='read'||e.status==='replied'}).length;
+  var replyRate=totalSent?Math.round(totalReplied/totalSent*100):0;
+  var h='<div class="af">';
+  h+='<div class="flex items-center justify-between mb-6"><div><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-brands fa-whatsapp text-[#25d366] text-3xl"></i>Campagnes WhatsApp</h1><p class="text-xs text-mut mt-1">Envoyez des messages par campagne via WhatsApp</p></div>';
+  h+='<div class="flex gap-2"><button onclick="mkWaCampModal()" class="h-10 px-5 rounded-xl bg-[#25d366] hover:bg-[#25d366]/80 text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-brands fa-whatsapp text-xs"></i>Nouvelle campagne</button></div></div>';
+  h+='<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">';
+  h+='<div class="kpi" style="background:#25d366"><i class="fa-brands fa-whatsapp text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+totalSent+'</div><div class="text-xs opacity-90 mt-1">Messages envoyés</div></div>';
+  h+='<div class="kpi" style="background:rgba(37,211,102,0.15)"><i class="fa-solid fa-check-double text-2xl opacity-80 mb-3" style="color:#25d366"></i><div class="text-2xl font-disp font-bold">'+totalDelivered+'</div><div class="text-xs opacity-90 mt-1">Livrés</div></div>';
+  h+='<div class="kpi" style="background:rgba(95,191,143,0.15)"><i class="fa-solid fa-eye text-2xl opacity-80 mb-3" style="color:#5fbf8f"></i><div class="text-2xl font-disp font-bold">'+totalRead+'</div><div class="text-xs opacity-90 mt-1">Lus</div></div>';
+  h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-reply text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+totalReplied+'</div><div class="text-xs opacity-90 mt-1">Réponses</div></div>';
+  h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-chart-line text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+replyRate+'%</div><div class="text-xs opacity-90 mt-1">Taux de réponse</div></div>';
+  h+='</div>';
+  if(camps.length){
+    h+='<div class="mb-6"><h3 class="text-xs text-mut uppercase tracking-wide font-semibold mb-3"><i class="fa-solid fa-rocket mr-1.5"></i>Campagnes</h3>';
+    h+='<div class="flex flex-col gap-3">';
+    camps.forEach(function(c){
+      var cLog=log.filter(function(e){return e.campaignId===c.id;});
+      var cSent=cLog.length,cReplied=cLog.filter(function(e){return e.status==='replied'}).length,cRead=cLog.filter(function(e){return e.status==='read'||e.status==='replied'}).length;
+      var cRate=cSent?Math.round(cReplied/cSent*100):0;
+      var statusColors={draft:'bg-sAlt text-mut',active:'bg-okS text-ok',completed:'bg-infS text-inf',paused:'bg-warnS text-warn'};
+      h+='<div class="bg-surface border border-bdr rounded-xl p-4 af group">';
+      h+='<div class="flex items-start gap-4">';
+      h+='<div class="w-10 h-10 rounded-lg bg-[#25d366]/20 text-[#25d366] flex items-center justify-center shrink-0"><i class="fa-brands fa-whatsapp"></i></div>';
+      h+='<div class="flex-1 min-w-0">';
+      h+='<div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-medium">'+escHtml(c.name)+'</span>';
+      h+='<span class="bdg '+(statusColors[c.status]||'bg-sAlt text-mut')+'">'+(c.status||'draft')+'</span></div>';
+      if(c.message)h+='<div class="text-xs text-mut mt-1 line-clamp-1">'+escHtml(c.message.replace(/<[^>]*>/g,''))+'</div>';
+      h+='<div class="flex gap-4 mt-2 text-xs text-mut"><span><i class="fa-solid fa-paper-plane mr-1"></i>'+cSent+' envoyés</span><span><i class="fa-solid fa-eye mr-1"></i>'+cRead+' lus</span><span><i class="fa-solid fa-reply mr-1"></i>'+cRate+'%</span></div></div>';
+      h+='<div class="flex items-center gap-1 shrink-0">';
+      h+='<button onclick="mkWaSendCampModal(\''+c.id+'\')" class="h-8 px-3 rounded-lg bg-[#25d366] text-black text-[.6rem] font-semibold bp"><i class="fa-brands fa-whatsapp mr-1"></i>Envoyer</button>';
+      h+='<button onclick="mkWaCampModal(\''+c.id+'\')" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp" data-tip="Modifier"><i class="fa-solid fa-pen text-xs"></i></button>';
+      h+='<button onclick="mkWaDeleteCamp(\''+c.id+'\')" class="w-8 h-8 rounded-lg text-mut hover:text-red-400 bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-xs"></i></button>';
+      h+='</div></div></div>';
+    });
+    h+='</div></div>';
+  }
+  h+='<div class="flex items-center justify-between mb-4 mt-6"><h2 class="font-disp font-bold text-base flex items-center gap-2"><i class="fa-solid fa-chart-line text-[#25d366]"></i>Historique des envois</h2>';
+  h+='<div class="flex items-center gap-2"><button onclick="mkWaExportLog()" class="h-7 px-2.5 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-download mr-1"></i>CSV</button></div></div>';
+  var campNames=new Set();log.forEach(function(e){if(e.campaignName)campNames.add(e.campaignName);});
+  var campArr=Array.from(campNames).sort();
+  if(campArr.length){
+    h+='<div class="mb-3"><select class="fi text-xs max-w-xs" onchange="mkSetWaCampFilter(this.value)"><option value=""'+(window.mkWaCampFilter?'':' selected')+'>Toutes les campagnes</option>';
+    campArr.forEach(function(cn){h+='<option value="'+escHtml(cn)+'"'+(window.mkWaCampFilter===cn?' selected':'')+'>'+escHtml(cn)+'</option>';});
+    h+='</select></div>';
+  }
+  var waFilters=[{key:'all',label:'Tous'},{key:'sent',label:'Envoyés'},{key:'delivered',label:'Livrés'},{key:'read',label:'Lus'},{key:'replied',label:'Répondu'}];
+  h+='<div class="flex flex-wrap gap-1.5 mb-3">';
+  waFilters.forEach(function(f){
+    var active=window.mkWaFilter===f.key;
+    h+='<button onclick="mkSetWaFilter(\''+f.key+'\')" class="h-7 px-3 rounded-full text-[.6rem] font-medium transition-colors bp '+(active?'bg-[#25d366] text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'">'+f.label+'</button>';
+  });
+  h+='</div>';
+  h+='<div class="mb-4"><input type="text" class="fi text-xs" placeholder="Rechercher contact, numéro..." value="'+escHtml(window.mkWaSearch||'')+'" oninput="mkSetWaSearch(this.value)"></div>';
+  var waFiltered=log.slice();
+  if(window.mkWaCampFilter){waFiltered=waFiltered.filter(function(e){return(e.campaignName||'')===window.mkWaCampFilter;});}
+  if(window.mkWaFilter==='sent')waFiltered=waFiltered.filter(function(e){return e.status==='sent'||e.status==='delivered'||e.status==='read'||e.status==='replied';});
+  else if(window.mkWaFilter==='delivered')waFiltered=waFiltered.filter(function(e){return e.status==='delivered'||e.status==='read'||e.status==='replied';});
+  else if(window.mkWaFilter==='read')waFiltered=waFiltered.filter(function(e){return e.status==='read'||e.status==='replied';});
+  else if(window.mkWaFilter==='replied')waFiltered=waFiltered.filter(function(e){return e.status==='replied';});
+  var waSearch=(window.mkWaSearch||'').toLowerCase();
+  if(waSearch){waFiltered=waFiltered.filter(function(e){return(e.contactName||'').toLowerCase().indexOf(waSearch)!==-1||(e.phone||'').indexOf(waSearch)!==-1||(e.campaignName||'').toLowerCase().indexOf(waSearch)!==-1;});}
+  waFiltered.sort(function(a,b){return new Date(b.sentAt).getTime()-new Date(a.sentAt).getTime();});
+  if(!waFiltered.length){
+    h+='<div class="text-mut text-sm text-center py-8">'+(log.length?'Aucun résultat pour ce filtre':'Aucun message envoyé. Crée une campagne WhatsApp pour commencer.')+'</div>';
+  }else{
+    h+='<div class="bg-surface border border-bdr rounded-xl overflow-hidden">';
+    h+='<div class="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-sAlt/50 text-[.55rem] text-mut uppercase tracking-wide font-semibold border-b border-bdr">';
+    h+='<div class="col-span-1">État</div><div class="col-span-3">Contact</div><div class="col-span-3">Campagne</div><div class="col-span-2">Message</div><div class="col-span-2">Date</div><div class="col-span-1 text-right">Actions</div>';
+    h+='</div>';
+    waFiltered.slice(0,50).forEach(function(e){
+      var st=mkWaStatusColor(e.status);
+      var dateLabel='';try{dateLabel=new Date(e.sentAt).toLocaleDateString('fr-CH',{day:'2-digit',month:'short'});}catch(ex){}
+      var timeLabel='';try{timeLabel=new Date(e.sentAt).toLocaleTimeString('fr-CH',{hour:'2-digit',minute:'2-digit'});}catch(ex){}
+      h+='<div class="grid grid-cols-1 sm:grid-cols-12 gap-1 sm:gap-2 px-4 py-2.5 border-b border-bdr/50 last:border-0 hover:bg-sHov/30 transition-colors items-center group">';
+      h+='<div class="sm:col-span-1"><div class="w-7 h-7 rounded-lg '+st.bg+' '+st.tx+' flex items-center justify-center" data-tip="'+(e.status||'pending')+'"><i class="fa-solid '+st.icon+' text-[.55rem]"></i></div></div>';
+      h+='<div class="sm:col-span-3 min-w-0"><div class="text-[.7rem] font-medium truncate">'+escHtml(e.contactName||e.phone)+'</div><div class="text-[.6rem] text-mut truncate">'+escHtml(e.phone)+'</div></div>';
+      h+='<div class="sm:col-span-3 min-w-0"><div class="text-[.7rem] truncate">'+escHtml(e.campaignName||'')+'</div></div>';
+      h+='<div class="sm:col-span-2 min-w-0"><div class="text-[.6rem] text-mut line-clamp-1">'+escHtml((e.message||'').replace(/<[^>]*>/g,'').substring(0,50))+'</div></div>';
+      h+='<div class="sm:col-span-2"><div class="text-[.65rem] text-mut">'+dateLabel+'</div><div class="text-[.55rem] text-mut/60">'+timeLabel+'</div></div>';
+      h+='<div class="sm:col-span-1 flex items-center justify-end gap-0.5">';
+      h+='<a href="https://wa.me/'+escHtml(e.phone.replace(/[^0-9]/g,''))+'" target="_blank" class="w-7 h-7 rounded-lg text-[#25d366] hover:bg-[#25d366]/10 bp" data-tip="Ouvrir WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a>';
+      h+='<button onclick="mkWaToggleStatus('+e.id+',\'replied\')" class="w-7 h-7 rounded-lg '+(e.status==='replied'?'text-inf bg-infS':'text-mut hover:text-inf hover:bg-infS/50')+' bp" data-tip="Répondu"><i class="fa-solid fa-reply text-[.5rem]"></i></button>';
+      h+='<button onclick="mkWaDeleteLog('+e.id+')" class="w-7 h-7 rounded-lg text-mut hover:text-red-400 bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-[.5rem]"></i></button>';
+      h+='</div></div>';
+    });
+    if(waFiltered.length>50){h+='<div class="text-center py-3 border-t border-bdr/50 text-[.65rem] text-mut">Affichage de 50 sur '+waFiltered.length+'</div>';}
+    h+='</div>';
+  }
+  return h;
+}
+
+/* --- WhatsApp Campaign Modal --- */
+window.mkWaCampModal=function(campId){
+  var camp=campId?window.MK_WA_CAMPAIGNS.find(function(c){return c.id===campId;}):null;
+  var isNew=!camp;
+  if(isNew){camp={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:'',message:'',status:'draft',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};}
+  window._mkWaEdit=JSON.parse(JSON.stringify(camp));
+  var ed=window._mkWaEdit;
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-5"><i class="fa-brands fa-whatsapp text-[#25d366] mr-2"></i>'+(isNew?'Nouvelle campagne WhatsApp':'Modifier : '+escHtml(ed.name))+'</h2>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Nom de la campagne</label><input type="text" id="waCampName" class="fi" placeholder="Ex: Lancement produit Q4" value="'+escHtml(ed.name)+'"></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Message</label>';
+  h+='<div class="text-[.6rem] text-mut mb-1.5">Variables : <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{name}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{poste}}</code></div>';
+  h+='<textarea id="waCampMsg" class="fi" rows="6" placeholder="Bonjour {{prenom}},\n\nJe voulais vous informer que...">'+escHtml(ed.message)+'</textarea></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Statut</label><select id="waCampStatus" class="fi"><option value="draft"'+(ed.status==='draft'?' selected':'')+'>Brouillon</option><option value="active"'+(ed.status==='active'?' selected':'')+'>Active</option><option value="completed"'+(ed.status==='completed'?' selected':'')+'>Terminée</option><option value="paused"'+(ed.status==='paused'?' selected':'')+'>En pause</option></select></div>';
+  h+='<div class="mb-4"><label class="text-[.65rem] text-mut block mb-1"><i class="fa-solid fa-eye mr-1"></i>Aperçu (1er contact trouvé)</label>';
+  var previewContact=mkGetAllContactsFlat()[0]||{firstName:'Jean',lastName:'Dupont',company:'ACME',title:'Directeur'};
+  var preview=(ed.message||'Bonjour {{prenom}},').replace(/\{\{prenom\}\}/gi,previewContact.firstName).replace(/\{\{nom\}\}/gi,previewContact.lastName).replace(/\{\{name\}\}/gi,previewContact.firstName+' '+previewContact.lastName).replace(/\{\{entreprise\}\}/gi,previewContact.company).replace(/\{\{poste\}\}/gi,previewContact.title);
+  h+='<div class="bg-[#25d366]/5 border border-[#25d366]/20 rounded-xl p-3 text-xs whitespace-pre-wrap max-h-28 overflow-y-auto"><div class="flex items-start gap-2"><div class="w-6 h-6 rounded-full bg-[#25d366] flex items-center justify-center shrink-0 mt-0.5"><i class="fa-brands fa-whatsapp text-white text-[.5rem]"></i></div><div class="flex-1">'+escHtml(preview)+'</div></div></div></div>';
+  h+='<div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
+  if(!isNew)h+='<button onclick="mkWaDeleteCamp(\''+campId+'\');clsM()" class="h-10 px-4 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 bp mr-auto">Supprimer</button>';
+  h+='<button onclick="mkWaSaveCamp(\''+(campId||'')+'\')" class="h-10 px-5 rounded-xl bg-[#25d366] hover:bg-[#25d366]/80 text-black text-sm font-semibold bp"><i class="fa-solid fa-check mr-1.5"></i>'+(isNew?'Créer':'Enregistrer')+'</button></div>';
+  h+='</div>';
+  opM(h);
+};
+
+window.mkWaSaveCamp=function(existingId){
+  var ed=window._mkWaEdit;if(!ed)return;
+  ed.name=(document.getElementById('waCampName')||{}).value||'';
+  ed.message=(document.getElementById('waCampMsg')||{}).value||'';
+  ed.status=(document.getElementById('waCampStatus')||{}).value||'draft';
+  if(!ed.name.trim()){toast('Nom requis','err');return;}
+  if(!ed.message.trim()){toast('Message requis','err');return;}
+  ed.updatedAt=new Date().toISOString();
+  var idx=-1;if(existingId){idx=window.MK_WA_CAMPAIGNS.findIndex(function(c){return c.id===existingId;});}
+  if(idx>=0){window.MK_WA_CAMPAIGNS[idx]=ed;}else{window.MK_WA_CAMPAIGNS.push(ed);}
+  svWaCampaigns();clsM();toast('Campagne enregistrée','ok');rMarketing();
+};
+
+window.mkWaDeleteCamp=function(campId){
+  if(!confirm('Supprimer cette campagne ?'))return;
+  window.MK_WA_CAMPAIGNS=window.MK_WA_CAMPAIGNS.filter(function(c){return c.id!==campId;});
+  window.MK_WA_LOG=window.MK_WA_LOG.filter(function(e){return e.campaignId!==campId;});
+  svWaCampaigns();svWaLog();toast('Campagne supprimée','info');rMarketing();
+};
+
+/* --- WhatsApp Send Modal --- */
+window.mkWaSendCampModal=function(campId){
+  var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===campId;});
+  if(!camp){toast('Campagne introuvable','err');return;}
+  window._mkWaSend={campId:campId,_selTags:[],_manualPhones:[]};
+  var selTags=window._mkWaSend._selTags;
+  var contacts=mkContactsByTag(selTags);
+  var groupedTags=mkGetGroupedTags();
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-5"><i class="fa-brands fa-whatsapp text-[#25d366] mr-2"></i>Envoyer : '+escHtml(camp.name)+'</h2>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Message</label><div class="bg-[#25d366]/5 border border-[#25d366]/20 rounded-xl p-3 text-xs whitespace-pre-wrap max-h-32 overflow-y-auto">'+escHtml(camp.message)+'</div></div>';
+  h+='<div class="mb-4"><label class="text-xs font-semibold text-mut block mb-2"><i class="fa-solid fa-users mr-1"></i>Destinataires <span class="text-ok font-bold ml-1">'+contacts.length+'</span></label>';
+  var tagHtml='';
+  if(groupedTags.length){
+    tagHtml+='<div class="mb-3">';
+    groupedTags.forEach(function(cat){
+      tagHtml+='<div class="mb-2"><div class="text-[.6rem] text-mut mb-1 flex items-center gap-1"><i class="fa-solid '+cat.icon+' text-[.5rem]"></i>'+escHtml(cat.label)+'</div><div class="flex flex-wrap gap-1.5">';
+      cat.tags.forEach(function(t){
+        var act=selTags.indexOf(t)!==-1;
+        tagHtml+='<button type="button" onclick="mkWaToggleTag(\''+escHtml(t).replace(/"/g,'')+  '\')" class="px-2.5 py-1 rounded-full text-[.6rem] font-medium bp '+(act?'bg-[#25d366] text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'">'+escHtml(t)+'</button>';
+      });
+      tagHtml+='</div></div>';
+    });
+    tagHtml+='</div>';
+  }
+  h+=tagHtml;
+  h+='<div class="mt-3 pt-3 border-t border-bdr/50"><div class="text-[.6rem] text-mut mb-1.5"><i class="fa-solid fa-phone mr-1"></i>Ajouter un numéro manuellement</div><div class="flex gap-2"><input type="tel" id="waManualPhone" class="fi text-xs flex-1" placeholder="+41 79 123 45 67" onkeydown="if(event.key===\'Enter\'){event.preventDefault();mkWaAddManualPhone();}"><button onclick="mkWaAddManualPhone()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-[.6rem] text-mut hover:text-txt bp"><i class="fa-solid fa-plus"></i></button></div>';
+  var manualPhones=window._mkWaSend._manualPhones||[];
+  if(manualPhones.length){
+    h+='<div class="flex flex-wrap gap-1.5 mt-2">';
+    manualPhones.forEach(function(p,i){
+      h+='<span class="inline-flex items-center gap-1 text-[.6rem] px-2 py-0.5 rounded-full bg-[#25d366]/20 text-[#25d366]"><span>'+escHtml(p)+'</span><button type="button" onclick="mkWaRemoveManualPhone('+i+')" class="hover:text-red-400"><i class="fa-solid fa-xmark text-[.45rem]"></i></button></span>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  if(contacts.length){
+    h+='<div class="mt-3 bg-sAlt/50 border border-bdr rounded-xl max-h-40 overflow-y-auto">';
+    contacts.forEach(function(c){
+      var phone=c.phone||c.mobile||'';
+      h+='<div class="flex items-center gap-2 px-3 py-1.5 border-b border-bdr/50 last:border-0"><div class="w-5 h-5 rounded bg-[#25d366]/20 text-[#25d366] flex items-center justify-center text-[.5rem] font-bold shrink-0">'+escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))+'</div><div class="flex-1 min-w-0"><span class="text-[.6rem] font-medium truncate block">'+escHtml(contactDisplayName(c))+'</span><span class="text-[.55rem] text-mut">'+escHtml(phone||c.email)+'</span></div>';
+      if(!phone)h+='<span class="text-[.45rem] text-warn">Pas de tél.</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  var totalRecip=contacts.filter(function(c){return c.phone||c.mobile}).length+manualPhones.length;
+  h+='<div class="flex justify-end gap-3 mt-5">';
+  h+='<button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
+  h+='<button onclick="mkWaExecuteSend()" class="h-10 px-5 rounded-xl bg-[#25d366] hover:bg-[#25d366]/80 text-black text-sm font-semibold bp" '+(totalRecip?'':'disabled style="opacity:.5;pointer-events:none"')+'><i class="fa-brands fa-whatsapp mr-1.5"></i>Ouvrir WhatsApp ('+totalRecip+')</button>';
+  h+='</div></div>';
+  opM(h);
+};
+
+window.mkWaToggleTag=function(tag){
+  if(!window._mkWaSend._selTags)window._mkWaSend._selTags=[];
+  var arr=window._mkWaSend._selTags;var idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
+  mkWaSendCampModal(window._mkWaSend.campId);
+};
+window.mkWaAddManualPhone=function(){
+  var inp=document.getElementById('waManualPhone');if(!inp)return;
+  var phone=inp.value.trim().replace(/[^0-9+\s]/g,'');
+  if(!phone||phone.length<7){toast('Numéro invalide','err');return;}
+  if(!window._mkWaSend._manualPhones)window._mkWaSend._manualPhones=[];
+  window._mkWaSend._manualPhones.push(phone);
+  inp.value='';mkWaSendCampModal(window._mkWaSend.campId);
+};
+window.mkWaRemoveManualPhone=function(idx){
+  if(window._mkWaSend._manualPhones){window._mkWaSend._manualPhones.splice(idx,1);mkWaSendCampModal(window._mkWaSend.campId);}
+};
+
+window.mkWaExecuteSend=function(){
+  var send=window._mkWaSend;if(!send)return;
+  var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===send.campId;});
+  if(!camp){toast('Campagne introuvable','err');return;}
+  var contacts=mkContactsByTag(send._selTags).filter(function(c){return c.phone||c.mobile;});
+  var manualPhones=send._manualPhones||[];
+  var allRecipients=[];
+  contacts.forEach(function(c){
+    var phone=(c.phone||c.mobile||'').replace(/[^0-9]/g,'');
+    if(phone.length>=7)allRecipients.push({phone:phone,name:contactDisplayName(c),firstName:c.firstName||'',lastName:c.lastName||'',company:c.company||'',title:c.title||''});
+  });
+  manualPhones.forEach(function(p){
+    var phone=p.replace(/[^0-9]/g,'');
+    allRecipients.push({phone:phone,name:'Contact',firstName:'',lastName:'',company:'',title:''});
+  });
+  if(!allRecipients.length){toast('Aucun numéro valide','err');return;}
+  allRecipients.forEach(function(r,i){
+    window.MK_WA_LOG.push({id:Date.now()+i,campaignId:camp.id,campaignName:camp.name,phone:r.phone,contactName:r.name,message:camp.message,status:'sent',sentAt:new Date().toISOString()});
+  });
+  svWaLog();
+  var baseMessage=encodeURIComponent(camp.message);
+  allRecipients.forEach(function(r,i){
+    var personalized=baseMessage.replace(/%7B%7Bprenom%7D%7D/gi,encodeURIComponent(r.firstName)).replace(/%7B%7Bnom%7D%7D/gi,encodeURIComponent(r.lastName)).replace(/%7B%7Bname%7D%7D/gi,encodeURIComponent(r.name)).replace(/%7B%7Bentreprise%7D%7D/gi,encodeURIComponent(r.company)).replace(/%7B%7Bposte%7D%7D/gi,encodeURIComponent(r.title));
+    var waUrl='https://wa.me/'+r.phone+'?text='+personalized;
+    if(i===0){window.open(waUrl,'_blank');}
+  });
+  clsM();
+  toast(allRecipients.length+' message(s) WhatsApp ouvert(s) — n\'oublie pas d\'envoyer !','ok');
+  camp.status='active';camp.updatedAt=new Date().toISOString();
+  svWaCampaigns();rMarketing();
+};
+
+window.mkWaToggleStatus=function(id,newStatus){
+  var e=window.MK_WA_LOG.find(function(x){return x.id===id;});
+  if(e){e.status=newStatus;if(newStatus==='replied')e.repliedAt=new Date().toISOString();svWaLog();if(S.mkv==='whatsapp')rMarketing();}
+};
+window.mkWaDeleteLog=function(id){
+  window.MK_WA_LOG=window.MK_WA_LOG.filter(function(x){return x.id!==id;});
+  svWaLog();if(S.mkv==='whatsapp')rMarketing();toast('Entrée supprimée','info');
+};
+window.mkWaExportLog=function(){
+  var csv='\uFEFFDate;Contact;Telephone;Campagne;Statut;Message\n';
+  window.MK_WA_LOG.slice().sort(function(a,b){return new Date(b.sentAt).getTime()-new Date(a.sentAt).getTime();}).forEach(function(e){
+    var msg=(e.message||'').replace(/"/g,'""').replace(/\n/g,' ');
+    csv+='"'+e.sentAt+'","'+(e.contactName||'').replace(/"/g,'""')+'","'+e.phone+'","'+(e.campaignName||'').replace(/"/g,'""')+'","'+(e.status||'')+'","'+msg+'"\n';
+  });
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var link=document.createElement('a');link.href=URL.createObjectURL(blob);
+  link.download='whatsapp_campaigns_'+new Date().toISOString().slice(0,10)+'.csv';
+  link.click();URL.revokeObjectURL(link.href);toast('Export CSV téléchargé','ok');
+};
+
+
 /* --- Meeting Scheduler Data Layer --- */
 function ldMeetings(){try{var s=localStorage.getItem('cdc_meetings');if(s)return JSON.parse(s);}catch(e){}return[];}
 function svMeetings(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();}
@@ -6302,6 +6596,8 @@ var r=[];FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(f
 
 function rMeetings(){
 var el=document.getElementById('PC');if(!el)return;
+/* If booking page via hash, redirect to booking view */
+if(window.mkCheckBookingHash())return;
 var mts=window.MK_MEETINGS||[];
 var filter=window.MK_MFILTER||'all';
 var now=new Date();var todayStr2=now.toISOString().slice(0,10);
@@ -6310,21 +6606,26 @@ var upcoming=mts.filter(function(m){return m.date>=todayStr2&&m.status!=='cancel
 var proposed=mts.filter(function(m){return m.status==='proposed';});
 var confirmedWeek=mts.filter(function(m){return m.status==='confirmed'&&m.date>=todayStr2&&m.date<=weekEnd;});
 var completed=mts.filter(function(m){return m.status==='completed';});
+var booked=mts.filter(function(m){return m.bookedViaLink;});
 var filtered=mts.slice();
 if(filter==='proposed')filtered=filtered.filter(function(m){return m.status==='proposed';});
 else if(filter==='confirmed')filtered=filtered.filter(function(m){return m.status==='confirmed';});
 else if(filter==='completed')filtered=filtered.filter(function(m){return m.status==='completed';});
 else if(filter==='cancelled')filtered=filtered.filter(function(m){return m.status==='cancelled';});
+else if(filter==='booked')filtered=filtered.filter(function(m){return m.bookedViaLink;});
 filtered.sort(function(a,b){return b.date.localeCompare(a.date)||b.startTime.localeCompare(a.startTime);});
 var h='<div class="af">';
-h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-calendar-check text-acc"></i>Meeting Scheduler</h1><button onclick="mkMeetingModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau meeting</button></div>';
-h+='<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">';
+h+='<div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-solid fa-calendar-check text-acc"></i>Meeting Scheduler</h1><div class="flex gap-2">';
+h+='<button onclick="mkBookingSettingsModal()" class="h-10 px-4 rounded-xl '+(window.MK_BOOKING.enabled?'bg-ok hover:bg-ok/80':'bg-sAlt border border-bdr text-mut hover:text-txt')+' text-sm font-medium flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-link text-xs"></i>'+(window.MK_BOOKING.enabled?'Réservation en ligne':'Lien de réservation')+'</button>';
+h+='<button onclick="mkMeetingModal()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouveau meeting</button></div></div>';
+h+='<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">';
 h+='<div class="kpi" style="background:#ff9c00"><i class="fa-solid fa-calendar-day text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+upcoming.length+'</div><div class="text-xs opacity-90 mt-1">A venir</div></div>';
 h+='<div class="kpi" style="background:rgba(255,204,102,0.15)"><i class="fa-solid fa-clock text-2xl opacity-80 mb-3" style="color:#ffcc66"></i><div class="text-2xl font-disp font-bold">'+proposed.length+'</div><div class="text-xs opacity-90 mt-1">En attente</div></div>';
 h+='<div class="kpi" style="background:#5fbf8f"><i class="fa-solid fa-check-circle text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+confirmedWeek.length+'</div><div class="text-xs opacity-90 mt-1">Confirmés cette semaine</div></div>';
+h+='<div class="kpi" style="background:#25d366"><i class="fa-solid fa-link text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+booked.length+'</div><div class="text-xs opacity-90 mt-1">Réservés en ligne</div></div>';
 h+='<div class="kpi" style="background:#9999ff"><i class="fa-solid fa-flag-checkered text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+completed.length+'</div><div class="text-xs opacity-90 mt-1">Terminés</div></div>';
 h+='</div>';
-var filters=[{key:'all',label:'Tous',count:mts.length},{key:'proposed',label:'Proposés',count:proposed.length},{key:'confirmed',label:'Confirmés',count:mts.filter(function(m){return m.status==='confirmed';}).length},{key:'completed',label:'Terminés',count:completed.length},{key:'cancelled',label:'Annulés',count:mts.filter(function(m){return m.status==='cancelled';}).length}];
+var filters=[{key:'all',label:'Tous',count:mts.length},{key:'booked',label:'Réservés en ligne',count:booked.length},{key:'proposed',label:'Proposés',count:proposed.length},{key:'confirmed',label:'Confirmés',count:mts.filter(function(m){return m.status==='confirmed';}).length},{key:'completed',label:'Terminés',count:completed.length},{key:'cancelled',label:'Annulés',count:mts.filter(function(m){return m.status==='cancelled';}).length}];
 h+='<div class="flex flex-wrap gap-1.5 mb-4">';
 filters.forEach(function(f){
   var active=filter===f.key;
@@ -6345,6 +6646,7 @@ if(!filtered.length){
     h+='<div class="flex-1 min-w-0">';
     h+='<div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-medium">'+escHtml(m.title||'Sans titre')+'</span>'+mkMeetingStatusBadge(m.status);
     if(m.gcalEventId)h+='<span class="text-[.5rem] px-1.5 py-0.5 rounded-full bg-infS text-inf"><i class="fa-brands fa-google mr-0.5"></i>Sync</span>';
+    if(m.bookedViaLink)h+='<span class="text-[.5rem] px-1.5 py-0.5 rounded-full bg-okS text-ok"><i class="fa-solid fa-link mr-0.5"></i>Booking</span>';
     h+='</div>';
     h+='<div class="text-xs text-mut mt-1"><i class="fa-solid fa-user mr-1"></i>'+escHtml(m.contactName||m.contactEmail||'Contact inconnu')+(m.company?' · '+escHtml(m.company):'')+'</div>';
     h+='<div class="text-xs text-mut mt-0.5 flex items-center gap-3"><span><i class="fa-solid fa-calendar mr-1"></i>'+dateLabel+'</span>'+(timeLabel?'<span><i class="fa-solid fa-clock mr-1"></i>'+timeLabel+'</span>':'')+(m.duration?'<span><i class="fa-solid fa-hourglass-half mr-1"></i>'+m.duration+'min</span>':'')+'</div>';
@@ -6522,6 +6824,281 @@ window.mkProposeMeetingSlots=function(id){
   m.status='proposed';m.updatedAt=new Date().toISOString();
   svMeetings();toast(slots.length+' créneaux proposés','ok');
   mkMeetingModal(id);
+};
+
+/* ===== MEETING SCHEDULER — BOOKING LINK SYSTEM ===== */
+function ldBookingSettings(){try{var s=localStorage.getItem('cdc_booking_settings');if(s)return JSON.parse(s);}catch(e){}return{enabled:false,slotDuration:30,minNoticeHours:24,maxDaysForward:14,startHour:'09:00',endHour:'18:00',weekdays:[1,2,3,4,5],lunchBreak:true,lunchStart:'12:00',lunchEnd:'13:30',location:'',conferenceLink:'',instructions:'',bookingLink:''};}
+function svBookingSettings(){localStorage.setItem('cdc_booking_settings',JSON.stringify(window.MK_BOOKING));}
+window.MK_BOOKING=ldBookingSettings();
+
+window.mkGenBookingLink=function(){
+  if(!window.MK_BOOKING.bookingLink){
+    var id=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+    window.MK_BOOKING.bookingLink=id;
+  }
+  svBookingSettings();
+  var base=window.location.origin+window.location.pathname;
+  return base+'#booking='+window.MK_BOOKING.bookingLink;
+};
+
+window.mkCopyBookingLink=function(){
+  var link=mkGenBookingLink();
+  if(navigator.clipboard){navigator.clipboard.writeText(link).then(function(){toast('Lien copié !','ok');}).catch(function(){mkFallbackCopy(link);});}
+  else{mkFallbackCopy(link);}
+};
+function mkFallbackCopy(text){var ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Lien copié !','ok');}catch(e){toast('Copie impossible','err');}document.body.removeChild(ta);}
+
+window.mkGetAvailableSlots=function(dateStr){
+  var bs=window.MK_BOOKING;if(!bs.enabled)return[];
+  var slots=[];var d=new Date(dateStr+'T00:00:00');
+  if(!bs.weekdays.includes(d.getDay()))return[];
+  var now=new Date();
+  var startH=parseInt(bs.startHour.split(':')[0]);var startM=parseInt(bs.startHour.split(':')[1]||'0');
+  var endH=parseInt(bs.endHour.split(':')[0]);var endM=parseInt(bs.endHour.split(':')[1]||'0');
+  var duration=bs.slotDuration||30;
+  var lunchS=bs.lunchBreak?parseInt(bs.lunchStart.split(':')[0])*60+parseInt((bs.lunchStart.split(':')[1]||'0')):null;
+  var lunchE=bs.lunchBreak?parseInt(bs.lunchEnd.split(':')[0])*60+parseInt((bs.lunchEnd.split(':')[1]||'0')):null;
+  var minNoticeMs=(bs.minNoticeHours||0)*3600000;
+  for(var mins=startH*60+startM;mins<endH*60+endM;mins+=duration){
+    if(lunchS!==null&&mins+duration>lunchS&&mins<lunchE)continue;
+    var hh=Math.floor(mins/60);var mm=mins%60;
+    var slotTime=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+    var slotEnd=String(Math.floor((mins+duration)/60)).padStart(2,'0')+':'+String((mins+duration)%60).padStart(2,'0');
+    var slotDateTime=new Date(dateStr+'T'+slotTime+':00');
+    if(slotDateTime.getTime()-now.getTime()<minNoticeMs)continue;
+    var booked=window.MK_MEETINGS.some(function(m){return m.date===dateStr&&m.startTime===slotTime&&m.status!=='cancelled';});
+    if(!booked)slots.push({date:dateStr,time:slotTime,end:slotEnd});
+  }
+  return slots;
+};
+
+window.mkBookingSettingsModal=function(){
+  var bs=window.MK_BOOKING;var link=bs.bookingLink?mkGenBookingLink():'';
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-5"><i class="fa-solid fa-link text-acc mr-2"></i>Paramètres du lien de réservation</h2>';
+  h+='<div class="mb-4"><label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input type="checkbox" id="bkEnabled" '+(bs.enabled?'checked':'')+' onchange="window.MK_BOOKING.enabled=this.checked;svBookingSettings()" class="w-4 h-4 accent-acc"><span class="font-medium">Activer la réservation en ligne</span></label>';
+  if(bs.enabled)h+='<p class="text-xs text-mut mt-1 ml-6">Vos contacts pourront réserver un créneau directement via le lien ci-dessous.</p>';
+  h+='</div>';
+  if(bs.enabled||bs.bookingLink){
+    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5"><i class="fa-solid fa-link mr-1"></i>Lien de réservation</label>';
+    h+='<div class="flex gap-2"><input type="text" class="fi text-xs flex-1" value="'+escHtml(link)+'" readonly onclick="this.select()"><button onclick="mkCopyBookingLink()" class="h-9 px-4 rounded-lg bg-acc hover:bg-accH text-black text-xs font-semibold bp"><i class="fa-solid fa-copy mr-1"></i>Copier</button></div></div>';
+  }
+  h+='<div class="grid grid-cols-2 gap-3 mb-4">';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Durée créneau (min)</label><select id="bkDuration" class="fi" onchange="window.MK_BOOKING.slotDuration=parseInt(this.value);svBookingSettings()"><option value="15"'+(bs.slotDuration===15?' selected':'')+'>15 min</option><option value="30"'+(bs.slotDuration===30?' selected':'')+'>30 min</option><option value="45"'+(bs.slotDuration===45?' selected':'')+'>45 min</option><option value="60"'+(bs.slotDuration===60?' selected':'')+'>1 heure</option></select></div>';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Préavis min (heures)</label><select id="bkMinNotice" class="fi" onchange="window.MK_BOOKING.minNoticeHours=parseInt(this.value);svBookingSettings()"><option value="1"'+(bs.minNoticeHours===1?' selected':'')+'>1h</option><option value="2"'+(bs.minNoticeHours===2?' selected':'')+'>2h</option><option value="4"'+(bs.minNoticeHours===4?' selected':'')+'>4h</option><option value="24"'+(bs.minNoticeHours===24?' selected':'')+'>24h</option><option value="48"'+(bs.minNoticeHours===48?' selected':'')+'>48h</option></select></div></div>';
+  h+='<div class="grid grid-cols-3 gap-3 mb-4">';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Heure début</label><input type="time" class="fi" value="'+bs.startHour+'" onchange="window.MK_BOOKING.startHour=this.value;svBookingSettings()"></div>';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Heure fin</label><input type="time" class="fi" value="'+bs.endHour+'" onchange="window.MK_BOOKING.endHour=this.value;svBookingSettings()"></div>';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Jours max</label><select class="fi" onchange="window.MK_BOOKING.maxDaysForward=parseInt(this.value);svBookingSettings()"><option value="7"'+(bs.maxDaysForward===7?' selected':'')+'>7</option><option value="14"'+(bs.maxDaysForward===14?' selected':'')+'>14</option><option value="21"'+(bs.maxDaysForward===21?' selected':'')+'>21</option><option value="30"'+(bs.maxDaysForward===30?' selected':'')+'>30</option></select></div></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Jours ouvrés</label><div class="flex gap-2">';
+  ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].forEach(function(d,i){var v=i===0?7:i;var chk=bs.weekdays.includes(v)?'checked':'';h+='<label class="flex items-center gap-1 text-xs text-mut cursor-pointer select-none"><input type="checkbox" '+(chk?'checked':'')+' onchange="var w=window.MK_BOOKING.weekdays;var val='+v+';if(this.checked&&!w.includes(val))w.push(val);else w=w.filter(function(x){return x!==val});svBookingSettings()" class="w-3.5 h-3.5 accent-acc"><span>'+d+'</span></label>';});
+  h+='</div></div>';
+  h+='<div class="mb-4"><label class="flex items-center gap-2 text-[.65rem] text-mut cursor-pointer select-none"><input type="checkbox" '+(bs.lunchBreak?'checked':'')+' onchange="window.MK_BOOKING.lunchBreak=this.checked;svBookingSettings()" class="w-3.5 h-3.5 accent-acc"><span>Pause déjeuner ('+bs.lunchStart+' - '+bs.lunchEnd+')</span></label></div>';
+  h+='<div class="grid grid-cols-2 gap-3 mb-4"><div><label class="text-xs text-mut block mb-1.5">Lieu par défaut</label><input type="text" class="fi" placeholder="Visio, bureau..." value="'+escHtml(bs.location)+'" onchange="window.MK_BOOKING.location=this.value;svBookingSettings()"></div><div><label class="text-xs text-mut block mb-1.5">Lien visio par défaut</label><input type="url" class="fi" placeholder="https://meet.google.com/..." value="'+escHtml(bs.conferenceLink)+'" onchange="window.MK_BOOKING.conferenceLink=this.value;svBookingSettings()"></div></div>';
+  h+='<div class="mb-5"><label class="text-xs text-mut block mb-1.5">Instructions pour le contact</label><textarea class="fi" rows="3" placeholder="Ex: Merci de réserver un créneau ci-dessous..." onchange="window.MK_BOOKING.instructions=this.value;svBookingSettings()">'+escHtml(bs.instructions)+'</textarea></div>';
+  h+='<div class="flex justify-end gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold bp">Fermer</button></div>';
+  h+='</div>';
+  opM(h);
+};
+
+/* --- Public Booking Page (rendered when #booking=xxx in URL) --- */
+window.mkRenderBookingPage=function(linkId){
+  var el=document.getElementById('PC');if(!el)return;
+  var bs=window.MK_BOOKING;
+  if(!bs.enabled||bs.bookingLink!==linkId){
+    el.innerHTML='<div class="af"><div class="text-center py-20"><i class="fa-solid fa-calendar-xmark text-4xl text-mut mb-4 block opacity-30"></i><h2 class="font-disp font-bold text-xl mb-2">Lien invalide</h2><p class="text-sm text-mut">Ce lien de réservation n\'est plus valide ou n\'existe pas.</p></div></div>';return;
+  }
+  var h='<div class="af">';
+  h+='<div class="max-w-2xl mx-auto">';
+  h+='<div class="text-center mb-8"><div class="w-16 h-16 rounded-2xl bg-acc/20 flex items-center justify-center mx-auto mb-4"><i class="fa-solid fa-calendar-check text-acc text-2xl"></i></div><h1 class="font-disp font-bold text-2xl mb-2">Réserver un créneau</h1>';
+  h+='<p class="text-sm text-mut">Choisissez une date et un horaire qui vous conviennent.</p>';
+  if(bs.instructions)h+='<p class="text-xs text-mut/70 mt-2">'+escHtml(bs.instructions)+'</p>';
+  h+='</div>';
+  var now=new Date();var maxDate=new Date(now.getTime()+bs.maxDaysForward*86400000);
+  var nextWeekStart=new Date(now);nextWeekStart.setDate(now.getDate()+((8-now.getDay())%7||7));
+  var weeksToShow=3;
+  h+='<div id="bkDatePicker" class="mb-6"><div class="flex items-center gap-2 mb-3"><button onclick="mkBkNavWeek(-1)" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp"><i class="fa-solid fa-chevron-left text-xs"></i></button><span id="bkWeekLabel" class="text-sm font-medium flex-1 text-center"></span><button onclick="mkBkNavWeek(1)" class="w-8 h-8 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp"><i class="fa-solid fa-chevron-right text-xs"></i></button></div><div id="bkDayCards" class="grid grid-cols-5 gap-2"></div></div>';
+  h+='<div id="bkSlotsArea" class="mb-6"></div>';
+  h+='<div id="bkBookForm" class="hidden">';
+  h+='<div class="bg-surface border border-bdr rounded-xl p-6"><h3 class="font-disp font-semibold text-sm mb-4"><i class="fa-solid fa-user mr-2 text-acc"></i>Vos informations</h3>';
+  h+='<div class="grid grid-cols-2 gap-3 mb-3"><div><label class="text-xs text-mut block mb-1">Prénom</label><input type="text" id="bkFirstName" class="fi" placeholder="Prénom"></div><div><label class="text-xs text-mut block mb-1">Nom</label><input type="text" id="bkLastName" class="fi" placeholder="Nom"></div></div>';
+  h+='<div class="mb-3"><label class="text-xs text-mut block mb-1">Email</label><input type="email" id="bkEmail" class="fi" placeholder="prenom@exemple.com"></div>';
+  h+='<div class="mb-4"><label class="text-xs text-mut block mb-1">Entreprise (optionnel)</label><input type="text" id="bkCompany" class="fi" placeholder="Nom de l\'entreprise"></div>';
+  h+='<div class="bg-sAlt/50 border border-bdr rounded-lg p-3 mb-4" id="bkSummary"></div>';
+  h+='<div class="flex gap-3"><button onclick="mkBkCancelBooking()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt bp">Annuler</button><button onclick="mkBkConfirmBooking()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold bp"><i class="fa-solid fa-check mr-1.5"></i>Confirmer la réservation</button></div></div></div>';
+  h+='</div></div>';
+  el.innerHTML=h;
+  window._mkBkWeekOffset=0;
+  window._mkBkSelectedDate=null;
+  window._mkBkSelectedSlot=null;
+  window._mkBkMinDate=localDateStr(now);
+  window._mkBkMaxDate=localDateStr(maxDate);
+  mkBkRenderWeek();
+};
+
+window.mkBkNavWeek=function(dir){
+  window._mkBkWeekOffset=(window._mkBkWeekOffset||0)+dir;
+  mkBkRenderWeek();
+};
+
+window.mkBkRenderWeek=function(){
+  var offset=window._mkBkWeekOffset||0;
+  var base=new Date();base.setDate(base.getDate()+offset*7);
+  var start=new Date(base);start.setDate(base.getDate()-base.getDay()+1);
+  var cards='';
+  var monthLabel=start.toLocaleDateString('fr-CH',{month:'long',year:'numeric'});
+  for(var d=0;d<7;d++){
+    var dd=new Date(start.getTime()+d*86400000);
+    var ds=localDateStr(dd);
+    var isPast=ds<window._mkBkMinDate;
+    var isFar=ds>window._mkBkMaxDate;
+    var isSel=ds===window._mkBkSelectedDate;
+    var hasSlots=!isPast&&!isFar&&window.MK_BOOKING.weekdays.includes(dd.getDay());
+    var cls=isSel?'bg-acc text-black border-acc':'bg-surface border-bdr text-txt hover:border-acc/40';
+    if(isPast||isFar||!hasSlots)cls+=' opacity-40 pointer-events-none';
+    cards+='<button onclick="mkBkSelectDay(\''+ds+'\')" class="rounded-xl border p-3 text-center transition-all bp '+cls+'">';
+    cards+='<div class="text-[.55rem] text-mut uppercase">'+dd.toLocaleDateString('fr-CH',{weekday:'short'})+'</div>';
+    cards+='<div class="text-lg font-disp font-bold">'+dd.getDate()+'</div>';
+    cards+='</button>';
+  }
+  document.getElementById('bkDayCards').innerHTML=cards;
+  document.getElementById('bkWeekLabel').textContent=monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1);
+  if(window._mkBkSelectedDate)mkBkShowSlots(window._mkBkSelectedDate);
+};
+
+window.mkBkSelectDay=function(dateStr){
+  window._mkBkSelectedDate=dateStr;window._mkBkSelectedSlot=null;
+  mkBkRenderWeek();
+  mkBkShowSlots(dateStr);
+};
+
+window.mkBkShowSlots=function(dateStr){
+  var area=document.getElementById('bkSlotsArea');if(!area)return;
+  var slots=mkGetAvailableSlots(dateStr);
+  var d=new Date(dateStr+'T00:00:00');
+  var label=d.toLocaleDateString('fr-CH',{weekday:'long',day:'numeric',month:'long'});
+  var h='<h3 class="text-xs text-mut uppercase tracking-wide font-semibold mb-3"><i class="fa-solid fa-clock mr-1.5"></i>Créneaux disponibles — '+label.charAt(0).toUpperCase()+label.slice(1)+'</h3>';
+  if(!slots.length){
+    h+='<div class="text-mut text-sm text-center py-6"><i class="fa-solid fa-calendar-xmark text-2xl mb-2 block opacity-30"></i>Aucun créneau disponible ce jour.</div>';
+  }else{
+    h+='<div class="flex flex-wrap gap-2">';
+    slots.forEach(function(s){
+      var sel=window._mkBkSelectedSlot===s.date+'|'+s.time;
+      h+='<button onclick="mkBkSelectSlot(\''+s.date+'\',\''+s.time+'\',\''+s.end+'\')" class="h-auto px-4 py-3 rounded-xl border text-center transition-all bp '+(sel?'bg-acc text-black border-acc':'bg-surface border-bdr text-txt hover:border-acc/40')+'"><div class="text-sm font-disp font-bold">'+s.time+'</div><div class="text-[.55rem] opacity-60">'+s.end+'</div></button>';
+    });
+    h+='</div>';
+  }
+  area.innerHTML=h;
+};
+
+window.mkBkSelectSlot=function(date,time,end){
+  window._mkBkSelectedSlot=date+'|'+time;
+  window._mkBkSelectedSlotTime=time;
+  window._mkBkSelectedSlotEnd=end;
+  mkBkShowSlots(date);
+  var form=document.getElementById('bkBookForm');if(form)form.classList.remove('hidden');
+  var d=new Date(date+'T00:00:00');
+  var label=d.toLocaleDateString('fr-CH',{weekday:'long',day:'numeric',month:'long'});
+  var summary=document.getElementById('bkSummary');
+  if(summary){
+    summary.innerHTML='<div class="text-xs text-mut mb-1">Votre réservation</div><div class="text-sm font-medium"><i class="fa-solid fa-calendar mr-1 text-acc"></i>'+label.charAt(0).toUpperCase()+label.slice(1)+'</div><div class="text-sm font-medium"><i class="fa-solid fa-clock mr-1 text-acc"></i>'+time+' — '+end+'</div>';
+    if(window.MK_BOOKING.location)summary.innerHTML+='<div class="text-xs text-mut mt-1"><i class="fa-solid fa-location-dot mr-1"></i>'+escHtml(window.MK_BOOKING.location)+'</div>';
+  }
+  form.scrollIntoView({behavior:'smooth',block:'center'});
+};
+
+window.mkBkCancelBooking=function(){
+  window._mkBkSelectedSlot=null;
+  document.getElementById('bkBookForm').classList.add('hidden');
+};
+
+window.mkBkConfirmBooking=function(){
+  if(!window._mkBkSelectedDate||!window._mkBkSelectedSlot){toast('Sélectionnez un créneau','err');return;}
+  var firstName=(document.getElementById('bkFirstName')||{}).value||'';
+  var lastName=(document.getElementById('bkLastName')||{}).value||'';
+  var email=(document.getElementById('bkEmail')||{}).value||'';
+  var company=(document.getElementById('bkCompany')||{}).value||'';
+  if(!firstName||!lastName){toast('Prénom et nom requis','err');return;}
+  if(!email||email.indexOf('@')===-1){toast('Email invalide','err');return;}
+  var parts=window._mkBkSelectedSlot.split('|');
+  var meeting={
+    id:Date.now(),
+    title:'Meeting avec '+firstName+' '+lastName,
+    contactName:firstName+' '+lastName,
+    contactEmail:email,
+    company:company,
+    date:parts[0],
+    startTime:window._mkBkSelectedSlotTime,
+    endTime:window._mkBkSelectedSlotEnd,
+    duration:window.MK_BOOKING.slotDuration||30,
+    status:'confirmed',
+    gcalEventId:null,
+    location:window.MK_BOOKING.location||'',
+    conferenceLink:window.MK_BOOKING.conferenceLink||'',
+    notes:'Réservation via lien de booking',
+    proposedSlots:[],
+    campaignName:'',
+    createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString(),
+    bookedViaLink:true
+  };
+  window.MK_MEETINGS.push(meeting);
+  svMeetings();
+  var bs=window.MK_BOOKING;
+  if(bs.conferenceLink)meeting.conferenceLink=bs.conferenceLink;
+  /* Try to sync to Google Calendar */
+  if(gcalHasValidToken()){
+    mkSyncBookingToGCal(meeting).then(function(){
+      mkBkShowConfirmation(meeting);
+    }).catch(function(){
+      mkBkShowConfirmation(meeting);
+    });
+  }else{
+    mkBkShowConfirmation(meeting);
+  }
+};
+
+window.mkSyncBookingToGCal=async function(meeting){
+  var bs=window.MK_BOOKING;
+  var body={summary:meeting.title,start:{dateTime:meeting.date+'T'+meeting.startTime+':00',timeZone:'Europe/Zurich'},end:{dateTime:meeting.date+'T'+meeting.endTime+':00',timeZone:'Europe/Zurich'}};
+  if(meeting.location)body.location=meeting.location;
+  if(meeting.conferenceLink)body.description='Visio : '+meeting.conferenceLink;
+  if(meeting.contactEmail)body.attendees=[{email:meeting.contactEmail}];
+  var r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok){
+    var ev=await r.json();
+    var idx=window.MK_MEETINGS.findIndex(function(m){return m.id===meeting.id;});
+    if(idx>=0){window.MK_MEETINGS[idx].gcalEventId=ev.id;svMeetings();}
+  }
+};
+
+window.mkBkShowConfirmation=function(meeting){
+  var el=document.getElementById('PC');if(!el)return;
+  var d=new Date(meeting.date+'T00:00:00');
+  var label=d.toLocaleDateString('fr-CH',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  var h='<div class="af"><div class="max-w-lg mx-auto text-center py-12">';
+  h+='<div class="w-20 h-20 rounded-2xl bg-okS flex items-center justify-center mx-auto mb-6"><i class="fa-solid fa-check text-ok text-3xl"></i></div>';
+  h+='<h1 class="font-disp font-bold text-2xl mb-4">Réservation confirmée !</h1>';
+  h+='<div class="bg-surface border border-bdr rounded-xl p-6 text-left mb-6">';
+  h+='<div class="flex items-center gap-2 mb-3"><i class="fa-solid fa-user text-acc"></i><span class="font-medium">'+escHtml(meeting.contactName)+'</span></div>';
+  h+='<div class="flex items-center gap-2 mb-2"><i class="fa-solid fa-calendar text-acc"></i><span>'+label+'</span></div>';
+  h+='<div class="flex items-center gap-2 mb-2"><i class="fa-solid fa-clock text-acc"></i><span>'+meeting.startTime+' — '+meeting.endTime+' ('+meeting.duration+' min)</span></div>';
+  if(meeting.location)h+='<div class="flex items-center gap-2"><i class="fa-solid fa-location-dot text-acc"></i><span>'+escHtml(meeting.location)+'</span></div>';
+  if(meeting.conferenceLink)h+='<div class="flex items-center gap-2 mt-2"><i class="fa-solid fa-video text-inf"></i><a href="'+escHtml(meeting.conferenceLink)+'" target="_blank" class="text-inf hover:underline">'+escHtml(meeting.conferenceLink)+'</a></div>';
+  h+='</div>';
+  h+='<p class="text-sm text-mut">Vous recevrez un email de confirmation. À bientôt !</p>';
+  h+='</div></div>';
+  el.innerHTML=h;
+};
+
+/* --- Booking page URL handler --- */
+window.mkCheckBookingHash=function(){
+  if(window.location.hash&&window.location.hash.indexOf('#booking=')===0){
+    var linkId=window.location.hash.replace('#booking=','');
+    mkRenderBookingPage(linkId);
+    return true;
+  }
+  return false;
 };
 
 </script>
