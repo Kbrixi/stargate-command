@@ -3280,7 +3280,7 @@ function renderMkSubNav(){
   MKV2_TABS.forEach(function(t){
     var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;
     var act=S.mkv===t.key?' text-acc font-bold':'';
-    h+='<button onclick="navMkV2(\''+t.key+'\')" class="flex items-center gap-2 px-3 py-1.5 text-xs text-left rounded-l-full transition-colors text-black/80 hover:bg-ok/80'+act+'"><i class="'+ico+' w-3.5 text-center"></i>'+t.label+'</button>';
+    h+='<button onclick="navMkV2(\''+t.key+'\')" class="flex items-center gap-2 px-3 py-1.5 text-xs text-left rounded-l-full transition-colors text-mut hover:text-txt hover:bg-sHov'+act+'"><i class="'+ico+' w-3.5 text-center"></i>'+t.label+'</button>';
   });
   sub.innerHTML=h;
 }
