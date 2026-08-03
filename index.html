@@ -5487,7 +5487,7 @@ window.mkCampaignComposeModal=function(existingItem,existingIdx){
   h+='<div class="flex items-center justify-between mb-5"><h2 class="font-disp font-bold text-lg">'+(isExisting?'Envoyer : '+escHtml(send.item.name||send.item.subject):'\U0001f4e7 Rédiger & Envoyer')+'</h2><span class="bdg '+sigBadge+' text-[.6rem]"><i class="fa-solid fa-'+sigIcon+' mr-1"></i>'+sigText+'</span></div>';
 
   if(!isExisting){
-    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Campagne</label><select id="mkeCampaign" class="fi" onchange="window._mkCampSend.item.campaignName=this.value||\'\'"'><option value="">-- Aucune campagne --</option>';
+    h+='<div class="mb-4"><label class="text-xs text-mut block mb-1.5">Campagne</label><select id="mkeCampaign" class="fi" onchange="window._mkCampSend.item.campaignName=this.value||\'\'"><option value="">-- Aucune campagne --</option>';
     var campaigns=MK.campaigns||[];
     campaigns.forEach(function(c){var sel=(send.item.campaignName||'')===c.name?' selected':'';h+='<option value="'+escHtml(c.name)+'"'+sel+'>'+escHtml(c.name)+(c.status?' ('+c.status+')':'')+'</option>';});
     h+='</select></div>';
