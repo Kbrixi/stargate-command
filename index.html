@@ -8587,16 +8587,30 @@ window.seq2LaunchModal=function(seqId){
   /* Build candidate list: contacts matching selected tags (or all if no tags) */
   var candidates=seq2GetLaunchCandidates(selTags);
 
-  /* Auto-select contacts matching any step's stage_is trigger condition */
+  /* Auto-select contacts matching any step's trigger conditions (stage_is, tag_present) */
   if(!selIds.size&&seq.steps&&seq.steps.length){
     var targetStages=[];
+    var targetTags=[];
     seq.steps.forEach(function(s){
-      if(s.conditionType==='stage_is'&&s.conditionValue)targetStages.push(s.conditionValue);
+      /* Check condition field on ALL step types (not just condition steps) */
+      var ct=s.conditionType||'always';
+      var cv=s.conditionValue||'';
+      if(ct==='stage_is'&&cv){if(targetStages.indexOf(cv)===-1)targetStages.push(cv);}
+      if(ct==='tag_present'&&cv){if(targetTags.indexOf(cv)===-1)targetTags.push(cv);}
     });
-    if(targetStages.length){
+    if(targetStages.length||targetTags.length){
       candidates.forEach(function(c){
-        var pe=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===c.folderKey;});
-        if(pe&&targetStages.indexOf(pe.stage)!==-1){selIds.add(c.folderKey+'|'+c.id);}
+        var match=true;
+        if(targetStages.length){
+          var pe=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===c.folderKey;});
+          if(!pe||targetStages.indexOf(pe.stage)===-1)match=false;
+        }
+        if(match&&targetTags.length){
+          var cTags=c.tags||[];
+          var hasAll=targetTags.every(function(tt){return cTags.indexOf(tt)!==-1;});
+          if(!hasAll)match=false;
+        }
+        if(match)selIds.add(c.folderKey+'|'+c.id);
       });
     }
   }
@@ -8622,6 +8636,22 @@ window.seq2LaunchModal=function(seqId){
     h+='</div>';
   });
   h+='</div>';
+
+  /* Pre-selection info banner */
+  if(selIds.size>0){
+    var preSelReasons=[];
+    seq.steps.forEach(function(s){
+      var ct=s.conditionType||'always';
+      var cv=s.conditionValue||'';
+      if(ct==='stage_is'&&cv){var fsInfo=funnelStageInfo(cv);preSelReasons.push('Stade : '+(fsInfo?fsInfo.label:cv));}
+      if(ct==='tag_present'&&cv){preSelReasons.push('Tag : '+cv);}
+    });
+    if(preSelReasons.length){
+      h+='<div class="bg-okS/30 border border-ok/30 rounded-xl p-3 mb-4"><div class="flex items-center gap-2 mb-1"><i class="fa-solid fa-wand-magic-sparkles text-ok text-xs"></i><span class="text-[.65rem] font-semibold text-ok">Pr\u00e9-s\u00e9lection automatique</span></div>';
+      h+='<div class="text-[.6rem] text-mut">'+selIds.size+' contact'+(selIds.size>1?'s':'')+' s\u00e9lectionn\u00e9'+(selIds.size>1?'s':'')+' selon les crit\u00e8res : '+preSelReasons.join(', ')+'</div>';
+      h+='</div>';
+    }
+  }
 
   /* Recipient selection — tag filters */
   var groupedTags=mkGetGroupedTags();
