@@ -7675,10 +7675,25 @@ window.mkRestoreCrmUI=function(){
 
 /* ===== MARKETING V2 — PIPELINE RENDER ===== */
 var PIPE_DRAG={contactId:null,folderKey:null,entryId:null};
+var _pipeFilterSnapshot=null;
+
+/* Save current filter values before re-render so they survive DOM rebuild */
+function pipeSnapshotFilters(){
+  var ids=['pipeFilterFolder','pipeFilterSource','pipeFilterCompany','pipeFilterTitle','pipeFilterRegion','pipeFilterCountry','pipeFilterStage','pipeFilterMonth','pipeFilterYear','pipeFilterTags','pipeFilterSearch'];
+  var snap={};
+  ids.forEach(function(id){var el=document.getElementById(id);if(el)snap[id]=el.value;});
+  return snap;
+}
+function pipeRestoreFilters(snap){
+  if(!snap)return;
+  Object.keys(snap).forEach(function(id){var el=document.getElementById(id);if(el)el.value=snap[id];});
+}
 
 function rMarketingV2(){
   var el=document.getElementById('PC');
   if(!el)return;
+  /* Snapshot filter values before DOM rebuild */
+  _pipeFilterSnapshot=pipeSnapshotFilters();
   var body='';
   if(S.mkv==='pipeline'){
     body=rPipelineView();
@@ -7688,6 +7703,8 @@ function rMarketingV2(){
     body=rMarketingV2Fallback();
   }
   el.innerHTML='<div class="af"><div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Marketing</h1></div>'+body+'</div>';
+  /* Restore filter values after DOM rebuild */
+  pipeRestoreFilters(_pipeFilterSnapshot);
 }
 
 function rPipelineView(){
@@ -7720,7 +7737,7 @@ function rPipelineView(){
   h+='<button onclick="pipeOpenAddModal()" class="h-8 px-3 rounded-lg bg-acc hover:bg-accH text-black text-[.65rem] font-semibold flex items-center gap-1.5 transition-colors bp ml-auto"><i class="fa-solid fa-plus text-[.55rem]"></i>Ajouter au pipeline</button>';
   h+='</div>';
   /* Advanced filter panel (hidden by default) */
-  h+='<div id="pipeAdvFilters" style="display:none" class="pipe-adv-filters">';
+  h+='<div id="pipeAdvFilters" style="display:'+(typeof _pipeAdvOpen!=='undefined'&&_pipeAdvOpen?'block':'none')+'" class="pipe-adv-filters">';
   h+='<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">';
   h+='<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="pipeFilterCompany" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
   h+='<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="pipeFilterTitle" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
@@ -8820,11 +8837,12 @@ window.pipeOpenDetail=function(entryId){
 
 
 /* ===== PIPELINE ADVANCED FILTERS ===== */
+var _pipeAdvOpen=false;
 window.pipeToggleAdvFilters=function(){
   var panel=document.getElementById('pipeAdvFilters');
   if(!panel)return;
-  var isHidden=panel.style.display==='none';
-  panel.style.display=isHidden?'block':'none';
+  _pipeAdvOpen=!_pipeAdvOpen;
+  panel.style.display=_pipeAdvOpen?'block':'none';
 };
 
 /* --- Booking page URL handler --- */
