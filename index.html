@@ -3560,6 +3560,7 @@ else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucu
 else if(S.mkv==='content')body=mkTabsBar()+rMarketingSection('content','Aucun contenu','Nouveau contenu');
 else if(S.mkv==='emails')body=mkTabsBar()+rMarketingSection('emails','Aucun email','Nouvel email');
 else if(S.mkv==='social')body=mkTabsBar()+rMarketingSection('social','Aucun post social','Nouveau post');
+else if(S.mkv==='pipeline'||S.mkv==='sequences'){rMarketingV2();return;}
 else body=`${mkTabsBar()}<div class="bg-surface border border-bdr rounded-2xl p-8 text-center text-mut text-sm">Cette section arrive dans une prochaine étape.</div>`;
 el.innerHTML=`<div class="af">
 <div class="flex items-center justify-between mb-6"><h1 class="font-disp font-bold text-2xl">Marketing</h1></div>
@@ -8611,8 +8612,8 @@ window.seq2ExecuteLaunch=async function(seqId){
   var seq=SEQ2.find(function(s){return s.id===seqId;});if(!seq)return;
   /* Get only the manually selected contacts */
   var selIds=window._seq2Launch?window._seq2Launch._selIds:null;
-  var candidates=seq2GetLaunchCandidates(window._seq2Launch?window._seq2Launch._selTags||[]):[]);
-  var contacts=selIds&&selIds.size?candidates.filter(function(c){return selIds.has(c.folderKey+'|'+c.id);}):candidates;
+  var candidates=seq2GetLaunchCandidates(window._seq2Launch?window._seq2Launch._selTags||[]:[]);
+  var contacts=selIds&&selIds.size?candidates.filter(function(c){return selIds.has(c.folderKey+'|'+c.id);}):(selIds?[]:candidates);
   if(!contacts.length){toast('Aucun contact s\u00e9lectionn\u00e9','err');return;}
   var signature=window.MK_SIGNATURE||'';
   var launched=0,errors=0;
