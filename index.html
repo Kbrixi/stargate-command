@@ -8458,13 +8458,16 @@ window.seq2LaunchModal=function(seqId){
   /* Build candidate list: contacts matching selected tags (or all if no tags) */
   var candidates=seq2GetLaunchCandidates(selTags);
 
-  /* Auto-select contacts matching first step's trigger condition (stage_is) */
+  /* Auto-select contacts matching any step's stage_is trigger condition */
   if(!selIds.size&&seq.steps&&seq.steps.length){
-    var trigger=seq.steps[0];
-    if(trigger.conditionType==='stage_is'&&trigger.conditionValue){
+    var targetStages=[];
+    seq.steps.forEach(function(s){
+      if(s.conditionType==='stage_is'&&s.conditionValue)targetStages.push(s.conditionValue);
+    });
+    if(targetStages.length){
       candidates.forEach(function(c){
         var pe=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===c.folderKey;});
-        if(pe&&pe.stage===trigger.conditionValue){selIds.add(c.folderKey+'|'+c.id);}
+        if(pe&&targetStages.indexOf(pe.stage)!==-1){selIds.add(c.folderKey+'|'+c.id);}
       });
     }
   }
