@@ -240,6 +240,33 @@ body.vc-panel-open #MO{right:0}
 .pipe-filter-bar select:focus{border-color:#ff9c00}
 @media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
 
+
+/* ===== MARKETING V2 — SEQUENCES MULTI-CANAL ===== */
+.seq2-step{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:14px;margin-bottom:10px;transition:border-color .2s}
+.seq2-step:hover{border-color:#4a4a4a}
+.seq2-step-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.seq2-step-num{width:26px;height:26px;border-radius:50%;background:rgba(255,156,0,.15);color:#ff9c00;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.seq2-step-type{display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.seq2-type-email{background:rgba(153,153,255,.12);color:#9999ff}
+.seq2-type-whatsapp{background:rgba(37,211,102,.12);color:#25d366}
+.seq2-type-wait{background:rgba(255,204,102,.12);color:#ffcc66}
+.seq2-type-task{background:rgba(204,153,204,.12);color:#cc99cc}
+.seq2-type-stage_move{background:rgba(255,156,0,.12);color:#ff9c00}
+.seq2-type-tag{background:rgba(95,191,143,.12);color:#5fbf8f}
+.seq2-type-condition{background:rgba(201,169,126,.12);color:#c9a97e}
+.seq2-step-actions{display:flex;align-items:center;gap:4px;margin-left:auto}
+.seq2-cond-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;font-size:.55rem;background:rgba(201,169,126,.1);color:#c9a97e;border:1px solid rgba(201,169,126,.2)}
+.seq2-branch{border-left:2px solid #2b2b2b;padding-left:14px;margin-left:13px;margin-top:8px}
+.seq2-branch-label{font-size:.55rem;color:#c9a97e;text-transform:uppercase;letter-spacing:.03em;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.seq2-branch-true .seq2-branch-label{color:#5fbf8f}
+.seq2-branch-false .seq2-branch-label{color:#c9a97e}
+.seq2-launch-card{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px;transition:border-color .2s}
+.seq2-launch-card:hover{border-color:#4a4a4a}
+.seq2-global-rules{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:10px;padding:12px 14px}
+.seq2-global-rules label{display:flex;align-items:center;gap:6px;font-size:.65rem;color:#c9a97e;cursor:pointer;margin-bottom:4px}
+.seq2-global-rules label:last-child{margin-bottom:0}
+.seq2-global-rules input[type=checkbox]{accent-color:#ff9c00}
+
 </style>
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
@@ -437,7 +464,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log','cdc_funnel_stages','cdc_funnel_settings'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log','cdc_funnel_stages','cdc_funnel_settings','cdc_sequences_v2','cdc_seq_runs_v2'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -2983,6 +3010,33 @@ const bodyHtml=parts.html?`<iframe class="w-full rounded-xl border-0" style="hei
 .pipe-filter-bar select:focus{border-color:#ff9c00}
 @media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
 
+
+/* ===== MARKETING V2 — SEQUENCES MULTI-CANAL ===== */
+.seq2-step{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:14px;margin-bottom:10px;transition:border-color .2s}
+.seq2-step:hover{border-color:#4a4a4a}
+.seq2-step-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.seq2-step-num{width:26px;height:26px;border-radius:50%;background:rgba(255,156,0,.15);color:#ff9c00;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.seq2-step-type{display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.seq2-type-email{background:rgba(153,153,255,.12);color:#9999ff}
+.seq2-type-whatsapp{background:rgba(37,211,102,.12);color:#25d366}
+.seq2-type-wait{background:rgba(255,204,102,.12);color:#ffcc66}
+.seq2-type-task{background:rgba(204,153,204,.12);color:#cc99cc}
+.seq2-type-stage_move{background:rgba(255,156,0,.12);color:#ff9c00}
+.seq2-type-tag{background:rgba(95,191,143,.12);color:#5fbf8f}
+.seq2-type-condition{background:rgba(201,169,126,.12);color:#c9a97e}
+.seq2-step-actions{display:flex;align-items:center;gap:4px;margin-left:auto}
+.seq2-cond-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;font-size:.55rem;background:rgba(201,169,126,.1);color:#c9a97e;border:1px solid rgba(201,169,126,.2)}
+.seq2-branch{border-left:2px solid #2b2b2b;padding-left:14px;margin-left:13px;margin-top:8px}
+.seq2-branch-label{font-size:.55rem;color:#c9a97e;text-transform:uppercase;letter-spacing:.03em;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.seq2-branch-true .seq2-branch-label{color:#5fbf8f}
+.seq2-branch-false .seq2-branch-label{color:#c9a97e}
+.seq2-launch-card{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px;transition:border-color .2s}
+.seq2-launch-card:hover{border-color:#4a4a4a}
+.seq2-global-rules{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:10px;padding:12px 14px}
+.seq2-global-rules label{display:flex;align-items:center;gap:6px;font-size:.65rem;color:#c9a97e;cursor:pointer;margin-bottom:4px}
+.seq2-global-rules label:last-child{margin-bottom:0}
+.seq2-global-rules input[type=checkbox]{accent-color:#ff9c00}
+
 </style></head><body>${gmailSanitizeHtml(parts.html)}</body></html>`)}"></iframe>`:`<div class="bg-sAlt rounded-xl p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">${escHtml(plainBody)||'<span class="italic text-mut">(Corps vide)</span>'}</div>`;
 opM(`<div class="p-6">
 <div class="flex items-start justify-between gap-4 mb-1"><h2 class="font-disp font-bold text-lg">${escHtml(subject)}</h2></div>
@@ -3251,6 +3305,121 @@ function funnelGetAvgDays(){
     return n+Math.floor((Date.now()-d.getTime())/86400000);
   },0);
   return Math.round(totalDays/entries.length);
+}
+
+
+/* ===== MARKETING V2 — SEQUENCES MULTI-CANAL ===== */
+var SEQ2_STEP_TYPES=[
+{key:'email',label:'Email',icon:'fa-envelope',color:'#9999ff',bg:'rgba(153,153,255,.12)'},
+{key:'whatsapp',label:'WhatsApp',icon:'fa-brands fa-whatsapp',color:'#25d366',bg:'rgba(37,211,102,.12)'},
+{key:'wait',label:'Attente',icon:'fa-clock',color:'#ffcc66',bg:'rgba(255,204,102,.12)'},
+{key:'task',label:'T\u00e2che',icon:'fa-list-check',color:'#cc99cc',bg:'rgba(204,153,204,.12)'},
+{key:'stage_move',label:'Changer stade',icon:'fa-right-left',color:'#ff9c00',bg:'rgba(255,156,0,.12)'},
+{key:'tag',label:'Tag',icon:'fa-tag',color:'#5fbf8f',bg:'rgba(95,191,143,.12)'},
+{key:'condition',label:'Condition',icon:'fa-code-branch',color:'#c9a97e',bg:'rgba(201,169,126,.12)'}
+];
+var SEQ2_COND_TYPES=['always','email_opened','email_replied','wa_replied','tag_present','stage_is'];
+
+function ldSeq2(){try{var s=localStorage.getItem('cdc_sequences_v2');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svSeq2(){localStorage.setItem('cdc_sequences_v2',JSON.stringify(SEQ2));}
+var SEQ2=ldSeq2();
+
+function ldSeqRuns2(){try{var s=localStorage.getItem('cdc_seq_runs_v2');if(s)return JSON.parse(s);}catch(e){}return[];}
+function svSeqRuns2(){localStorage.setItem('cdc_seq_runs_v2',JSON.stringify(SEQ2_RUNS));}
+var SEQ2_RUNS=ldSeqRuns2();
+
+function seq2NewId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function seq2RunId(){return 'run_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,5);}
+
+function seq2StepTypeInfo(key){return SEQ2_STEP_TYPES.find(function(t){return t.key===key;})||SEQ2_STEP_TYPES[0];}
+
+/* Migrate v1 email sequences to v2 format */
+function seq2MigrateV1(){
+  if(SEQ2.length)return; // already migrated
+  var v1Seqs=window.MK_SEQUENCES||[];
+  if(!v1Seqs.length)return;
+  v1Seqs.forEach(function(v1){
+    var v2={
+      id:v1.id||seq2NewId(),
+      name:v1.name||'Sans titre',
+      description:v1.description||'',
+      enabled:v1.enabled!==false,
+      status:v1.enabled!==false?'active':'draft',
+      createdAt:v1.createdAt||new Date().toISOString(),
+      updatedAt:v1.updatedAt||new Date().toISOString(),
+      steps:(v1.steps||[]).map(function(s,i){
+        return{
+          id:'step_'+i+'_'+Math.random().toString(36).slice(2,5),
+          type:'email',
+          delay:i===0?0:(s.delay||3),
+          subject:s.subject||'',
+          body:s.body||'',
+          waMessage:'',
+          taskTitle:'',
+          taskDesc:'',
+          waitDays:s.delay||3,
+          stageTarget:'lead',
+          tagAction:'add',
+          tagName:'',
+          conditionType:'always',
+          conditionStepId:'',
+          conditionValue:'',
+          nextStepId:null,
+          altStepId:null,
+          stopIfReplied:s.stopIfReplied||false
+        };
+      }),
+      globalRules:{
+        stopOnReply:true,
+        stopOnMeetingBooked:true,
+        stopOnStage:['won'],
+        cooldownDays:30,
+        maxStepsPerContact:15
+      }
+    };
+    SEQ2.push(v2);
+  });
+  svSeq2();
+  console.log('[Seq2] Migrated '+v1Seqs.length+' v1 sequences to v2');
+}
+seq2MigrateV1();
+
+/* Migrate v1 runs to v2 */
+function seqRuns2MigrateV1(){
+  if(SEQ2_RUNS.length)return;
+  var v1Runs=window.MK_SEQ_RUNS||[];
+  if(!v1Runs.length)return;
+  v1Runs.forEach(function(v1){
+    SEQ2_RUNS.push({
+      id:v1.id||seq2RunId(),
+      sequenceId:v1.sequenceId,
+      sequenceName:v1.sequenceName||'',
+      contactId:null,
+      contactEmail:v1.contactEmail,
+      contactName:v1.contactName||'',
+      folderKey:null,
+      currentStepId:null,
+      currentStepIndex:v1.currentStep||0,
+      status:v1.status||'active',
+      startedAt:v1.startedAt||new Date().toISOString(),
+      nextStepAt:v1.nextStepAt||null,
+      stepLog:(v1.stepLog||[]).map(function(sl){
+        return{stepIndex:sl.stepIndex,sentAt:sl.sentAt,status:sl.status||'sent',channel:'email',detail:''};
+      })
+    });
+  });
+  svSeqRuns2();
+  console.log('[SeqRuns2] Migrated '+v1Runs.length+' v1 runs to v2');
+}
+seqRuns2MigrateV1();
+
+function seq2GetContact(run){
+  if(run.contactId)return funnelGetContact({contactId:run.contactId,folderKey:run.folderKey});
+  if(!run.contactEmail)return null;
+  var allC=[];
+  FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){if(c.email){allC.push({c:c,fk:f.key});}});});
+  var match=allC.find(function(x){return x.c.email.toLowerCase()===run.contactEmail.toLowerCase();});
+  return match?match.c:null;
 }
 
 /* ===== MARKETING V2 — SIDEBAR SOUS-NAVIGATION ===== */
@@ -5279,6 +5448,33 @@ function nPrintNote(id) {
 .pipe-filter-bar select{background:#141414;border:1px solid #2b2b2b;border-radius:999px;padding:6px 12px;color:#c9a97e;font-size:.7rem;outline:none;cursor:pointer;font-family:'Jost',sans-serif}
 .pipe-filter-bar select:focus{border-color:#ff9c00}
 @media(max-width:768px){.pipe-wrap{flex-direction:column}.pipe-col{min-width:100%;max-width:100%;max-height:300px}.pipe-detail-panel{width:100vw}}
+
+
+/* ===== MARKETING V2 — SEQUENCES MULTI-CANAL ===== */
+.seq2-step{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:14px;margin-bottom:10px;transition:border-color .2s}
+.seq2-step:hover{border-color:#4a4a4a}
+.seq2-step-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.seq2-step-num{width:26px;height:26px;border-radius:50%;background:rgba(255,156,0,.15);color:#ff9c00;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.seq2-step-type{display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.seq2-type-email{background:rgba(153,153,255,.12);color:#9999ff}
+.seq2-type-whatsapp{background:rgba(37,211,102,.12);color:#25d366}
+.seq2-type-wait{background:rgba(255,204,102,.12);color:#ffcc66}
+.seq2-type-task{background:rgba(204,153,204,.12);color:#cc99cc}
+.seq2-type-stage_move{background:rgba(255,156,0,.12);color:#ff9c00}
+.seq2-type-tag{background:rgba(95,191,143,.12);color:#5fbf8f}
+.seq2-type-condition{background:rgba(201,169,126,.12);color:#c9a97e}
+.seq2-step-actions{display:flex;align-items:center;gap:4px;margin-left:auto}
+.seq2-cond-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;font-size:.55rem;background:rgba(201,169,126,.1);color:#c9a97e;border:1px solid rgba(201,169,126,.2)}
+.seq2-branch{border-left:2px solid #2b2b2b;padding-left:14px;margin-left:13px;margin-top:8px}
+.seq2-branch-label{font-size:.55rem;color:#c9a97e;text-transform:uppercase;letter-spacing:.03em;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.seq2-branch-true .seq2-branch-label{color:#5fbf8f}
+.seq2-branch-false .seq2-branch-label{color:#c9a97e}
+.seq2-launch-card{background:#141414;border:1px solid #2b2b2b;border-radius:12px;padding:16px;display:flex;align-items:center;gap:16px;transition:border-color .2s}
+.seq2-launch-card:hover{border-color:#4a4a4a}
+.seq2-global-rules{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:10px;padding:12px 14px}
+.seq2-global-rules label{display:flex;align-items:center;gap:6px;font-size:.65rem;color:#c9a97e;cursor:pointer;margin-bottom:4px}
+.seq2-global-rules label:last-child{margin-bottom:0}
+.seq2-global-rules input[type=checkbox]{accent-color:#ff9c00}
 
 </style></head><body>
     <h1>${escH(n.title||'Sans titre')}</h1>
@@ -7787,7 +7983,58 @@ function pipeConfirmAdd(){
 
 /* Sequences V2 placeholder */
 function rSequencesV2View(){
-  return '<div class="mb-4">'+mkV2TabsBar()+'</div><div class="bg-surface border border-bdr rounded-2xl p-10 text-center"><i class="fa-solid fa-diagram-project text-3xl text-mut mb-3 block opacity-40"></i><p class="text-mut text-sm">Les s\u00e9quences multi-canal arrivent en Phase 2.</p><p class="text-mut text-sm mt-2">Pour l\u2019instant, utilise l\u2019onglet Emails pour g\u00e9rer tes s\u00e9quences email.</p><button onclick="S.mkv=\'emails\';rMarketing();" class="mt-4 h-9 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Voir les s\u00e9quences email</button></div>';
+  var h='<div class="mb-4">'+mkV2TabsBar()+'</div>';
+  h+='<div class="flex items-center justify-between mb-4"><h2 class="font-disp font-bold text-base">S\u00e9quences multi-canal</h2>';
+  h+='<button onclick="seq2EditorModal()" class="h-9 px-4 rounded-xl bg-acc hover:bg-accH text-black text-xs font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-[.55rem]"></i>Nouvelle s\u00e9quence</button></div>';
+
+  /* Active runs banner */
+  var activeRuns=SEQ2_RUNS.filter(function(r){return r.status==='active';});
+  if(activeRuns.length){
+    h+='<div class="bg-infS/30 border border-inf/20 rounded-xl p-3 mb-4">';
+    h+='<div class="flex items-center gap-2 mb-2"><i class="fa-solid fa-bolt text-inf text-[.65rem]"></i><span class="text-[.65rem] font-semibold text-inf">'+activeRuns.length+' ex\u00e9cution'+(activeRuns.length>1?'s':'')+' en cours</span></div>';
+    h+='<div class="flex flex-col gap-1">';
+    activeRuns.slice(0,8).forEach(function(run){
+      var nextLabel='';
+      if(run.nextStepAt){var diff=new Date(run.nextStepAt).getTime()-Date.now();if(diff>86400000)nextLabel=Math.ceil(diff/86400000)+'j';else if(diff>3600000)nextLabel=Math.ceil(diff/3600000)+'h';else nextLabel=Math.max(1,Math.ceil(diff/60000))+'min';}
+      h+='<div class="flex items-center gap-2 text-[.6rem] text-mut"><span class="truncate flex-1">'+escHtml(run.contactName||run.contactEmail)+' \u2192 '+escHtml(run.sequenceName)+'</span><span class="text-inf shrink-0">'+(nextLabel||'')+'</span>';
+      h+='<button onclick="seq2StopRun(\''+run.id+'\')" class="w-5 h-5 rounded text-mut hover:text-red-400 shrink-0 bp"><i class="fa-solid fa-stop text-[.4rem]"></i></button></div>';
+    });
+    if(activeRuns.length>8)h+='<div class="text-[.55rem] text-mut opacity-60">+ '+(activeRuns.length-8)+' autre(s)</div>';
+    h+='</div></div>';
+  }
+
+  /* Sequences list */
+  if(!SEQ2.length){
+    h+='<div class="bg-surface border border-bdr rounded-2xl p-10 text-center"><i class="fa-solid fa-diagram-project text-3xl text-mut mb-3 block opacity-40"></i><p class="text-mut text-sm">Aucune s\u00e9quence. Cr\u00e9e ta premi\u00e8re s\u00e9quence multi-canal.</p></div>';
+  }else{
+    h+='<div class="flex flex-col gap-3">';
+    SEQ2.forEach(function(seq){
+      var isOn=seq.enabled!==false&&seq.status==='active';
+      var ac=SEQ2_RUNS.filter(function(r){return r.sequenceId===seq.id&&r.status==='active';}).length;
+      var types=new Set();
+      (seq.steps||[]).forEach(function(s){types.add(s.type||'email');});
+      var typeTags=[];
+      types.forEach(function(t){var ti=seq2StepTypeInfo(t);typeTags.push('<span style="color:'+ti.color+';background:'+ti.bg+'" class="seq2-step-type"><i class="fa-solid '+ti.icon+'"></i> '+ti.label+'</span>');});
+      h+='<div class="seq2-launch-card">';
+      h+='<div class="w-10 h-10 rounded-lg '+(isOn?'bg-accS text-acc':'bg-sAlt text-mut')+' flex items-center justify-center shrink-0"><i class="fa-solid fa-diagram-project"></i></div>';
+      h+='<div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap"><span class="text-sm font-medium">'+escHtml(seq.name)+'</span>';
+      h+='<span class="text-[.55rem] px-1.5 py-0.5 rounded-full '+(isOn?'bg-okS text-ok':'bg-sAlt text-mut')+'">'+(isOn?'Active':'Draft')+'</span>';
+      if(ac)h+='<span class="text-[.55rem] px-1.5 py-0.5 rounded-full bg-infS text-inf">'+ac+' en cours</span>';
+      h+='</div>';
+      h+='<div class="text-xs text-mut mt-0.5">'+(seq.steps||[]).length+' \u00e9tape'+((seq.steps||[]).length>1?'s':'')+' \u00b7 '+typeTags.join(' ')+'</div>';
+      if(seq.description)h+='<div class="text-[.65rem] text-mut/60 mt-1 truncate">'+escHtml(seq.description)+'</div>';
+      h+='</div>';
+      h+='<div class="flex items-center gap-1 shrink-0">';
+      h+='<button onclick="seq2LaunchModal(\''+seq.id+'\')" class="h-7 px-2.5 rounded-lg bg-okS text-ok text-[.6rem] font-medium hover:bg-okS/70 bp"><i class="fa-solid fa-play mr-1"></i>Lancer</button>';
+      h+='<button onclick="seq2EditorModal(\''+seq.id+'\')" class="w-7 h-7 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp" data-tip="Modifier"><i class="fa-solid fa-pen text-[.5rem]"></i></button>';
+      h+='<button onclick="seq2ToggleEnabled(\''+seq.id+'\')" class="w-7 h-7 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp" data-tip="'+(isOn?'D\u00e9sactiver':'Activer')+'"><i class="fa-solid '+(isOn?'fa-pause':'fa-play')+' text-[.5rem]"></i></button>';
+      h+='<button onclick="seq2Duplicate(\''+seq.id+'\')" class="w-7 h-7 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt bp" data-tip="Dupliquer"><i class="fa-solid fa-copy text-[.5rem]"></i></button>';
+      h+='<button onclick="seq2Delete(\''+seq.id+'\')" class="w-7 h-7 rounded-lg text-mut hover:text-red-400 bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-[.5rem]"></i></button>';
+      h+='</div></div>';
+    });
+    h+='</div>';
+  }
+  return h;
 }
 
 /* Fallback for other tabs (campaigns, content, whatsapp, social) */
@@ -7823,6 +8070,542 @@ window.rMarketing=function(){
     return;
   }
   _prevRMarketingOverride();
+};
+
+
+
+/* ===== MARKETING V2 — SEQUENCE V2 EDITOR ===== */
+window.seq2EditorModal=function(seqId){
+  var isNew=!seqId;
+  var seq;
+  if(isNew){
+    seq={id:'',name:'',description:'',enabled:true,status:'active',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),
+      steps:[{id:'step_0',type:'email',delay:0,subject:'',body:'<p>Bonjour {{prenom}},</p><p>Votre message ici...</p><p>Cordialement,<br>{{signature}}</p>',waMessage:'',taskTitle:'',taskDesc:'',waitDays:3,stageTarget:'lead',tagAction:'add',tagName:'',conditionType:'always',conditionStepId:'',conditionValue:'',nextStepId:null,altStepId:null,stopIfReplied:true}],
+      globalRules:{stopOnReply:true,stopOnMeetingBooked:true,stopOnStage:['won'],cooldownDays:30,maxStepsPerContact:15}
+    };
+  }else{
+    seq=JSON.parse(JSON.stringify(SEQ2.find(function(s){return s.id===seqId;})));
+  }
+  if(!seq){toast('S\u00e9quence introuvable','err');return;}
+  if(!seq.globalRules)seq.globalRules={stopOnReply:true,stopOnMeetingBooked:true,stopOnStage:['won'],cooldownDays:30,maxStepsPerContact:15};
+  window._seq2Edit=seq;
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-5"><i class="fa-solid fa-diagram-project text-acc mr-2"></i>'+(isNew?'Nouvelle s\u00e9quence multi-canal':'Modifier : '+escHtml(seq.name))+'</h2>';
+  h+='<div class="grid grid-cols-2 gap-4 mb-5">';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Nom</label><input type="text" id="seq2Name" class="fi" placeholder="Ex: Prospection B2B Standard" value="'+escHtml(seq.name)+'"></div>';
+  h+='<div><label class="text-xs text-mut block mb-1.5">Description</label><input type="text" id="seq2Desc" class="fi" placeholder="Objectif..." value="'+escHtml(seq.description||'')+'"></div>';
+  h+='</div>';
+  h+='<div class="mb-5"><label class="text-xs font-semibold text-mut block mb-3"><i class="fa-solid fa-list-ol mr-1"></i>\u00c9tapes <span class="font-normal opacity-60">('+(seq.steps?seq.steps.length:0)+')</span></label>';
+  (seq.steps||[]).forEach(function(step,si){
+    var ti=seq2StepTypeInfo(step.type);
+    h+='<div class="seq2-step" data-step-idx="'+si+'">';
+    h+='<div class="seq2-step-head">';
+    h+='<span class="seq2-step-num">'+(si+1)+'</span>';
+    h+='<span class="seq2-step-type seq2-type-'+step.type+'" id="seq2TypeBadge_'+si+'"><i class="fa-solid '+ti.icon+' mr-1"></i>'+ti.label+'</span>';
+    if(step.conditionType&&step.conditionType!=='always'){
+      h+='<span class="seq2-cond-badge"><i class="fa-solid fa-code-branch mr-1"></i>'+step.conditionType.replace(/_/g,' ')+'</span>';
+    }
+    h+='<div class="seq2-step-actions">';
+    if(seq.steps.length>1){
+      if(si>0)h+='<button onclick="seq2MoveStep('+si+',-1)" class="w-6 h-6 rounded text-mut hover:text-txt bp"><i class="fa-solid fa-chevron-up text-[.5rem]"></i></button>';
+      if(si<seq.steps.length-1)h+='<button onclick="seq2MoveStep('+si+',1)" class="w-6 h-6 rounded text-mut hover:text-txt bp"><i class="fa-solid fa-chevron-down text-[.5rem]"></i></button>';
+    }
+    h+='<button onclick="seq2DeleteStep('+si+')" class="w-6 h-6 rounded text-mut hover:text-red-400 bp"><i class="fa-solid fa-trash text-[.5rem]"></i></button>';
+    h+='</div></div>';
+
+    /* Step type selector */
+    h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Type d\u2019\u00e9tape</label>';
+    h+='<select id="seq2StepType_'+si+'" class="fi text-xs" onchange="seq2ChangeStepType('+si+',this.value)">';
+    SEQ2_STEP_TYPES.forEach(function(t){h+='<option value="'+t.key+'"'+(step.type===t.key?' selected':'')+'>'+t.label+'</option>';});
+    h+='</select></div>';
+
+    /* Type-specific fields */
+    if(step.type==='email'){
+      if(si>0)h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">D\u00e9lai (jours)</label><input type="number" id="seq2Delay_'+si+'" class="fi text-xs w-20" min="0" max="90" value="'+(step.delay||3)+'" onchange="window._seq2Edit.steps['+si+'].delay=parseInt(this.value)||0"></div>';
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Objet</label><input type="text" id="seq2Subj_'+si+'" class="fi text-xs" value="'+escHtml(step.subject||'')+'" oninput="window._seq2Edit.steps['+si+'].subject=this.value"></div>';
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Corps du message</label><textarea id="seq2Body_'+si+'" class="fi text-xs" rows="3" oninput="window._seq2Edit.steps['+si+'].body=this.value">'+escHtml(step.body||'')+'</textarea></div>';
+      h+='<div class="text-[.55rem] text-mut mb-2">Variables: <code class="bg-sAlt px-1 rounded">{{prenom}}</code> <code class="bg-sAlt px-1 rounded">{{nom}}</code> <code class="bg-sAlt px-1 rounded">{{entreprise}}</code> <code class="bg-sAlt px-1 rounded">{{signature}}</code></div>';
+      h+='<label class="flex items-center gap-2 text-[.6rem] text-mut cursor-pointer"><input type="checkbox" '+(step.stopIfReplied?'checked':'')+' onchange="window._seq2Edit.steps['+si+'].stopIfReplied=this.checked" class="w-3.5 h-3.5 accent-acc"><span>Arr\u00eater si r\u00e9ponse re\u00e7ue</span></label>';
+    }
+    if(step.type==='whatsapp'){
+      if(si>0)h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">D\u00e9lai (jours)</label><input type="number" id="seq2Delay_'+si+'" class="fi text-xs w-20" min="0" max="90" value="'+(step.delay||3)+'" onchange="window._seq2Edit.steps['+si+'].delay=parseInt(this.value)||0"></div>';
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Message WhatsApp</label><textarea id="seq2WaMsg_'+si+'" class="fi text-xs" rows="3" oninput="window._seq2Edit.steps['+si+'].waMessage=this.value">'+escHtml(step.waMessage||'')+'</textarea></div>';
+      h+='<div class="text-[.55rem] text-mut">Ouvre wa.me avec le message pr\u00e9-rempli. Tracking manuel du statut.</div>';
+    }
+    if(step.type==='wait'){
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Dur\u00e9e d\u2019attente (jours)</label><input type="number" id="seq2Wait_'+si+'" class="fi text-xs w-20" min="1" max="90" value="'+(step.waitDays||3)+'" onchange="window._seq2Edit.steps['+si+'].waitDays=parseInt(this.value)||3"></div>';
+    }
+    if(step.type==='task'){
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Titre de la t\u00e2che</label><input type="text" id="seq2TaskTitle_'+si+'" class="fi text-xs" value="'+escHtml(step.taskTitle||'')+'" oninput="window._seq2Edit.steps['+si+'].taskTitle=this.value"></div>';
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Description</label><textarea id="seq2TaskDesc_'+si+'" class="fi text-xs" rows="2" oninput="window._seq2Edit.steps['+si+'].taskDesc=this.value">'+escHtml(step.taskDesc||'')+'</textarea></div>';
+    }
+    if(step.type==='stage_move'){
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Stade cible</label><select id="seq2StageTarget_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].stageTarget=this.value">';
+      FUNNEL_STAGES.forEach(function(s){h+='<option value="'+s.key+'"'+(step.stageTarget===s.key?' selected':'')+'>'+s.label+'</option>';});
+      h+='</select></div>';
+    }
+    if(step.type==='tag'){
+      h+='<div class="mb-3 grid grid-cols-2 gap-3"><div><label class="text-[.6rem] text-mut block mb-1">Action</label><select id="seq2TagAction_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].tagAction=this.value"><option value="add"'+(step.tagAction==='add'?' selected':'')+'>Ajouter</option><option value="remove"'+(step.tagAction==='remove'?' selected':'')+'>Retirer</option></select></div>';
+      h+='<div><label class="text-[.6rem] text-mut block mb-1">Tag</label><input type="text" id="seq2TagName_'+si+'" class="fi text-xs" value="'+escHtml(step.tagName||'')+'" oninput="window._seq2Edit.steps['+si+'].tagName=this.value"></div></div>';
+    }
+    if(step.type==='condition'){
+      h+='<div class="mb-3"><label class="text-[.6rem] text-mut block mb-1">Type de condition</label><select id="seq2CondType_'+si+'" class="fi text-xs" onchange="window._seq2Edit.steps['+si+'].conditionType=this.value;seq2EditorModal(window._seq2Edit.id||null,true)">';
+      SEQ2_COND_TYPES.forEach(function(c){h+='<option value="'+c+'"'+(step.conditionType===c?' selected':'')+'>'+c.replace(/_/g,' ')+'</option>';});
+      h+='</select></div>';
+    }
+
+    /* Condition fields for any non-condition step */
+    if(step.type!=='condition'){
+      h+='<div class="mt-3 pt-3 border-t border-bdr/50"><label class="text-[.55rem] text-mut block mb-1">Condition de d\u00e9clenchement (optionnel)</label>';
+      h+='<select id="seq2Cond_'+si+'" class="fi text-[.65rem] mb-2" onchange="window._seq2Edit.steps['+si+'].conditionType=this.value">';
+      h+='<option value="always"'+(step.conditionType==='always'?' selected':'')+'>Toujours (aucune condition)</option>';
+      SEQ2_COND_TYPES.slice(1).forEach(function(c){h+='<option value="'+c+'"'+(step.conditionType===c?' selected':'')+'>'+c.replace(/_/g,' ')+'</option>';});
+      h+='</select></div>';
+    }
+    h+='</div>';
+  });
+  h+='<button onclick="seq2AddStep()" class="w-full h-9 rounded-xl border-2 border-dashed border-bdr text-mut hover:text-acc hover:border-acc/40 text-xs font-medium transition-colors bp"><i class="fa-solid fa-plus mr-1.5"></i>Ajouter une \u00e9tape</button>';
+
+  /* Global Rules */
+  var gr=seq.globalRules||{};
+  h+='<div class="seq2-global-rules mt-5"><h4 class="text-[.7rem] font-semibold text-mut mb-2 font-disp uppercase tracking-wide"><i class="fa-solid fa-gear mr-1"></i>R\u00e8gles globales</h4>';
+  h+='<label><input type="checkbox" '+(gr.stopOnReply?'checked':'')+' onchange="window._seq2Edit.globalRules.stopOnReply=this.checked"><span>Arr\u00eater si r\u00e9ponse re\u00e7ue</span></label>';
+  h+='<label><input type="checkbox" '+(gr.stopOnMeetingBooked?'checked':'')+' onchange="window._seq2Edit.globalRules.stopOnMeetingBooked=this.checked"><span>Arr\u00eater si RDV pris</span></label>';
+  h+='<label class="flex items-center gap-2"><span>D\u00e9lai de cooldown</span><input type="number" class="fi text-xs w-16" min="0" max="365" value="'+(gr.cooldownDays||30)+'" onchange="window._seq2Edit.globalRules.cooldownDays=parseInt(this.value)||30"><span>jours</span></label>';
+  h+='</div>';
+
+  h+='<div class="flex justify-end gap-3 mt-5">';
+  h+='<button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
+  h+='<button onclick="seq2Save()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp"><i class="fa-solid fa-check mr-1.5"></i>Enregistrer</button>';
+  h+='</div></div>';
+  opM(h);
+};
+
+window.seq2ChangeStepType=function(si,type){
+  var step=window._seq2Edit.steps[si];
+  if(!step)return;
+  step.type=type;
+  /* Set sensible defaults for new type */
+  if(type==='wait'&&!step.waitDays)step.waitDays=3;
+  if(type==='email'){step.stopIfReplied=true;}
+  /* Re-render */
+  seq2EditorModal(window._seq2Edit.id||null,true);
+};
+
+window.seq2AddStep=function(){
+  if(!window._seq2Edit)return;
+  var lastDelay=(window._seq2Edit.steps.length?window._seq2Edit.steps[window._seq2Edit.steps.length-1].delay:3)||3;
+  window._seq2Edit.steps.push({
+    id:'step_'+Date.now().toString(36),type:'email',delay:lastDelay,subject:'',body:'',waMessage:'',
+    taskTitle:'',taskDesc:'',waitDays:3,stageTarget:'lead',tagAction:'add',tagName:'',
+    conditionType:'always',conditionStepId:'',conditionValue:'',nextStepId:null,altStepId:null,stopIfReplied:true
+  });
+  seq2EditorModal(window._seq2Edit.id||null,true);
+};
+
+window.seq2DeleteStep=function(si){
+  if(!window._seq2Edit||window._seq2Edit.steps.length<=1)return;
+  window._seq2Edit.steps.splice(si,1);
+  seq2EditorModal(window._seq2Edit.id||null,true);
+};
+
+window.seq2MoveStep=function(si,dir){
+  if(!window._seq2Edit)return;
+  var nsi=si+dir;if(nsi<0||nsi>=window._seq2Edit.steps.length)return;
+  var tmp=window._seq2Edit.steps[si];window._seq2Edit.steps[si]=window._seq2Edit.steps[nsi];window._seq2Edit.steps[nsi]=tmp;
+  seq2EditorModal(window._seq2Edit.id||null,true);
+};
+
+window.seq2Save=function(){
+  var seq=window._seq2Edit;if(!seq)return;
+  seq.name=(document.getElementById('seq2Name')||{}).value||'';
+  seq.description=(document.getElementById('seq2Desc')||{}).value||'';
+  seq.steps.forEach(function(step,si){
+    if(document.getElementById('seq2StepType_'+si))step.type=document.getElementById('seq2StepType_'+si).value;
+    if(document.getElementById('seq2Delay_'+si))step.delay=parseInt(document.getElementById('seq2Delay_'+si).value)||0;
+    if(document.getElementById('seq2Subj_'+si))step.subject=document.getElementById('seq2Subj_'+si).value||'';
+    if(document.getElementById('seq2Body_'+si))step.body=document.getElementById('seq2Body_'+si).value||'';
+    if(document.getElementById('seq2WaMsg_'+si))step.waMessage=document.getElementById('seq2WaMsg_'+si).value||'';
+    if(document.getElementById('seq2Wait_'+si))step.waitDays=parseInt(document.getElementById('seq2Wait_'+si).value)||3;
+    if(document.getElementById('seq2TaskTitle_'+si))step.taskTitle=document.getElementById('seq2TaskTitle_'+si).value||'';
+    if(document.getElementById('seq2TaskDesc_'+si))step.taskDesc=document.getElementById('seq2TaskDesc_'+si).value||'';
+    if(document.getElementById('seq2StageTarget_'+si))step.stageTarget=document.getElementById('seq2StageTarget_'+si).value||'lead';
+    if(document.getElementById('seq2TagAction_'+si))step.tagAction=document.getElementById('seq2TagAction_'+si).value||'add';
+    if(document.getElementById('seq2TagName_'+si))step.tagName=document.getElementById('seq2TagName_'+si).value||'';
+    if(document.getElementById('seq2Cond_'+si))step.conditionType=document.getElementById('seq2Cond_'+si).value||'always';
+    if(document.getElementById('seq2CondType_'+si))step.conditionType=document.getElementById('seq2CondType_'+si).value||'always';
+  });
+  if(!seq.name.trim()){toast('Nom requis','err');return;}
+  seq.updatedAt=new Date().toISOString();
+  var idx=SEQ2.findIndex(function(s){return s.id===seq.id;});
+  if(idx>=0){SEQ2[idx]=seq;}
+  else{seq.id=seq.id||seq2NewId();seq.createdAt=new Date().toISOString();SEQ2.push(seq);}
+  svSeq2();clsM();toast('S\u00e9quence enregistr\u00e9e','ok');
+  if(S.mkv==='sequences')rMarketingV2();
+};
+
+window.seq2Delete=function(id){
+  SEQ2=SEQ2.filter(function(s){return s.id!==id;});
+  SEQ2_RUNS=SEQ2_RUNS.filter(function(r){return r.sequenceId!==id;});
+  svSeq2();svSeqRuns2();toast('S\u00e9quence supprim\u00e9e','info');
+  if(S.mkv==='sequences')rMarketingV2();
+};
+
+window.seq2ToggleEnabled=function(id){
+  var seq=SEQ2.find(function(s){return s.id===id;});
+  if(seq){seq.enabled=!seq.enabled;seq.status=seq.enabled?'active':'draft';svSeq2();if(S.mkv==='sequences')rMarketingV2();}
+};
+
+window.seq2Duplicate=function(id){
+  var src=SEQ2.find(function(s){return s.id===id;});if(!src)return;
+  var copy=JSON.parse(JSON.stringify(src));
+  copy.id=seq2NewId();copy.name=src.name+' (copie)';copy.createdAt=new Date().toISOString();copy.updatedAt=copy.createdAt;copy.enabled=false;copy.status='draft';
+  SEQ2.push(copy);svSeq2();toast('S\u00e9quence dupliqu\u00e9e','ok');
+  if(S.mkv==='sequences')rMarketingV2();
+};
+
+/* ===== LAUNCH SEQUENCE V2 ===== */
+window.seq2LaunchModal=function(seqId){
+  var seq=SEQ2.find(function(s){return s.id===seqId;});
+  if(!seq){toast('S\u00e9quence introuvable','err');return;}
+  window._seq2Launch={seqId:seqId,_selTags:[],_mode:'pipeline'};
+  var selTags=window._seq2Launch._selTags;
+  var contacts=seq2GetLaunchContacts(selTags);
+  var h='<div class="p-6 max-h-[88vh] overflow-y-auto">';
+  h+='<h2 class="font-disp font-bold text-lg mb-2"><i class="fa-solid fa-play text-ok mr-2"></i>Lancer : '+escHtml(seq.name)+'</h2>';
+  if(seq.description)h+='<p class="text-xs text-mut mb-4">'+escHtml(seq.description)+'</p>';
+
+  /* Step summary */
+  h+='<div class="bg-sAlt/50 border border-bdr rounded-xl p-3 mb-4">';
+  (seq.steps||[]).forEach(function(s,i){
+    var ti=seq2StepTypeInfo(s.type);
+    h+='<div class="text-[.6rem] text-mut flex items-center gap-2 py-0.5">';
+    h+='<span class="seq2-step-type seq2-type-'+s.type+'"><i class="fa-solid '+ti.icon+'"></i> '+ti.label+'</span>';
+    if(s.type==='email')h+=escHtml(s.subject||'(sans objet)');
+    else if(s.type==='whatsapp')h+=escHtml((s.waMessage||'').substring(0,40));
+    else if(s.type==='wait')h+='Attendre '+s.waitDays+'j';
+    else if(s.type==='task')h+=escHtml(s.taskTitle||'T\u00e2che');
+    else if(s.type==='stage_move')h+='Stade \u2192 '+funnelStageInfo(s.stageTarget).label;
+    else if(s.type==='tag')h+=(s.tagAction==='add'?'+':'-')+' '+(s.tagName||'?');
+    else if(s.type==='condition')h+='Si '+s.conditionType.replace(/_/g,' ');
+    if(s.conditionType&&s.conditionType!=='always')h+=' <span class="opacity-50">[si '+s.conditionType+']</span>';
+    h+='</div>';
+  });
+  h+='</div>';
+
+  /* Recipient selection */
+  var groupedTags=mkGetGroupedTags();
+  h+='<div class="mb-4"><label class="text-xs font-semibold text-mut block mb-2"><i class="fa-solid fa-users mr-1"></i>Destinataires</label>';
+  if(window.MK_GROUPS&&window.MK_GROUPS.length){
+    h+='<div class="mb-2 flex flex-wrap gap-1.5">';
+    window.MK_GROUPS.forEach(function(g){
+      h+='<button type="button" onclick="seq2LoadGroup(\''+g.id+'\')" class="px-2.5 py-1 rounded-full text-[.6rem] font-medium bp bg-sAlt border border-bdr text-mut hover:text-txt"><i class="fa-solid fa-layer-group text-[.5rem] mr-1"></i>'+escHtml(g.name)+'</button>';
+    });
+    h+='</div>';
+  }
+  if(groupedTags.length){
+    groupedTags.forEach(function(cat){
+      h+='<div class="mb-2"><div class="text-[.6rem] text-mut mb-1">'+escHtml(cat.label)+'</div><div class="flex flex-wrap gap-1.5">';
+      cat.tags.forEach(function(t){
+        var act=selTags.indexOf(t)!==-1;
+        h+='<button type="button" onclick="seq2ToggleTag(\''+escHtml(t).replace(/'/g,'')+'\')" class="px-2.5 py-1 rounded-full text-[.6rem] font-medium bp '+(act?'bg-acc text-black':'bg-sAlt border border-bdr text-mut hover:text-txt')+'">'+escHtml(t)+'</button>';
+      });
+      h+='</div></div>';
+    });
+  }
+  h+='</div>';
+
+  if(contacts.length){
+    h+='<div class="bg-sAlt/50 border border-bdr rounded-xl max-h-28 overflow-y-auto mb-4">';
+    contacts.slice(0,20).forEach(function(c){
+      h+='<div class="flex items-center gap-2 px-3 py-1 border-b border-bdr/50 last:border-0"><div class="w-5 h-5 rounded bg-infS text-inf flex items-center justify-center text-[.5rem] font-bold shrink-0">'+escHtml((c.firstName||'').charAt(0)+(c.lastName||'').charAt(0))+'</div><div class="flex-1 min-w-0"><span class="text-[.6rem] font-medium truncate block">'+escHtml(contactDisplayName(c))+'</span><span class="text-[.55rem] text-mut">'+escHtml(c.email||c.phone||'')+'</span></div></div>';
+    });
+    if(contacts.length>20)h+='<div class="text-[.55rem] text-mut text-center py-1">+ '+(contacts.length-20)+' autres</div>';
+    h+='</div>';
+  }
+
+  h+='<div class="flex justify-end gap-3">';
+  h+='<button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>';
+  h+='<button onclick="seq2ExecuteLaunch(\''+seq.id+'\')" class="h-10 px-5 rounded-xl bg-ok hover:bg-ok/80 text-black text-sm font-semibold transition-colors bp" '+(contacts.length?'':'disabled style="opacity:.5"')+'><i class="fa-solid fa-rocket mr-1.5"></i>Lancer ('+contacts.length+')</button>';
+  h+='</div></div>';
+  opM(h);
+};
+
+function seq2GetLaunchContacts(selTags){
+  var all=[];
+  FOLDERS.forEach(function(f){
+    var contacts=(D[f.key]&&D[f.key].contacts)||[];
+    contacts.forEach(function(c){
+      if(selTags.length){
+        var hasTag=selTags.some(function(t){return(c.tags||[]).indexOf(t)!==-1;});
+        if(!hasTag)return;
+      }
+      if(c.email||c.phone)all.push(c);
+    });
+  });
+  return all;
+}
+
+window.seq2ToggleTag=function(tag){
+  if(!window._seq2Launch)window._seq2Launch={seqId:'',_selTags:[],_mode:'pipeline'};
+  var arr=window._seq2Launch._selTags;var idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
+  seq2LaunchModal(window._seq2Launch.seqId);
+};
+window.seq2LoadGroup=function(gid){
+  var g=window.MK_GROUPS.find(function(g){return g.id===gid;});
+  if(g){window._seq2Launch._selTags=g.tags.slice();seq2LaunchModal(window._seq2Launch.seqId);}
+};
+
+window.seq2ExecuteLaunch=async function(seqId){
+  var seq=SEQ2.find(function(s){return s.id===seqId;});if(!seq)return;
+  var contacts=seq2GetLaunchContacts(window._seq2Launch._selTags||[]);
+  if(!contacts.length){toast('Aucun contact s\u00e9lectionn\u00e9','err');return;}
+  var signature=window.MK_SIGNATURE||'';
+  var launched=0,errors=0;
+  toast('Lancement pour '+contacts.length+' contact(s)...','info');clsM();
+  for(var i=0;i<contacts.length;i++){
+    try{
+      var c=contacts[i];var runId=seq2RunId();
+      var run={
+        id:runId,sequenceId:seqId,sequenceName:seq.name,
+        contactId:c.id,contactEmail:c.email||'',contactName:contactDisplayName(c),
+        folderKey:FOLDERS.find(function(f){return(D[f.key]&&D[f.key].contacts||[]).indexOf(c)!==-1;})||{key:'?'},
+        currentStepId:null,currentStepIndex:0,
+        status:'active',startedAt:new Date().toISOString(),
+        nextStepAt:new Date().toISOString(),stepLog:[]
+      };
+      /* Execute first step */
+      var step=seq.steps[0];var stepExecuted=false;
+      if(step.type==='email'&&c.email&&gcalHasValidToken()){
+        var personalized=mkPersonalizeBody((step.body||'').replace(/\{\{signature\}\}/g,signature),c);
+        var encodedSubject=typeof gmailEncodeSubject==='function'?gmailEncodeSubject(step.subject||''):'=?UTF-8?B?'+btoa(unescape(encodeURIComponent(step.subject||'')))+'?=';
+        var dateStr=new Date().toUTCString();
+        var mimeLines=['To: '+c.email,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
+        var rawBody=mimeLines.join('\r\n')+personalized;
+        var encoded=btoa(unescape(encodeURIComponent(rawBody))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+        var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded})});
+        if(r.ok){
+          var sentData=await r.json();
+          window.MK_ELOG.push({id:Date.now()+i,to:c.email,subject:step.subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(c),gmailMessageId:sentData&&sentData.id?sentData.id:'',threadId:sentData&&sentData.threadId?sentData.threadId:'',mode:'sequence',campaignName:'S\u00e9quence: '+seq.name,sequenceId:seqId,sequenceRunId:runId});
+          run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'sent',channel:'email'});
+          stepExecuted=true;launched++;
+        }else{errors++;}
+      }else if(step.type==='email'&&!c.email){errors++;}
+      else if(step.type==='whatsapp'){
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
+        stepExecuted=true;launched++;
+      }else if(step.type==='wait'){
+        run.nextStepAt=new Date(Date.now()+(step.waitDays||3)*86400000).toISOString();
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'waiting',channel:'wait'});
+        run.currentStepIndex=1;stepExecuted=true;launched++;
+      }else if(step.type==='task'&&step.taskTitle){
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'task_created',channel:'task'});
+        run.currentStepIndex=1;stepExecuted=true;launched++;
+      }else if(step.type==='stage_move'){
+        funnelMoveTo(PIPELINE.find(function(f){return f.contactId===c.id;})&&PIPELINE.find(function(f){return f.contactId===c.id;}).id||'',step.stageTarget);
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'stage_moved',channel:'funnel'});
+        run.currentStepIndex=1;stepExecuted=true;launched++;
+      }else if(step.type==='tag'){
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'tag_applied',channel:'tag'});
+        run.currentStepIndex=1;stepExecuted=true;launched++;
+      }else if(step.type==='condition'){
+        run.currentStepIndex=1;stepExecuted=true;launched++;
+      }
+      if(!stepExecuted&&step.type!=='email'){run.currentStepIndex=1;launched++;}
+      /* Calculate next step */
+      if(seq.steps.length>1&&run.currentStepIndex<seq.steps.length){
+        var nextStep=seq.steps[run.currentStepIndex];
+        var delay=nextStep.type==='wait'?(nextStep.waitDays||3):(nextStep.delay||3);
+        if(run.currentStepIndex===0||nextStep.type!=='wait'){
+          run.nextStepAt=new Date(Date.now()+delay*86400000).toISOString();
+        }
+      }else{run.status='completed';run.nextStepAt=null;}
+      SEQ2_RUNS.push(run);
+      /* Update funnel: link sequence to contact */
+      var fEntry=PIPELINE.find(function(f){return f.contactId===c.id;});
+      if(fEntry){fEntry.activeSequenceId=seqId;fEntry.activeSequenceRunId=runId;svFunnel();}
+    }catch(e){errors++;console.error('[seq2Launch]',e);}
+    if(i<contacts.length-1)await new Promise(function(res){setTimeout(res,200);});
+  }
+  svSeqRuns2();svElog();
+  if(S.mkv==='sequences')rMarketingV2();
+  else if(S.mkv==='pipeline')rMarketingV2();
+  toast(launched+' contact(s) dans la s\u00e9quence'+(errors?' ('+errors+' \u00e9chec'+(errors>1?'s':'')+')':''),'ok');
+};
+
+/* ===== V2 SEQUENCE SCHEDULER ===== */
+window.seq2Scheduler=async function(){
+  if(!gcalHasValidToken())return;
+  var now=Date.now();
+  var due=SEQ2_RUNS.filter(function(r){return r.status==='active'&&r.nextStepAt&&new Date(r.nextStepAt).getTime()<=now;});
+  if(!due.length)return;
+  var signature=window.MK_SIGNATURE||'';
+  var didSomething=false;
+  for(var i=0;i<due.length;i++){
+    var run=due[i];
+    var seq=SEQ2.find(function(s){return s.id===run.sequenceId;});
+    if(!seq||!seq.steps||run.currentStepIndex>=seq.steps.length){run.status='completed';run.nextStepAt=null;svSeqRuns2();didSomething=true;continue;}
+    if(seq.enabled===false){run.status='paused';svSeqRuns2();didSomething=true;continue;}
+    var step=seq.steps[run.currentStepIndex];
+    /* Check global stop rules */
+    if(seq.globalRules&&seq.globalRules.stopOnReply){
+      var wasReplied=(window.MK_ELOG||[]).some(function(e){return e.sequenceRunId===run.id&&e.replied;});
+      if(wasReplied){run.status='completed';run.nextStepAt=null;svSeqRuns2();didSomething=true;continue;}
+    }
+    try{
+      var contact=seq2GetContact(run);
+      var stepExecuted=false;
+      if(step.type==='email'&&run.contactEmail){
+        var c={email:run.contactEmail,firstName:'',lastName:'',company:'',title:''};
+        if(contact)c=contact;
+        var personalized=mkPersonalizeBody((step.body||'').replace(/\{\{signature\}\}/g,signature),c);
+        var encodedSubject=typeof gmailEncodeSubject==='function'?gmailEncodeSubject(step.subject||''):'=?UTF-8?B?'+btoa(unescape(encodeURIComponent(step.subject||'')))+'?=';
+        var dateStr=new Date().toUTCString();
+        var mimeLines=['To: '+run.contactEmail,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
+        var rawBody=mimeLines.join('\r\n')+personalized;
+        var encoded=btoa(unescape(encodeURIComponent(rawBody))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+        var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded})});
+        if(r.ok){
+          var sentData=await r.json();
+          window.MK_ELOG.push({id:Date.now(),to:run.contactEmail,subject:step.subject,status:'sent',date:new Date().toISOString(),contactName:run.contactName,gmailMessageId:sentData&&sentData.id?sentData.id:'',threadId:sentData&&sentData.threadId?sentData.threadId:'',mode:'sequence',campaignName:'S\u00e9quence: '+seq.name,sequenceId:seq.id,sequenceRunId:run.id});
+          run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'sent',channel:'email'});
+          stepExecuted=true;
+        }
+      }else if(step.type==='whatsapp'){
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp'});
+        stepExecuted=true;
+      }else if(step.type==='wait'){
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'waiting',channel:'wait'});
+        stepExecuted=true;
+      }else if(step.type==='stage_move'){
+        var fEntry=PIPELINE.find(function(f){return f.contactId===run.contactId;});
+        if(fEntry)funnelMoveTo(fEntry.id,step.stageTarget);
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'stage_moved',channel:'funnel'});
+        stepExecuted=true;
+      }else if(step.type==='tag'&&contact){
+        if(step.tagName){
+          if(step.tagAction==='add'&&!contact.tags)contact.tags=[];
+          if(step.tagAction==='add'&&contact.tags.indexOf(step.tagName)===-1)contact.tags.push(step.tagName);
+          if(step.tagAction==='remove'&&contact.tags)contact.tags=contact.tags.filter(function(t){return t!==step.tagName;});
+          svData();
+        }
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'tag_applied',channel:'tag'});
+        stepExecuted=true;
+      }else if(step.type==='task'){
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'task_created',channel:'task'});
+        stepExecuted=true;
+      }else if(step.type==='condition'){
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'condition_eval',channel:'condition'});
+        stepExecuted=true;
+      }
+      if(stepExecuted){
+        run.currentStepIndex++;
+        if(run.currentStepIndex>=seq.steps.length){run.status='completed';run.nextStepAt=null;}
+        else{
+          var nextStep=seq.steps[run.currentStepIndex];
+          var delay=nextStep.type==='wait'?(nextStep.waitDays||3):(nextStep.delay||3);
+          run.nextStepAt=new Date(Date.now()+delay*86400000).toISOString();
+        }
+        svElog();svSeqRuns2();didSomething=true;
+      }
+    }catch(e){console.error('[seq2Scheduler]',e);}
+  }
+  if(didSomething&&S.mkv==='sequences')rMarketingV2();
+};
+
+/* Replace v1 scheduler with v2 (keep v1 alive for v1 sequences) */
+setInterval(function(){window.seq2Scheduler();window.mkSeqScheduler&&window.mkSeqScheduler();},60000);
+setTimeout(function(){window.seq2Scheduler();},5000);
+
+/* Run management */
+window.seq2StopRun=function(id){var r=SEQ2_RUNS.find(function(x){return x.id===id;});if(r){r.status='stopped';r.nextStepAt=null;svSeqRuns2();if(S.mkv==='sequences')rMarketingV2();toast('S\u00e9quence arr\u00eat\u00e9e','info');}};
+window.seq2DeleteRun=function(id){SEQ2_RUNS=SEQ2_RUNS.filter(function(x){return x.id!==id;});svSeqRuns2();if(S.mkv==='sequences')rMarketingV2();};
+
+/* ===== PIPELINE INTEGRATION: Launch sequence from card ===== */
+window.seq2LaunchFromPipeline=function(entryId){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  if(!entry){toast('Entr\u00e9e introuvable','err');return;}
+  var contact=funnelGetContact(entry);
+  if(!contact){toast('Contact introuvable','err');return;}
+  /* Open sequence selector */
+  var seqs=SEQ2.filter(function(s){return s.enabled!==false;});
+  if(!seqs.length){toast('Aucune s\u00e9quence active','err');return;}
+  var h='<div class="p-6"><h2 class="font-disp font-bold text-lg mb-2">Lancer une s\u00e9quence</h2>';
+  h+='<p class="text-xs text-mut mb-4">Pour <strong class="text-txt">'+escHtml(contactDisplayName(contact))+'</strong></p>';
+  h+='<div class="flex flex-col gap-2 mb-4">';
+  seqs.forEach(function(seq){
+    var ti=[];
+    (seq.steps||[]).forEach(function(s){var st=seq2StepTypeInfo(s.type);if(ti.indexOf(st.label)===-1)ti.push(st.label);});
+    h+='<button onclick="seq2LaunchSingle(\''+entry.id+'\',\''+seq.id+'\')" class="bg-surface border border-bdr rounded-xl p-3 text-left hover:border-acc/40 transition-colors bp"><div class="text-sm font-medium">'+escHtml(seq.name)+'</div><div class="text-[.6rem] text-mut mt-1">'+(seq.steps||[]).length+' \u00e9tapes \u00b7 '+ti.join(', ')+'</div></button>';
+  });
+  h+='</div>';
+  h+='<div class="flex justify-end"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button></div></div>';
+  opM(h);
+};
+
+window.seq2LaunchSingle=async function(entryId,seqId){
+  var entry=PIPELINE.find(function(f){return f.id===entryId;});
+  var contact=entry?funnelGetContact(entry):null;
+  if(!entry||!contact){toast('Contact introuvable','err');return;}
+  var seq=SEQ2.find(function(s){return s.id===seqId;});if(!seq)return;
+  clsM();
+  var runId=seq2RunId();
+  var run={
+    id:runId,sequenceId:seqId,sequenceName:seq.name,
+    contactId:contact.id,contactEmail:contact.email||'',contactName:contactDisplayName(contact),folderKey:entry.folderKey,
+    currentStepId:null,currentStepIndex:0,status:'active',startedAt:new Date().toISOString(),
+    nextStepAt:new Date().toISOString(),stepLog:[]
+  };
+  /* Execute first step */
+  var step=seq.steps[0];var signature=window.MK_SIGNATURE||'';
+  if(step.type==='email'&&contact.email&&gcalHasValidToken()){
+    try{
+      var personalized=mkPersonalizeBody((step.body||'').replace(/\{\{signature\}\}/g,signature),contact);
+      var encodedSubject=typeof gmailEncodeSubject==='function'?gmailEncodeSubject(step.subject||''):'=?UTF-8?B?'+btoa(unescape(encodeURIComponent(step.subject||'')))+'?=';
+      var dateStr=new Date().toUTCString();
+      var mimeLines=['To: '+contact.email,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
+      var rawBody=mimeLines.join('\r\n')+personalized;
+      var encoded=btoa(unescape(encodeURIComponent(rawBody))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded})});
+      if(r.ok){
+        var sentData=await r.json();
+        window.MK_ELOG.push({id:Date.now(),to:contact.email,subject:step.subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(contact),gmailMessageId:sentData&&sentData.id?sentData.id:'',threadId:sentData&&sentData.threadId?sentData.threadId:'',mode:'sequence',campaignName:'S\u00e9quence: '+seq.name,sequenceId:seqId,sequenceRunId:runId});
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'sent',channel:'email'});
+        run.currentStepIndex=1;
+        if(seq.steps.length>1){var nd=seq.steps[1].delay||seq.steps[1].waitDays||3;run.nextStepAt=new Date(Date.now()+nd*86400000).toISOString();}
+        else{run.status='completed';run.nextStepAt=null;}
+        svElog();
+      }
+    }catch(e){console.error('[seq2PipelineLaunch]',e);}
+  }else{
+    run.currentStepIndex=1;
+    if(seq.steps.length>1){run.nextStepAt=new Date(Date.now()+(seq.steps[1].delay||3)*86400000).toISOString();}
+    else{run.status='completed';run.nextStepAt=null;}
+  }
+  SEQ2_RUNS.push(run);svSeqRuns2();
+  entry.activeSequenceId=seqId;entry.activeSequenceRunId=runId;
+  if(step.type==='stage_move')funnelMoveTo(entryId,step.stageTarget);
+  svFunnel();
+  toast('S\u00e9quence lanc\u00e9e pour '+contactDisplayName(contact),'ok');
+  pipeCloseDetail();rMarketingV2();
+};
+
+/* ===== UPDATE PIPELINE CARD: add "Launch Sequence" button in detail ===== */
+/* Hook: modify pipeOpenDetail to include launch button — done via override below */
+var _origPipeOpenDetail=window.pipeOpenDetail;
+window.pipeOpenDetail=function(entryId){
+  _origPipeOpenDetail(entryId);
+  /* Inject launch button into the detail panel after it renders */
+  var overlay=document.getElementById('pipeDetailOverlay');
+  if(!overlay)return;
+  var seqSection=overlay.querySelector('.pipe-detail-body > div:nth-child(4)');
+  if(seqSection&&SEQ2.length){
+    var launchBtn=document.createElement('button');
+    launchBtn.className='mt-2 h-8 px-3 rounded-lg bg-okS text-ok text-[.6rem] font-medium hover:bg-okS/70 bp flex items-center gap-1.5';
+    launchBtn.innerHTML='<i class="fa-solid fa-play text-[.5rem]"></i>Lancer une s\u00e9quence';
+    launchBtn.onclick=function(){seq2LaunchFromPipeline(entryId);};
+    seqSection.appendChild(launchBtn);
+  }
 };
 
 
