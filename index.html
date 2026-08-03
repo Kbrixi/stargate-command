@@ -5573,29 +5573,30 @@ window.mkExecuteEnhancedSend=async function(){
   toast('Envoi en cours...','info');
   var sent=0;var errors=0;
   var encodedSubject=typeof gmailEncodeSubject==='function'?gmailEncodeSubject(subject):'=?UTF-8?B?'+btoa(unescape(encodeURIComponent(subject)))+'?=';
+  var dateStr=new Date().toUTCString();
   if(send._bccMode&&!send._testMode){
     try{
       var bccList=recipients.map(function(r){return r.email}).join(', ');
-      var mimeLines=['To: undisclosed-recipients:;','Bcc: '+bccList,'Subject: '+encodedSubject,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
+      var mimeLines=['To: undisclosed-recipients:;','Bcc: '+bccList,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
       var rawBody=mimeLines.join('\r\n')+bodyTemplate.replace(/\{\{signature\}\}/g,signature);
       var encoded=btoa(unescape(encodeURIComponent(rawBody))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
       var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded})});
-      if(r.ok){sent=recipients.length;recipients.forEach(function(rcpt,i){window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt)});});}else errors=recipients.length;
-    }catch(e){errors=recipients.length;console.error(e);}
+      if(r.ok){sent=recipients.length;recipients.forEach(function(rcpt,i){window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt)});});}else{errors=recipients.length;try{var errData=await r.json();console.error('[mkSend BCC error]',errData);toast('Erreur API: '+(errData.error&&errData.error.message?errData.error.message:'HTTP '+r.status),'err');}catch(ex){toast('Erreur envoi BCC (HTTP '+r.status+')','err');}}
+    }catch(e){errors=recipients.length;console.error('[mkSend BCC exception]',e);toast('Erreur envoi: '+e.message,'err');}
   }else{
     for(var i=0;i<recipients.length;i++){
       try{
         var rcpt=recipients[i];
         var personalized=mkPersonalizeBody(bodyTemplate.replace(/\{\{signature\}\}/g,signature),rcpt);
-        var mimeLines2=['To: '+rcpt.email,'Subject: '+encodedSubject,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
+        var mimeLines2=['To: '+rcpt.email,'Subject: '+encodedSubject,'Date: '+dateStr,'Content-Type: text/html; charset=UTF-8','MIME-Version: 1.0','',''];
         var rawBody2=mimeLines2.join('\r\n')+personalized;
         var encoded2=btoa(unescape(encodeURIComponent(rawBody2))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
         var r2=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',{method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},body:JSON.stringify({raw:encoded2})});
         if(r2.ok){
           sent++;
           window.MK_ELOG.push({id:Date.now()+i,to:rcpt.email,subject:subject,status:'sent',date:new Date().toISOString(),contactName:contactDisplayName(rcpt)});
-        }else{errors++;}
-      }catch(e){errors++;console.error(e);}
+        }else{errors++;try{var errData2=await r2.json();console.error('[mkSend error]',errData2);if(i===0)toast('Erreur API: '+(errData2.error&&errData2.error.message?errData2.error.message:'HTTP '+r2.status),'err');}catch(ex2){if(i===0)toast('Erreur envoi (HTTP '+r2.status+')','err');}}
+      }catch(e){errors++;console.error('[mkSend exception]',e);if(i===0)toast('Erreur: '+e.message,'err');}
       if(i<recipients.length-1)await new Promise(function(r){setTimeout(r,200)});
     }
   }
@@ -5618,7 +5619,6 @@ window.mkExecuteEnhancedSend=async function(){
 window.checkEmailReplies=async function(){
   if(!gcalHasValidToken()||!window.MK_ELOG||!window.MK_ELOG.length)return;
   try{
-    var profile=await gcalGetProfile();
     var since=window.MK_ELOG.reduce(function(min,e){return Math.min(min,new Date(e.date).getTime())},Date.now()-7*86400000);
     var sinceStr=new Date(since).toISOString();
     var r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:'+sinceStr.split('T')[0]+'&maxResults=50',{headers:{Authorization:'Bearer '+GCAL.token}});
