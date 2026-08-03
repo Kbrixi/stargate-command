@@ -514,10 +514,10 @@ localStorage.setItem(k,JSON.stringify(parsed));
 /* Recharger les variables en mémoire */
 FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=ldTemplates();GCAL.clientId=localStorage.getItem('cdc_gcal_client_id')||'';
 /* Recharger les données WhatsApp */
-if(typeof window.MK_WA_CAMPAIGNS!=='undefined')window.MK_WA_CAMPAIGNS=ldWaCampaigns();
-if(typeof window.MK_WA_LOG!=='undefined')window.MK_WA_LOG=ldWaLog();
-if(typeof window.MK_MEETINGS!=='undefined')window.MK_MEETINGS=ldMeetings();
-if(typeof window.MK_BOOKING!=='undefined')window.MK_BOOKING=ldBookingSettings();
+if(typeof window.MK_WA_CAMPAIGNS!=='undefined')window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();
+if(typeof window.MK_WA_LOG!=='undefined')window.MK_WA_LOG=window.ldWaLog();
+if(typeof window.MK_MEETINGS!=='undefined')window.MK_MEETINGS=window.ldMeetings();
+if(typeof window.MK_BOOKING!=='undefined')window.MK_BOOKING=window.ldBookingSettings();
 /* Recharger les données du module email si déjà initialisé */
 if(typeof window._onDataSynced==='function')window._onDataSynced();
 /* Recharger aussi les notes si le module existe */
@@ -6280,13 +6280,13 @@ function mkSequencesPanelHtml(){
 }
 
 /* ===== WHATSAPP CAMPAIGNS ===== */
-function ldWaCampaigns(){try{var s=localStorage.getItem('cdc_wa_campaigns');if(s)return JSON.parse(s);}catch(e){}return[];}
-function svWaCampaigns(){localStorage.setItem('cdc_wa_campaigns',JSON.stringify(window.MK_WA_CAMPAIGNS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();}
-window.MK_WA_CAMPAIGNS=ldWaCampaigns();
+window.ldWaCampaigns=function(){try{var s=localStorage.getItem('cdc_wa_campaigns');if(s)return JSON.parse(s);}catch(e){}return[];};
+window.svWaCampaigns=function(){localStorage.setItem('cdc_wa_campaigns',JSON.stringify(window.MK_WA_CAMPAIGNS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();
 
-function ldWaLog(){try{var s=localStorage.getItem('cdc_wa_log');if(s)return JSON.parse(s);}catch(e){}return[];}
-function svWaLog(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));}
-window.MK_WA_LOG=ldWaLog();
+window.ldWaLog=function(){try{var s=localStorage.getItem('cdc_wa_log');if(s)return JSON.parse(s);}catch(e){}return[];};
+window.svWaLog=function(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));};
+window.MK_WA_LOG=window.ldWaLog();
 
 window.mkWaFilter='all';
 window.mkWaCampFilter='';
@@ -6304,7 +6304,7 @@ window.mkWaStatusColor=function(s){
   return{bg:'bg-sAlt',tx:'text-mut',icon:'fa-clock'};
 };
 
-function rWhatsAppView(){
+window.rWhatsAppView=function(){
   var camps=window.MK_WA_CAMPAIGNS||[];
   var log=window.MK_WA_LOG||[];
   var totalSent=log.length;
@@ -6572,9 +6572,9 @@ window.mkWaExportLog=function(){
 
 
 /* --- Meeting Scheduler Data Layer --- */
-function ldMeetings(){try{var s=localStorage.getItem('cdc_meetings');if(s)return JSON.parse(s);}catch(e){}return[];}
-function svMeetings(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();}
-window.MK_MEETINGS=ldMeetings();
+window.ldMeetings=function(){try{var s=localStorage.getItem('cdc_meetings');if(s)return JSON.parse(s);}catch(e){}return[];}
+window.svMeetings=function(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+window.MK_MEETINGS=window.ldMeetings();
 
 /* --- Firebase sync hook : recharge les données email depuis localStorage après un sync cloud --- */
 window._onDataSynced=function(){
@@ -6582,7 +6582,7 @@ window._onDataSynced=function(){
   try{window.MK_GROUPS=ldGroups();}catch(e){}
   try{window.MK_SEQUENCES=ldSeqs();}catch(e){}
   try{window.MK_SEQ_RUNS=ldSeqRuns();}catch(e){}
-  try{window.MK_MEETINGS=ldMeetings();}catch(e){}
+  try{window.MK_MEETINGS=window.ldMeetings();}catch(e){}
 };
 
 /* --- Intercepter les sauvegardes du module email pour push Firebase --- */
@@ -6849,9 +6849,9 @@ window.mkProposeMeetingSlots=function(id){
 };
 
 /* ===== MEETING SCHEDULER — BOOKING LINK SYSTEM ===== */
-function ldBookingSettings(){try{var s=localStorage.getItem('cdc_booking_settings');if(s)return JSON.parse(s);}catch(e){}return{enabled:false,slotDuration:30,minNoticeHours:24,maxDaysForward:14,startHour:'09:00',endHour:'18:00',weekdays:[1,2,3,4,5],lunchBreak:true,lunchStart:'12:00',lunchEnd:'13:30',location:'',conferenceLink:'',instructions:'',bookingLink:''};}
+window.ldBookingSettings=function(){try{var s=localStorage.getItem('cdc_booking_settings');if(s)return JSON.parse(s);}catch(e){}return{enabled:false,slotDuration:30,minNoticeHours:24,maxDaysForward:14,startHour:'09:00',endHour:'18:00',weekdays:[1,2,3,4,5],lunchBreak:true,lunchStart:'12:00',lunchEnd:'13:30',location:'',conferenceLink:'',instructions:'',bookingLink:''};};
 function svBookingSettings(){localStorage.setItem('cdc_booking_settings',JSON.stringify(window.MK_BOOKING));}
-window.MK_BOOKING=ldBookingSettings();
+window.MK_BOOKING=window.ldBookingSettings();
 
 window.mkGenBookingLink=function(){
   if(!window.MK_BOOKING.bookingLink){
