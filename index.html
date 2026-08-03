@@ -6473,7 +6473,10 @@ window.mkWaDeleteCamp=function(campId){
 window.mkWaSendCampModal=function(campId){
   var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===campId;});
   if(!camp){toast('Campagne introuvable','err');return;}
-  window._mkWaSend={campId:campId,_selTags:[],_manualPhones:[]};
+  /* Conserver les tags et numéros manuels existants si on re-render le modal */
+  var prevSelTags=(window._mkWaSend&&window._mkWaSend.campId===campId)?window._mkWaSend._selTags:[];
+  var prevManualPhones=(window._mkWaSend&&window._mkWaSend.campId===campId)?window._mkWaSend._manualPhones:[];
+  window._mkWaSend={campId:campId,_selTags:prevSelTags,_manualPhones:prevManualPhones};
   var selTags=window._mkWaSend._selTags;
   var contacts=mkContactsByTag(selTags);
   var groupedTags=mkGetGroupedTags();
@@ -6527,6 +6530,7 @@ window.mkWaSendCampModal=function(campId){
 window.mkWaToggleTag=function(tag){
   if(!window._mkWaSend._selTags)window._mkWaSend._selTags=[];
   var arr=window._mkWaSend._selTags;var idx=arr.indexOf(tag);if(idx>=0)arr.splice(idx,1);else arr.push(tag);
+  /* mkWaSendCampModal conserve désormais les données existantes */
   mkWaSendCampModal(window._mkWaSend.campId);
 };
 window.mkWaAddManualPhone=function(){
