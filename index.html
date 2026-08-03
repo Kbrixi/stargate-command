@@ -222,6 +222,7 @@ body.vc-panel-open #MO{right:0}
 .pipe-card .pc-value{font-size:.7rem;font-weight:600;color:#ff9c00}
 .pipe-card .pc-time{font-size:.6rem;color:#8a7a5a}
 .pipe-card .pc-seq{font-size:.6rem;color:#9999ff;margin-top:4px;display:flex;align-items:center;gap:3px}
+.pipe-adv-filters{background:rgba(20,20,20,.8);border:1px solid #2b2b2b;border-radius:12px;padding:14px;margin-bottom:12px;animation:fi .2s ease}
 .pipe-stats-bar{background:#0d0d0d;border:1px solid #2b2b2b;border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
 .pipe-stat{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#c9a97e}
 .pipe-stat .ps-val{font-weight:700;color:#f2ead8;font-family:'Antonio',sans-serif;text-transform:uppercase;letter-spacing:.03em}
@@ -3944,6 +3945,7 @@ ${c.linkedin?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="
 <div class="flex flex-wrap gap-2 mb-6">
 <span class="text-[.65rem] px-3 py-1 rounded-full font-medium" style="color:${st.color};background:${st.bg}">${st.label}</span>
 ${fObj?`<span class="text-[.65rem] px-3 py-1 rounded-full bg-sAlt text-mut border border-bdr">${escHtml(fObj.name)}</span>`:''}
+${(()=>{var pe=typeof PIPELINE!=='undefined'?PIPELINE.find(function(p){return p.contactId===c.id&&p.folderKey===folder;}):null;if(!pe)return '';var si=funnelStageInfo(pe.stage);return '<span class="text-[.65rem] px-3 py-1 rounded-full font-medium" style="color:'+si.color+';background:'+si.bg+'"><i class="fa-solid '+si.icon+' mr-1"></i>Pipeline: '+si.label+'</span>';})()}
 ${proj?`<span class="text-[.65rem] px-3 py-1 rounded-full bg-infS text-inf">${escHtml(proj.name)}</span>`:''}
 ${fu?'<span class="text-[.65rem] px-3 py-1 rounded-full font-medium bg-accS text-acc"><i class="fa-solid fa-clock-rotate-left mr-1"></i>A relancer</span>':''}
 ${(c.tags||[]).map(tag=>`<span class="text-[.65rem] px-3 py-1 rounded-full bg-sAlt text-mut">#${escHtml(tag)}</span>`).join('')}
@@ -3996,6 +3998,10 @@ ${showSelectors?`<div class="grid grid-cols-2 gap-3">
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Entreprise</label><input name="company" value="${escHtml(src.company||'')}" class="fi"></div>
 </div>
 <div class="grid grid-cols-2 gap-3">
+<div><label class="text-xs font-medium text-mut mb-1.5 block">R\u00e9gion</label><input name="region" value="${escHtml(src.region||'')}" class="fi" placeholder="Ex : Suisse romande, IDF..."></div>
+<div><label class="text-xs font-medium text-mut mb-1.5 block">Pays</label><input name="country" value="${escHtml(src.country||'')}" class="fi" placeholder="Ex : Suisse, France..."></div>
+</div>
+<div class="grid grid-cols-2 gap-3">
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Email</label><input type="email" name="email" value="${escHtml(src.email||'')}" class="fi"></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Téléphone</label><input name="phone" value="${escHtml(src.phone||'')}" class="fi"></div>
 </div>
@@ -4003,6 +4009,7 @@ ${showSelectors?`<div class="grid grid-cols-2 gap-3">
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Statut de prospection</label><select name="prospectStatus" class="fi">${PROSPECT_STAGES.map(s=>`<option value="${s.key}" ${(src.prospectStatus||'a_contacter')===s.key?'selected':''}>${s.label}</option>`).join('')}</select></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Dernier contact</label><div class="flex gap-1.5"><input type="date" name="lastContactedAt" id="cLastContacted" value="${c?(c.lastContactedAt||''):''}" class="fi"><button type="button" onclick="document.getElementById('cLastContacted').value=todayStr()" class="h-10 px-2.5 rounded-xl bg-sAlt border border-bdr text-mut hover:text-txt transition-colors bp text-xs shrink-0" data-tip="Aujourd'hui"><i class="fa-solid fa-calendar-day"></i></button></div></div>
 </div>
+${c?`<div><label class="text-xs font-medium text-mut mb-1.5 block"><i class="fa-solid fa-columns text-acc mr-1"></i>Statut Pipeline Marketing</label><select name="pipeStage" id="cPipeStage" class="fi">${(()=>{var pe=PIPELINE.find(function(f){return f.contactId===c.id&&f.folderKey===folder;});var cur=pe?pe.stage:'';return '<option value="">-- Non ajout\u00e9 --</option>'+FUNNEL_STAGES.map(function(s){return '<option value="'+s.key+'"'+(cur===s.key?' selected':'')+'>'+s.label+'</option>';}).join('');})()}</select></div>`:''}
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Tags <span class="text-mut font-normal normal-case">(séparés par des virgules)</span></label><input name="tags" value="${escHtml((src.tags||[]).join(', '))}" placeholder="Ex : chaud, décideur, secteur santé" class="fi"></div>
 <div><label class="text-xs font-medium text-mut mb-1.5 block">Notes</label><textarea name="notes" rows="2" class="fi">${escHtml(src.notes||'')}</textarea></div>
 <div class="flex justify-end gap-3 mt-2">${c?`<button type="button" onclick="delContact('${folder}',${c.id})" class="h-10 px-5 rounded-xl bg-accS text-acc text-sm font-medium hover:bg-accS/70 transition-colors bp mr-auto">Supprimer</button>`:''}<button type="button" onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:bg-sHov transition-colors bp">Annuler</button><button type="submit" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">${c?'Enregistrer':'Ajouter'}</button></div>
@@ -4021,11 +4028,22 @@ e.preventDefault();
 const f=new FormData(e.target);
 const targetFolder=f.get('folder')||folder;
 const pVal=f.get('project');
-const o={firstName:(f.get('firstName')||'').trim(),lastName:(f.get('lastName')||'').trim(),name:'',title:f.get('title').trim(),company:(f.get('company')||'').trim(),email:f.get('email').trim(),phone:f.get('phone').trim(),linkedin:(f.get('linkedin')||'').trim(),prospectStatus:f.get('prospectStatus')||'a_contacter',lastContactedAt:f.get('lastContactedAt')||null,tags:(f.get('tags')||'').split(',').map(t=>t.trim()).filter(Boolean),notes:f.get('notes').trim(),projectId:pVal?parseInt(pVal):null};
+const pipeStageVal=(f.get('pipeStage')||'').trim();
+const o={firstName:(f.get('firstName')||'').trim(),lastName:(f.get('lastName')||'').trim(),name:'',title:f.get('title').trim(),company:(f.get('company')||'').trim(),email:f.get('email').trim(),phone:f.get('phone').trim(),linkedin:(f.get('linkedin')||'').trim(),region:(f.get('region')||'').trim(),country:(f.get('country')||'').trim(),prospectStatus:f.get('prospectStatus')||'a_contacter',lastContactedAt:f.get('lastContactedAt')||null,tags:(f.get('tags')||'').split(',').map(t=>t.trim()).filter(Boolean),notes:f.get('notes').trim(),projectId:pVal?parseInt(pVal):null};
 if(cid!=null){
 const c=D[folder].contacts.find(x=>x.id===cid);
 Object.assign(c,o);
 if(targetFolder!==folder){D[folder].contacts=D[folder].contacts.filter(x=>x.id!==cid);D[targetFolder].contacts.push(c);}
+/* Sync pipeline stage */
+if(typeof PIPELINE!=='undefined'&&pipeStageVal){
+  var pe=PIPELINE.find(function(p){return p.contactId===cid&&p.folderKey===folder;});
+  if(pe&&FUNNEL_STAGE_KEYS.indexOf(pipeStageVal)!==-1){
+    if(pe.stage!==pipeStageVal)funnelMoveTo(pe.id,pipeStageVal);
+  }else if(!pe&&pipeStageVal&&pipeStageVal!==''){
+    PIPELINE.push({id:funnelNewId(),contactId:cid,folderKey:folder,stage:pipeStageVal,previousStage:null,enteredAt:new Date().toISOString(),history:[],activeSequenceId:null,activeSequenceRunId:null,estimatedValue:0,actualValue:null,lostReason:null,lostReasonDetail:'',tags:(c.tags||[]).slice(),source:'other',assignedTo:'moi',notes:''});
+    svFunnel();
+  }
+}
 toast('Contact modifié');
 }else{
 o.id=gid(D[targetFolder].contacts);
@@ -7697,8 +7715,36 @@ function rPipelineView(){
   h+='<select id="pipeFilterSource" onchange="rMarketingV2()"><option value="all">Toutes sources</option>';
   h+='<option value="website">Website</option><option value="referral">Referral</option><option value="linkedin">LinkedIn</option><option value="cold">Cold</option><option value="event">Event</option><option value="other">Other</option>';
   h+='</select>';
+  /* Advanced filters toggle */
+  h+='<button onclick="pipeToggleAdvFilters()" class="h-8 px-3 rounded-lg bg-sAlt border border-bdr text-mut hover:text-txt text-[.65rem] font-medium flex items-center gap-1.5 transition-colors bp"><i class="fa-solid fa-sliders text-[.55rem]"></i>Filtres avanc\u00e9s</button>';
   h+='<button onclick="pipeOpenAddModal()" class="h-8 px-3 rounded-lg bg-acc hover:bg-accH text-black text-[.65rem] font-semibold flex items-center gap-1.5 transition-colors bp ml-auto"><i class="fa-solid fa-plus text-[.55rem]"></i>Ajouter au pipeline</button>';
   h+='</div>';
+  /* Advanced filter panel (hidden by default) */
+  h+='<div id="pipeAdvFilters" style="display:none" class="pipe-adv-filters">';
+  h+='<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Entreprise</label><input type="text" id="pipeFilterCompany" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Titre / Fonction</label><input type="text" id="pipeFilterTitle" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">R\u00e9gion</label><input type="text" id="pipeFilterRegion" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Pays</label><input type="text" id="pipeFilterCountry" class="fi text-xs" placeholder="Rechercher..." oninput="rMarketingV2()"></div>';
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Stade pipeline</label><select id="pipeFilterStage" class="fi text-xs" onchange="rMarketingV2()"><option value="all">Tous</option>';
+  FUNNEL_STAGES.forEach(function(s){h+='<option value="'+s.key+'">'+s.label+'</option>';});
+  h+='</select></div>';
+  h+='</div>';
+  h+='<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">';
+  /* Month filter */
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Mois cr\u00e9ation fiche</label><select id="pipeFilterMonth" class="fi text-xs" onchange="rMarketingV2()"><option value="all">Tous</option>';
+  for(var mi=0;mi<12;mi++){var ml=['Janvier','F\u00e9vrier','Mars','Avril','Mai','Juin','Juillet','Ao\u00fbt','Septembre','Octobre','Novembre','D\u00e9cembre'];h+='<option value="'+(mi+1)+'">'+ml[mi]+'</option>';}
+  h+='</select></div>';
+  /* Year filter */
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Ann\u00e9e cr\u00e9ation fiche</label><select id="pipeFilterYear" class="fi text-xs" onchange="rMarketingV2()"><option value="all">Toutes</option>';
+  var cy=new Date().getFullYear();
+  for(var yi=cy;yi>=cy-5;yi--){h+='<option value="'+yi+'">'+yi+'</option>';}
+  h+='</select></div>';
+  /* Tags filter */
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Tags</label><input type="text" id="pipeFilterTags" class="fi text-xs" placeholder="tag1, tag2..." oninput="rMarketingV2()"></div>';
+  /* Text search */
+  h+='<div><label class="text-[.6rem] text-mut block mb-1">Recherche</label><input type="text" id="pipeFilterSearch" class="fi text-xs" placeholder="Nom, email..." oninput="rMarketingV2()"></div>';
+  h+='</div></div>';
 
   /* Kanban columns */
   h+='<div class="pipe-wrap" id="pipeBoard">';
@@ -7740,6 +7786,18 @@ function pipeRenderCards(){
   var filterSource=document.getElementById('pipeFilterSource');
   var fFolder=filterFolder?filterFolder.value:'all';
   var fSource=filterSource?filterSource.value:'all';
+  /* Advanced filters */
+  var fCompany=(document.getElementById('pipeFilterCompany')||{}).value||'';
+  var fTitle=(document.getElementById('pipeFilterTitle')||{}).value||'';
+  var fRegion=(document.getElementById('pipeFilterRegion')||{}).value||'';
+  var fCountry=(document.getElementById('pipeFilterCountry')||{}).value||'';
+  var fStage=(document.getElementById('pipeFilterStage')||{}).value||'all';
+  var fMonth=(document.getElementById('pipeFilterMonth')||{}).value||'all';
+  var fYear=(document.getElementById('pipeFilterYear')||{}).value||'all';
+  var fTags=(document.getElementById('pipeFilterTags')||{}).value||'';
+  var fSearch=(document.getElementById('pipeFilterSearch')||{}).value||'';
+  var fTagsArr=fTags?fTags.split(',').map(function(t){return t.trim().toLowerCase();}).filter(Boolean):[];
+  var hasAdvFilters=fCompany||fTitle||fRegion||fCountry||fStage!=='all'||fMonth!=='all'||fYear!=='all'||fTagsArr.length||fSearch;
 
   /* Clear all columns */
   FUNNEL_STAGES.forEach(function(stg){
@@ -7752,6 +7810,34 @@ function pipeRenderCards(){
   PIPELINE.forEach(function(entry){
     if(fFolder!=='all'&&entry.folderKey!==fFolder)return;
     if(fSource!=='all'&&entry.source!==fSource)return;
+    /* Advanced filters */
+    var contact=funnelGetContact(entry);
+    if(fCompany){var cc=(contact&&contact.company||'').toLowerCase();if(cc.indexOf(fCompany.toLowerCase())===-1)return;}
+    if(fTitle){var ct=(contact&&contact.title||'').toLowerCase();if(ct.indexOf(fTitle.toLowerCase())===-1)return;}
+    if(fRegion){var cr=(contact&&contact.region||'').toLowerCase();if(cr.indexOf(fRegion.toLowerCase())===-1)return;}
+    if(fCountry){var cco=(contact&&contact.country||'').toLowerCase();if(cco.indexOf(fCountry.toLowerCase())===-1)return;}
+    if(fStage!=='all'&&entry.stage!==fStage)return;
+    if(fMonth!=='all'||fYear!=='all'){
+      var entryDate=entry.enteredAt?new Date(entry.enteredAt):null;
+      if(!entryDate&&entry.history&&entry.history.length)entryDate=new Date(entry.history[0].from);
+      if(entryDate){
+        if(fMonth!=='all'&&entryDate.getMonth()!==parseInt(fMonth)-1)return;
+        if(fYear!=='all'&&entryDate.getFullYear()!==parseInt(fYear))return;
+      }else if(fMonth!=='all'||fYear!=='all')return;
+    }
+    if(fTagsArr.length){
+      var eTags=(entry.tags||[]).map(function(t){return t.toLowerCase();});
+      var cTags=(contact&&contact.tags||[]).map(function(t){return t.toLowerCase();});
+      var allTags=eTags.concat(cTags);
+      var hasTag=fTagsArr.some(function(ft){return allTags.indexOf(ft)!==-1;});
+      if(!hasTag)return;
+    }
+    if(fSearch){
+      var cName=contact?contactDisplayName(contact).toLowerCase():'';
+      var sLow=fSearch.toLowerCase();
+      var matchSearch=cName.indexOf(sLow)!==-1||(contact&&contact.email||'').toLowerCase().indexOf(sLow)!==-1||(contact&&contact.company||'').toLowerCase().indexOf(sLow)!==-1;
+      if(!matchSearch)return;
+    }
     var body=document.getElementById('pipeBody_'+entry.stage);
     if(!body)return;
 
@@ -8732,6 +8818,14 @@ window.pipeOpenDetail=function(entryId){
   }
 };
 
+
+/* ===== PIPELINE ADVANCED FILTERS ===== */
+window.pipeToggleAdvFilters=function(){
+  var panel=document.getElementById('pipeAdvFilters');
+  if(!panel)return;
+  var isHidden=panel.style.display==='none';
+  panel.style.display=isHidden?'block':'none';
+};
 
 /* --- Booking page URL handler --- */
 window.mkCheckBookingHash=function(){
