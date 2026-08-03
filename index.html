@@ -8723,7 +8723,7 @@ function seq2GetLaunchCandidates(selTags){
         if(!hasTag)return;
       }
       if(c.email||c.phone){
-        c._folderKey=f.key;
+        c.folderKey=f.key;
         all.push(c);
       }
     });
