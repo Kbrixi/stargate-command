@@ -3054,7 +3054,15 @@ if(!MK_BUILT.includes(tab)){toast('Cette section arrive dans une prochaine étap
 S.mkv=tab;rMarketing();
 }
 function mkTabsBar(){
-return`<div class="flex flex-wrap gap-2 mb-6">${MK_TABS.map(t=>{var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;return`<button onclick="navMk('${t.key}')" class="chip ${S.mkv===t.key?'act':''} ${!MK_BUILT.includes(t.key)?'opacity-50':''}"><i class="${ico} mr-1.5"></i>${t.label}${!MK_BUILT.includes(t.key)?' <span class="text-[.6rem] opacity-70">(bientôt)</span>':''}</button>`;}).join('')}</div>`;
+var tabs='';
+MK_TABS.forEach(function(t){
+  var ico=t.icon.indexOf('fa-brands')===0?t.icon:'fa-solid '+t.icon;
+  var act=S.mkv===t.key?'act':'';
+  var dis=!MK_BUILT.includes(t.key)?'opacity-50':'';
+  var soon=!MK_BUILT.includes(t.key)?' <span style="font-size:.6rem;opacity:.7">(bientôt)</span>':'';
+  tabs+='<button onclick="navMk(\''+t.key+'\')" class="chip '+act+' '+dis+'"><i class="'+ico+' mr-1.5"></i>'+t.label+soon+'</button>';
+});
+return '<div class="flex flex-wrap gap-2 mb-6">'+tabs+'</div>';
 }
 function mkKpi(label,value,icon,color){
 return`<div class="kpi" style="background:${color}"><i class="fa-solid ${icon} text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">${value}</div><div class="text-xs opacity-90 mt-1">${label}</div></div>`;
@@ -6925,6 +6933,15 @@ window.mkBookingSettingsModal=function(){
 
 /* --- Public Booking Page (rendered when #booking=xxx in URL) --- */
 window.mkRenderBookingPage=function(linkId){
+  /* Masquer toute l'interface CRM pour les visiteurs */
+  var sidebar=document.getElementById('sb');if(sidebar)sidebar.style.display='none';
+  var header=document.querySelector('header');if(header)header.style.display='none';
+  var voiceBtn=document.getElementById('voiceBtn');if(voiceBtn)voiceBtn.style.display='none';
+  var voiceOverlay=document.getElementById('voiceOverlay');if(voiceOverlay)voiceOverlay.style.display='none';
+  var mobl=document.getElementById('mobl');if(mobl)mobl.style.display='none';
+  document.body.style.overflow='auto';
+  document.title='Reservation de creneau';
+
   var el=document.getElementById('PC');if(!el)return;
   var bs=window.MK_BOOKING;
   if(!bs.enabled||bs.bookingLink!==linkId){
@@ -7113,6 +7130,16 @@ window.mkBkShowConfirmation=function(meeting){
   el.innerHTML=h;
 };
 
+/* --- Restore CRM UI after booking page --- */
+window.mkRestoreCrmUI=function(){
+  var sidebar=document.getElementById('sb');if(sidebar)sidebar.style.display='';
+  var header=document.querySelector('header');if(header)header.style.display='';
+  var voiceBtn=document.getElementById('voiceBtn');if(voiceBtn)voiceBtn.style.display='';
+  var voiceOverlay=document.getElementById('voiceOverlay');if(voiceOverlay)voiceOverlay.style.display='';
+  var mobl=document.getElementById('mobl');if(mobl)mobl.style.display='';
+  document.title='Cockpit de Chasse \u2014 CRM Pro';
+};
+
 /* --- Booking page URL handler --- */
 window.mkCheckBookingHash=function(){
   if(window.location.hash&&window.location.hash.indexOf('#booking=')===0){
@@ -7120,8 +7147,16 @@ window.mkCheckBookingHash=function(){
     mkRenderBookingPage(linkId);
     return true;
   }
+  mkRestoreCrmUI();
   return false;
 };
+
+/* Detect hash changes to restore CRM UI when leaving booking page */
+window.addEventListener('hashchange',function(){
+  if(!window.location.hash||window.location.hash.indexOf('#booking=')!==0){
+    mkRestoreCrmUI();
+  }
+});
 
 </script>
 </body>
