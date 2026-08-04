@@ -367,7 +367,7 @@ let CL=ldLog();
 function svLog(){localStorage.setItem('cdc_log',JSON.stringify(CL));}
 
 /* ===== MARKETING (module type HubSpot) ===== */
-function emptyMk(){return{campaigns:[],content:[],emails:[],social:[],pages:[],ads:[]};}
+function emptyMk(){return{campaigns:[],content:[],emails:[],social:[],pages:[],ads:[],editorial:[]};}
 function ldMk(){try{const s=localStorage.getItem('cdc_marketing');if(s)return{...emptyMk(),...JSON.parse(s)};}catch(e){}return emptyMk();}
 let MK=ldMk();
 function svMk(){localStorage.setItem('cdc_marketing',JSON.stringify(MK));}
@@ -3599,6 +3599,7 @@ function navMkV2(tab){
 /* ===== MARKETING : VUE D'ENSEMBLE (Fonction 1/8) ===== */
 const MK_TABS=[
 {key:'overview',label:'Vue d\u2019ensemble',icon:'fa-gauge'},
+{key:'editorial',label:'Calendrier éditorial',icon:'fa-calendar-days'},
 {key:'campaigns',label:'Campagnes',icon:'fa-rocket'},
 {key:'whatsapp',label:'WhatsApp',icon:'fa-brands fa-whatsapp'},
 {key:'content',label:'Contenu',icon:'fa-pen-nib'},
@@ -3608,7 +3609,7 @@ const MK_TABS=[
 {key:'ads',label:'Publicités',icon:'fa-bullseye'},
 {key:'reports',label:'Rapports',icon:'fa-chart-line'}
 ];
-const MK_BUILT=['overview','campaigns','content','emails','social','whatsapp'];
+const MK_BUILT=['overview','editorial','campaigns','content','emails','social','whatsapp'];
 function navMk(tab){
 if(!MK_BUILT.includes(tab)){toast('Cette section arrive dans une prochaine étape','info');return;}
 S.mkv=tab;rMarketing();
@@ -3684,6 +3685,7 @@ function rMarketing(){
 const el=document.getElementById('PC');
 let body='';
 if(S.mkv==='overview')body=rMarketingOverview();
+else if(S.mkv==='editorial')body=rMkEditorial();
 else if(S.mkv==='whatsapp'){try{body=mkTabsBar()+(typeof window.rWhatsAppView==='function'?window.rWhatsAppView():'<div class="text-mut text-sm text-center py-8">Module WhatsApp en cours de chargement…</div>');}catch(e){console.error('[WhatsApp]',e);body=mkTabsBar()+'<div class="text-mut text-sm text-center py-8">Erreur WhatsApp: '+e.message+'</div>';}}
 else if(S.mkv==='campaigns')body=mkTabsBar()+rMarketingSection('campaigns','Aucune campagne','Nouvelle campagne');
 else if(S.mkv==='content')body=mkTabsBar()+rMarketingSection('content','Aucun contenu','Nouveau contenu');
@@ -3727,6 +3729,181 @@ if(type==='social'){item.platform=document.getElementById('mkPlatform')?.value||
 MK[type].push(item);svMk();clsM();toast('Élément créé');rMarketing();
 }
 function delMkItem(type,idx){MK[type].splice(idx,1);svMk();toast('Supprimé');rMarketing();}
+
+/* ===== MARKETING : CALENDRIER ÉDITORIAL (personal branding) ===== */
+const MK_ED_FORMATS=[
+{key:'texte',label:'Texte',icon:'fa-align-left',color:'#9999ff'},
+{key:'video',label:'Vidéo',icon:'fa-video',color:'#ff9c00'},
+{key:'carrousel',label:'Carrousel',icon:'fa-images',color:'#cc99cc'},
+{key:'autre',label:'Autre',icon:'fa-shapes',color:'#c9a97e'}
+];
+const MK_ED_STATUS=[
+{key:'idee',label:'Idée',cls:'bg-sAlt text-mut'},
+{key:'a_faire',label:'À faire',cls:'bg-warnS text-warn'},
+{key:'pret',label:'Prêt',cls:'bg-infS text-inf'},
+{key:'publie',label:'Publié',cls:'bg-okS text-ok'}
+];
+const MK_ED_PLATFORMS=[
+{key:'linkedin',label:'LinkedIn',icon:'fa-brands fa-linkedin'},
+{key:'instagram',label:'Instagram',icon:'fa-brands fa-instagram'},
+{key:'twitter',label:'Twitter/X',icon:'fa-brands fa-twitter'},
+{key:'blog',label:'Blog / Newsletter',icon:'fa-solid fa-newspaper'},
+{key:'autre',label:'Autre',icon:'fa-solid fa-globe'}
+];
+window.mkEdFilter=window.mkEdFilter||'all';
+function mkEdFmt(key){return MK_ED_FORMATS.find(f=>f.key===key)||MK_ED_FORMATS[0];}
+function mkEdStatus(key){return MK_ED_STATUS.find(s=>s.key===key)||MK_ED_STATUS[0];}
+function mkEdPlatform(key){return MK_ED_PLATFORMS.find(p=>p.key===key)||MK_ED_PLATFORMS[0];}
+function mkEdWeekLabel(dateStr){
+if(!dateStr)return'Sans date';
+const d=new Date(dateStr+'T00:00:00');
+if(isNaN(d))return'Sans date';
+const day=(d.getDay()+6)%7;const mon=new Date(d);mon.setDate(d.getDate()-day);
+const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+const fmt=x=>x.toLocaleDateString('fr-CH',{day:'2-digit',month:'2-digit'});
+return'Semaine du '+fmt(mon)+' au '+fmt(sun);
+}
+function mkEdSetFilter(f){window.mkEdFilter=f;rMarketing();}
+function rMkEditorial(){
+const all=MK.editorial||[];
+const filtered=window.mkEdFilter==='all'?all:all.filter(e=>e.status===window.mkEdFilter);
+const sorted=[...filtered].sort((a,b)=>{
+  if(!a.date&&!b.date)return 0;
+  if(!a.date)return 1;
+  if(!b.date)return -1;
+  return a.date.localeCompare(b.date);
+});
+const groups=[];
+sorted.forEach(e=>{
+  const idxReal=all.indexOf(e);
+  const label=mkEdWeekLabel(e.date);
+  let g=groups.find(x=>x.label===label);
+  if(!g){g={label,items:[]};groups.push(g);}
+  g.items.push({...e,_idx:idxReal});
+});
+const total=all.length;
+const doneCount=all.filter(e=>e.status==='publie').length;
+const filterChips=[{key:'all',label:'Toutes ('+total+')'}].concat(MK_ED_STATUS.map(s=>({key:s.key,label:s.label+' ('+all.filter(e=>e.status===s.key).length+')'})));
+return`${mkTabsBar()}
+<div class="bg-surface border border-bdr rounded-2xl p-5 mb-5">
+<div class="flex items-start justify-between gap-4 flex-wrap">
+<div>
+<div class="font-disp font-bold text-lg mb-1"><i class="fa-solid fa-calendar-days text-acc mr-2"></i>Calendrier éditorial — Personal branding</div>
+<div class="text-xs text-mut max-w-xl">Planifie tes prises de parole (texte, vidéo, carrousel) semaine par semaine. Le levier principal reste la régularité d'un point de vue distinctif — la vidéo n'est qu'un format parmi d'autres, à réserver aux moments où montrer bat dire.</div>
+</div>
+<div class="flex gap-2 shrink-0">
+${total===0?`<button onclick="mkEdLoadTemplate()" class="h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:text-acc transition-colors bp"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Charger un modèle 8 semaines</button>`:`<button onclick="mkEdLoadTemplate()" class="h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium hover:text-acc transition-colors bp" title="Ajoute 8 semaines types à la suite du calendrier existant"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Ajouter un modèle</button>`}
+<button onclick="mkEdOpenForm()" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-solid fa-plus text-xs"></i>Nouvelle entrée</button>
+</div>
+</div>
+${total>0?`<div class="flex items-center gap-3 mt-4 text-xs text-mut"><div class="flex-1 h-1.5 rounded-full bg-sAlt overflow-hidden"><div class="h-full bg-ok" style="width:${total?Math.round(doneCount/total*100):0}%"></div></div><span>${doneCount}/${total} publiés</span></div>`:''}
+</div>
+<div class="flex flex-wrap gap-2 mb-5">
+${filterChips.map(c=>`<button onclick="mkEdSetFilter('${c.key}')" class="chip ${window.mkEdFilter===c.key?'act':''}">${c.label}</button>`).join('')}
+</div>
+${groups.length===0?`<div class="bg-surface border border-bdr rounded-2xl p-10 text-center text-mut text-sm"><i class="fa-solid fa-calendar-days text-2xl mb-3 opacity-60"></i><br>Aucune entrée${window.mkEdFilter!=='all'?' pour ce filtre':''}. Charge le modèle 8 semaines ou crée ta première entrée.</div>`:
+groups.map(g=>`
+<div class="mb-6">
+<div class="text-xs font-semibold text-mut uppercase tracking-wide mb-2 px-1">${g.label}</div>
+<div class="flex flex-col gap-2">
+${g.items.map(e=>mkEdRow(e)).join('')}
+</div>
+</div>`).join('')}
+`;
+}
+function mkEdRow(e){
+const fmt=mkEdFmt(e.format);const st=mkEdStatus(e.status);const plat=mkEdPlatform(e.platform);
+return`<div class="bg-surface border border-bdr rounded-xl p-4 flex items-start gap-4 af">
+<div class="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center" style="background:${fmt.color}22;color:${fmt.color}"><i class="fa-solid ${fmt.icon.replace('fa-solid ','')}"></i></div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="text-sm font-medium">${escHtml(e.title||'Sans titre')}</span>
+<span class="bdg ${st.cls}">${st.label}</span>
+<span class="text-[.65rem] px-2 py-0.5 rounded-full bg-infS text-inf"><i class="${plat.icon} mr-1"></i>${plat.label}</span>
+</div>
+${e.angle?`<p class="text-xs text-mut mt-1.5 line-clamp-2">${escHtml(e.angle)}</p>`:''}
+<div class="flex items-center gap-3 mt-2 text-[.65rem] text-mut flex-wrap">
+${e.date?`<span><i class="fa-solid fa-calendar mr-1"></i>${new Date(e.date+'T00:00:00').toLocaleDateString('fr-CH',{weekday:'short',day:'2-digit',month:'2-digit'})}</span>`:''}
+<select onchange="mkEdQuickStatus(${e._idx},this.value)" class="bg-transparent border border-bdr rounded-md px-1.5 py-0.5 text-[.65rem] text-mut">
+${MK_ED_STATUS.map(s=>`<option value="${s.key}" ${s.key===e.status?'selected':''}>${s.label}</option>`).join('')}
+</select>
+</div>
+</div>
+<div class="flex gap-1 shrink-0">
+<button onclick="mkEdOpenForm(${e._idx})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-pen text-[.6rem]"></i></button>
+<button onclick="mkEdDelete(${e._idx})" class="w-7 h-7 rounded-lg hover:bg-accS text-mut hover:text-acc flex items-center justify-center"><i class="fa-solid fa-trash text-[.6rem]"></i></button>
+</div>
+</div>`;
+}
+function mkEdQuickStatus(idx,val){if(!MK.editorial[idx])return;MK.editorial[idx].status=val;svMk();rMarketing();}
+function mkEdDelete(idx){if(!MK.editorial[idx])return;MK.editorial.splice(idx,1);svMk();toast('Entrée supprimée','info');rMarketing();}
+function mkEdOpenForm(idx){
+const e=(idx!=null&&MK.editorial[idx])?MK.editorial[idx]:{title:'',angle:'',format:'texte',platform:'linkedin',status:'idee',date:'',notes:''};
+opM(`<div class="p-6">
+<h2 class="font-disp font-bold text-lg mb-5">${idx!=null?'Modifier l\u2019entrée':'Nouvelle entrée éditoriale'}</h2>
+<label class="text-xs text-mut block mb-1.5">Titre / accroche</label>
+<input type="text" id="mkEdTitle" class="fi mb-4" placeholder="Ex : Ce que le broadcast m'a appris sur le contenu AI-native" value="${escHtml(e.title)}">
+<label class="text-xs text-mut block mb-1.5">Angle / point de vue</label>
+<textarea id="mkEdAngle" class="fi mb-4" placeholder="L'idée forte, le point de vue distinctif du post">${escHtml(e.angle)}</textarea>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div><label class="text-xs text-mut block mb-1.5">Format</label><select id="mkEdFormat" class="fi">${MK_ED_FORMATS.map(f=>`<option value="${f.key}" ${f.key===e.format?'selected':''}>${f.label}</option>`).join('')}</select></div>
+<div><label class="text-xs text-mut block mb-1.5">Plateforme</label><select id="mkEdPlatform" class="fi">${MK_ED_PLATFORMS.map(p=>`<option value="${p.key}" ${p.key===e.platform?'selected':''}>${p.label}</option>`).join('')}</select></div>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-4">
+<div><label class="text-xs text-mut block mb-1.5">Date prévue</label><input type="date" id="mkEdDate" class="fi" value="${escHtml(e.date)}"></div>
+<div><label class="text-xs text-mut block mb-1.5">Statut</label><select id="mkEdStatus" class="fi">${MK_ED_STATUS.map(s=>`<option value="${s.key}" ${s.key===e.status?'selected':''}>${s.label}</option>`).join('')}</select></div>
+</div>
+<label class="text-xs text-mut block mb-1.5">Notes (brouillon, lien, idées visuelles...)</label>
+<textarea id="mkEdNotes" class="fi mb-5" placeholder="Optionnel">${escHtml(e.notes||'')}</textarea>
+<div class="flex justify-between gap-3">
+<div>${idx!=null?`<button onclick="mkEdDelete(${idx});clsM();" class="h-10 px-4 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-acc transition-colors bp"><i class="fa-solid fa-trash mr-2"></i>Supprimer</button>`:''}</div>
+<div class="flex gap-3"><button onclick="clsM()" class="h-10 px-5 rounded-xl bg-sAlt border border-bdr text-sm font-medium text-mut hover:text-txt transition-colors bp">Annuler</button>
+<button onclick="mkEdSave(${idx!=null?idx:'null'})" class="h-10 px-5 rounded-xl bg-acc hover:bg-accH text-black text-sm font-semibold transition-colors bp">Enregistrer</button></div>
+</div>
+</div>`);
+}
+function mkEdSave(idx){
+const item={
+title:document.getElementById('mkEdTitle')?.value?.trim()||'Sans titre',
+angle:document.getElementById('mkEdAngle')?.value?.trim()||'',
+format:document.getElementById('mkEdFormat')?.value||'texte',
+platform:document.getElementById('mkEdPlatform')?.value||'linkedin',
+date:document.getElementById('mkEdDate')?.value||'',
+status:document.getElementById('mkEdStatus')?.value||'idee',
+notes:document.getElementById('mkEdNotes')?.value?.trim()||''
+};
+if(idx!=null&&MK.editorial[idx])MK.editorial[idx]={...MK.editorial[idx],...item};
+else MK.editorial.push(item);
+svMk();clsM();toast(idx!=null?'Entrée mise à jour':'Entrée créée');rMarketing();
+}
+function mkEdLoadTemplate(){
+if((MK.editorial||[]).length>0){
+if(!confirm('Ajouter 8 semaines types à la suite du calendrier existant ?'))return;
+}
+const today=new Date();const day=(today.getDay()+6)%7;
+const mon=new Date(today);mon.setDate(today.getDate()-day+7); // lundi de la semaine prochaine
+const iso=d=>{const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const dd=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dd;};
+const addDays=(base,n)=>{const d=new Date(base);d.setDate(d.getDate()+n);return d;};
+const T='texte',V='video',C='carrousel';
+const plan=[
+{off:0,format:T,title:'Pourquoi je pivote vers le microdrama AI-native',angle:'Poser le positionnement : convergence broadcast + production AI-native, vu depuis le terrain.',platform:'linkedin'},
+{off:2,format:V,title:'Test technique MagicLight vs Kling en direct',angle:'Montrer un essai concret de génération vidéo — la vidéo sert ici car il faut voir le résultat.',platform:'linkedin'},
+{off:7,format:T,title:'Ce que 15 ans de gestion de projet média m\u2019ont appris sur les pivots',angle:'Retour d\u2019expérience terrain, ancré dans BEDROCK/RTL et l\u2019agence.',platform:'linkedin'},
+{off:9,format:C,title:'3 erreurs à éviter en contenu de marque AI-generated',angle:'Format carrousel : liste actionnable, facile à scanner.',platform:'linkedin'},
+{off:14,format:T,title:'Aentik vs acquisition boring but profitable : comment j\u2019arbitre',angle:'Documenter le processus de décision plutôt que le résultat final.',platform:'linkedin'},
+{off:16,format:V,title:'Démo rapide : mon outil de scoring Schein/RIASEC',angle:'Montrer l\u2019outil en action — synergie avec le maker/builder mindset.',platform:'linkedin'},
+{off:21,format:T,title:'\u2018En Régie\u2019 ou \u2018Le Off Média\u2019 : comment je choisis un nom de canal',angle:'Partager la réflexion de branding en cours, pas encore la décision finale.',platform:'linkedin'},
+{off:23,format:T,title:'Ce que le marché suisse cherche vraiment chez un Senior PM',angle:'Angle marché de l\u2019emploi, utile pour le positionnement Genève/Zurich.',platform:'linkedin'},
+{off:28,format:V,title:'Coulisses : premier test du pilote microdrama solo',angle:'Documenter le pilote power-reversal / secret-identity en cours de fabrication.',platform:'linkedin'},
+{off:30,format:C,title:'Le funnel du contenu de marque pour agences : mon offre',angle:'Présenter l\u2019offre branded content comme premier revenu, format liste.',platform:'linkedin'},
+{off:35,format:T,title:'Pourquoi le wellbeing masculin en entreprise est un angle mort',angle:'Partager le constat structurel identifié sur les EAP à faible usage.',platform:'linkedin'},
+{off:37,format:T,title:'Bilan à 8 semaines : ce que la régularité a changé',angle:'Retour réflexif sur le test de fréquence lui-même — méta, mais utile.',platform:'linkedin'}
+];
+plan.forEach(p=>{
+MK.editorial.push({title:p.title,angle:p.angle,format:p.format,platform:p.platform,date:iso(addDays(mon,p.off)),status:'idee',notes:''});
+});
+svMk();toast('Modèle 8 semaines chargé — à ajuster librement');rMarketing();
+}
 
 function rAgenda(){
 const el=document.getElementById('PC');
