@@ -7355,6 +7355,9 @@ window.mkWaRemoveManualPhone=function(idx){
   if(window._mkWaSend._manualPhones){window._mkWaSend._manualPhones.splice(idx,1);mkWaSendCampModal(window._mkWaSend.campId);}
 };
 
+/* Robust wa.me link opener: works in PWA/standalone iOS, regular browser & desktop */
+window.mkWaOpen=function(url){var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();document.body.removeChild(a);};
+
 window.mkWaExecuteSend=function(){
   var send=window._mkWaSend;if(!send)return;
   var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===send.campId;});
@@ -7379,7 +7382,7 @@ window.mkWaExecuteSend=function(){
   allRecipients.forEach(function(r,i){
     var personalized=baseMessage.replace(/%7B%7Bprenom%7D%7D/gi,encodeURIComponent(r.firstName)).replace(/%7B%7Bnom%7D%7D/gi,encodeURIComponent(r.lastName)).replace(/%7B%7Bname%7D%7D/gi,encodeURIComponent(r.name)).replace(/%7B%7Bentreprise%7D%7D/gi,encodeURIComponent(r.company)).replace(/%7B%7Bposte%7D%7D/gi,encodeURIComponent(r.title));
     var waUrl='https://wa.me/'+r.phone+'?text='+personalized;
-    if(i===0){window.open(waUrl,'_blank');}
+    if(i===0){mkWaOpen(waUrl);}
   });
   clsM();
   toast(allRecipients.length+' message(s) WhatsApp ouvert(s) — n\'oublie pas d\'envoyer !','ok');
@@ -9031,7 +9034,7 @@ window.seq2ExecuteLaunch=async function(seqId){
         if(waPhone.length>=7){
           var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,c.firstName||'').replace(/\{\{nom\}\}/gi,c.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(c)).replace(/\{\{entreprise\}\}/gi,c.company||'').replace(/\{\{poste\}\}/gi,c.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
           var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
-          if(i===0)window.open(waUrl,'_blank');
+          if(i===0)mkWaOpen(waUrl);
           run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
           stepExecuted=true;launched++;
         }else{
@@ -9274,7 +9277,7 @@ window.seq2LaunchSingle=async function(entryId,seqId){
     if(waPhone.length>=7){
       var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,contact.firstName||'').replace(/\{\{nom\}\}/gi,contact.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(contact)).replace(/\{\{entreprise\}\}/gi,contact.company||'').replace(/\{\{poste\}\}/gi,contact.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
       var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
-      window.open(waUrl,'_blank');
+      mkWaOpen(waUrl);
       run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
     }else{
       run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'skipped',channel:'whatsapp',detail:'no phone'});
