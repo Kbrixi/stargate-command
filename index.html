@@ -6120,12 +6120,13 @@ window.mkGetAllTags=function(){
   FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){(c.tags||[]).forEach(function(t){tagSet.add(t)});});});
   return Array.from(tagSet).sort(function(a,b){return a.localeCompare(b,'fr')});
 };
-window.mkContactsByTag=function(selectedTags){
+window.mkContactsByTag=function(selectedTags,opts){
   if(!selectedTags||!selectedTags.length)return[];
   var set=new Set(selectedTags);
+  var allowNoEmail=opts&&opts.allowNoEmail;
   var results=[];
   FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){
-    if(!c.email)return;
+    if(!allowNoEmail&&!c.email)return;
     var cTags=new Set(c.tags||[]);
     if(Array.from(set).some(function(t){return cTags.has(t)}))results.push(Object.assign({},c,{_folder:f.name,_fkey:f.key}));
   });});
@@ -7355,23 +7356,37 @@ window.mkWaRemoveManualPhone=function(idx){
   if(window._mkWaSend._manualPhones){window._mkWaSend._manualPhones.splice(idx,1);mkWaSendCampModal(window._mkWaSend.campId);}
 };
 
+/* Normalize phone for wa.me: strip non-digits, remove leading 00 or 0 (local format) */
+window.mkWaNormPhone=function(phone){
+  if(!phone)return'';
+  var p=phone.replace(/[^0-9]/g,'');
+  if(p.indexOf('00')===0)p=p.substring(2);
+  else if(p.indexOf('0')===0&&p.length>=10)p=p.substring(1);
+  return p;
+};
+
 /* Robust wa.me link opener: works in PWA/standalone iOS, regular browser & desktop */
-window.mkWaOpen=function(url){var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';document.body.appendChild(a);a.click();document.body.removeChild(a);};
+window.mkWaOpen=function(url){
+  var w=window.open(url,'_blank');
+  if(!w||w.closed||typeof w.closed==='undefined'){
+    var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},200);
+  }
+};
 
 window.mkWaExecuteSend=function(){
   var send=window._mkWaSend;if(!send)return;
   var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===send.campId;});
   if(!camp){toast('Campagne introuvable','err');return;}
-  var contacts=mkContactsByTag(send._selTags).filter(function(c){return c.phone||c.mobile;});
+  var contacts=mkContactsByTag(send._selTags,{allowNoEmail:true}).filter(function(c){return c.phone||c.mobile;});
   var manualPhones=send._manualPhones||[];
   var allRecipients=[];
   contacts.forEach(function(c){
-    var phone=(c.phone||c.mobile||'').replace(/[^0-9]/g,'');
+    var phone=mkWaNormPhone(c.phone||c.mobile||'');
     if(phone.length>=7)allRecipients.push({phone:phone,name:contactDisplayName(c),firstName:c.firstName||'',lastName:c.lastName||'',company:c.company||'',title:c.title||''});
   });
   manualPhones.forEach(function(p){
-    var phone=p.replace(/[^0-9]/g,'');
-    allRecipients.push({phone:phone,name:'Contact',firstName:'',lastName:'',company:'',title:''});
+    var phone=mkWaNormPhone(p);
+    if(phone.length>=7)allRecipients.push({phone:phone,name:'Contact',firstName:'',lastName:'',company:'',title:''});
   });
   if(!allRecipients.length){toast('Aucun numéro valide','err');return;}
   allRecipients.forEach(function(r,i){
@@ -7881,9 +7896,9 @@ window.mkBkSelectDay=function(dateStr){
 
 window.mkBkShowSlots=async function(dateStr){
   var area=document.getElementById('bkSlotsArea');if(!area)return;
-  /* Refresh Google Calendar events if connected, to get up-to-date availability */
-  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()&&(!GCAL.events||!GCAL.events.length)){
-    try{var bs=window.MK_BOOKING;var maxDt=new Date();maxDt.setDate(maxDt.getDate()+(bs.maxDaysForward||14));await gcalFetchEvents(new Date().toISOString(),maxDt.toISOString());}catch(e){}
+  /* Always refresh Google Calendar events if connected to ensure up-to-date availability */
+  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()){
+    try{var bs2=window.MK_BOOKING;var maxDt3=new Date();maxDt3.setDate(maxDt3.getDate()+(bs2.maxDaysForward||14));await gcalFetchEvents(new Date().toISOString(),maxDt3.toISOString());}catch(e){}
   }
   var slots=mkGetAvailableSlots(dateStr);
   var d=new Date(dateStr+'T00:00:00');
@@ -9030,7 +9045,7 @@ window.seq2ExecuteLaunch=async function(seqId){
         }else{errors++;}
       }else if(step.type==='email'&&!c.email){errors++;}
       else if(step.type==='whatsapp'){
-        var waPhone=(c.phone||c.mobile||'').replace(/[^0-9]/g,'');
+        var waPhone=mkWaNormPhone(c.phone||c.mobile||'');
         if(waPhone.length>=7){
           var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,c.firstName||'').replace(/\{\{nom\}\}/gi,c.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(c)).replace(/\{\{entreprise\}\}/gi,c.company||'').replace(/\{\{poste\}\}/gi,c.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
           var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
@@ -9273,7 +9288,7 @@ window.seq2LaunchSingle=async function(entryId,seqId){
       }
     }catch(e){console.error('[seq2PipelineLaunch]',e);}
   }else if(step.type==='whatsapp'){
-    var waPhone=(contact.phone||contact.mobile||'').replace(/[^0-9]/g,'');
+    var waPhone=mkWaNormPhone(contact.phone||contact.mobile||'');
     if(waPhone.length>=7){
       var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,contact.firstName||'').replace(/\{\{nom\}\}/gi,contact.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(contact)).replace(/\{\{entreprise\}\}/gi,contact.company||'').replace(/\{\{poste\}\}/gi,contact.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
       var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
