@@ -7720,6 +7720,22 @@ window.mkGetAvailableSlots=function(dateStr){
   var lunchS=bs.lunchBreak?parseInt(bs.lunchStart.split(':')[0])*60+parseInt((bs.lunchStart.split(':')[1]||'0')):null;
   var lunchE=bs.lunchBreak?parseInt(bs.lunchEnd.split(':')[0])*60+parseInt((bs.lunchEnd.split(':')[1]||'0')):null;
   var minNoticeMs=(bs.minNoticeHours||0)*3600000;
+  /* Build Google Calendar busy intervals for this date */
+  var gcalBusy=[];
+  if(typeof GCAL!=='undefined'&&GCAL.events&&GCAL.events.length){
+    GCAL.events.forEach(function(ev){
+      if(ev.status==='cancelled')return;
+      var evStart=ev.start&&(ev.start.dateTime||ev.start.date);
+      var evEnd=ev.end&&(ev.end.dateTime||ev.end.date);
+      if(!evStart||!evEnd)return;
+      var evIsAllDay=!!ev.start.date&&!ev.start.dateTime;
+      var evStartDate=evIsAllDay?ev.start.date:localDateStr(new Date(evStart));
+      if(evStartDate!==dateStr)return;
+      if(evIsAllDay){gcalBusy.push({startMins:0,endMins:1440});return;}
+      var sDt=new Date(evStart);var eDt=new Date(evEnd);
+      gcalBusy.push({startMins:sDt.getHours()*60+sDt.getMinutes(),endMins:eDt.getHours()*60+eDt.getMinutes()});
+    });
+  }
   for(var mins=startH*60+startM;mins<endH*60+endM;mins+=duration){
     if(lunchS!==null&&mins+duration>lunchS&&mins<lunchE)continue;
     var hh=Math.floor(mins/60);var mm=mins%60;
@@ -7728,7 +7744,11 @@ window.mkGetAvailableSlots=function(dateStr){
     var slotDateTime=new Date(dateStr+'T'+slotTime+':00');
     if(slotDateTime.getTime()-now.getTime()<minNoticeMs)continue;
     var booked=window.MK_MEETINGS.some(function(m){return m.date===dateStr&&m.startTime===slotTime&&m.status!=='cancelled';});
-    if(!booked)slots.push({date:dateStr,time:slotTime,end:slotEnd});
+    if(booked)continue;
+    /* Check overlap with Google Calendar busy intervals */
+    var gcalConflict=gcalBusy.some(function(b){return mins<b.endMins&&(mins+duration)>b.startMins;});
+    if(gcalConflict)continue;
+    slots.push({date:dateStr,time:slotTime,end:slotEnd});
   }
   return slots;
 };
@@ -7811,7 +7831,13 @@ window.mkRenderBookingPage=function(linkId){
   window._mkBkSelectedSlot=null;
   window._mkBkMinDate=localDateStr(now);
   window._mkBkMaxDate=localDateStr(maxDate);
+  /* Pre-fetch Google Calendar events for availability sync */
+  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()){
+    var maxDt2=new Date();maxDt2.setDate(maxDt2.getDate()+(bs.maxDaysForward||14));
+    gcalFetchEvents(new Date().toISOString(),maxDt2.toISOString()).then(function(){mkBkRenderWeek();}).catch(function(){mkBkRenderWeek();});
+  }else{
   mkBkRenderWeek();
+  }
 };
 
 window.mkBkNavWeek=function(dir){
@@ -7850,8 +7876,12 @@ window.mkBkSelectDay=function(dateStr){
   mkBkShowSlots(dateStr);
 };
 
-window.mkBkShowSlots=function(dateStr){
+window.mkBkShowSlots=async function(dateStr){
   var area=document.getElementById('bkSlotsArea');if(!area)return;
+  /* Refresh Google Calendar events if connected, to get up-to-date availability */
+  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()&&(!GCAL.events||!GCAL.events.length)){
+    try{var bs=window.MK_BOOKING;var maxDt=new Date();maxDt.setDate(maxDt.getDate()+(bs.maxDaysForward||14));await gcalFetchEvents(new Date().toISOString(),maxDt.toISOString());}catch(e){}
+  }
   var slots=mkGetAvailableSlots(dateStr);
   var d=new Date(dateStr+'T00:00:00');
   var label=d.toLocaleDateString('fr-CH',{weekday:'long',day:'numeric',month:'long'});
@@ -8997,8 +9027,17 @@ window.seq2ExecuteLaunch=async function(seqId){
         }else{errors++;}
       }else if(step.type==='email'&&!c.email){errors++;}
       else if(step.type==='whatsapp'){
-        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
-        stepExecuted=true;launched++;
+        var waPhone=(c.phone||c.mobile||'').replace(/[^0-9]/g,'');
+        if(waPhone.length>=7){
+          var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,c.firstName||'').replace(/\{\{nom\}\}/gi,c.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(c)).replace(/\{\{entreprise\}\}/gi,c.company||'').replace(/\{\{poste\}\}/gi,c.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
+          var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
+          if(i===0)window.open(waUrl,'_blank');
+          run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
+          stepExecuted=true;launched++;
+        }else{
+          run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'skipped',channel:'whatsapp',detail:'no phone'});
+          stepExecuted=true;launched++;
+        }
       }else if(step.type==='wait'){
         run.nextStepAt=new Date(Date.now()+(step.waitDays||3)*86400000).toISOString();
         run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'waiting',channel:'wait'});
@@ -9230,6 +9269,25 @@ window.seq2LaunchSingle=async function(entryId,seqId){
         svElog();
       }
     }catch(e){console.error('[seq2PipelineLaunch]',e);}
+  }else if(step.type==='whatsapp'){
+    var waPhone=(contact.phone||contact.mobile||'').replace(/[^0-9]/g,'');
+    if(waPhone.length>=7){
+      var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,contact.firstName||'').replace(/\{\{nom\}\}/gi,contact.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(contact)).replace(/\{\{entreprise\}\}/gi,contact.company||'').replace(/\{\{poste\}\}/gi,contact.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
+      var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
+      window.open(waUrl,'_blank');
+      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
+    }else{
+      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'skipped',channel:'whatsapp',detail:'no phone'});
+    }
+    run.currentStepIndex=1;
+    if(seq.steps.length>1){var nd2=seq.steps[1].delay||seq.steps[1].waitDays||3;run.nextStepAt=new Date(Date.now()+nd2*86400000).toISOString();}
+    else{run.status='completed';run.nextStepAt=null;}
+  }else if(step.type==='stage_move'){
+    funnelMoveTo(entryId,step.stageTarget);
+    run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'stage_moved',channel:'funnel'});
+    run.currentStepIndex=1;
+    if(seq.steps.length>1){var nd3=seq.steps[1].delay||seq.steps[1].waitDays||3;run.nextStepAt=new Date(Date.now()+nd3*86400000).toISOString();}
+    else{run.status='completed';run.nextStepAt=null;}
   }else{
     run.currentStepIndex=1;
     if(seq.steps.length>1){run.nextStepAt=new Date(Date.now()+(seq.steps[1].delay||3)*86400000).toISOString();}
@@ -9237,7 +9295,6 @@ window.seq2LaunchSingle=async function(entryId,seqId){
   }
   SEQ2_RUNS.push(run);svSeqRuns2();
   entry.activeSequenceId=seqId;entry.activeSequenceRunId=runId;
-  if(step.type==='stage_move')funnelMoveTo(entryId,step.stageTarget);
   svFunnel();
   toast('S\u00e9quence lanc\u00e9e pour '+contactDisplayName(contact),'ok');
   pipeCloseDetail();rMarketingV2();
