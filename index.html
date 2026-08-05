@@ -465,7 +465,7 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
 
 /* ===== FIREBASE CLOUD SYNC ===== */
 const FB={app:null,auth:null,db:null,uid:null,userEmail:null,listener:null,connected:false,pushing:false,signingIn:false};
-const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log','cdc_funnel_stages','cdc_funnel_settings','cdc_sequences_v2','cdc_seq_runs_v2'];
+const FB_KEYS=['cdc_folders','cdc_data','cdc_log','cdc_marketing','cdc_settings','cdc_templates','cdc_gcal_client_id','cdc_notes_data','cdc_email_log','cdc_email_groups','cdc_email_seqs','cdc_email_seq_runs','cdc_sounds','cdc_meetings','cdc_booking_settings','cdc_wa_campaigns','cdc_wa_log','cdc_wa_seq_pending','cdc_wa_default_cc','cdc_funnel_stages','cdc_funnel_settings','cdc_sequences_v2','cdc_seq_runs_v2'];
 /* Config Firebase par défaut de l'app (projet stargate-command-fd9fa).
    Ces valeurs client Firebase sont publiques par design : la sécurité repose
    sur les règles Firestore, pas sur le secret de l'apiKey. Cela permet à
@@ -582,6 +582,7 @@ FOLDERS=ldFolders();D=ldData();CL=ldLog();MK=ldMk();SET=ldSettings();TEMPLATES=l
 /* Recharger les données WhatsApp */
 if(typeof window.MK_WA_CAMPAIGNS!=='undefined')window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();
 if(typeof window.MK_WA_LOG!=='undefined')window.MK_WA_LOG=window.ldWaLog();
+if(typeof window.MK_WA_SEQ_PENDING!=='undefined'&&typeof window.ldWaSeqPending==='function')window.MK_WA_SEQ_PENDING=window.ldWaSeqPending();
 if(typeof window.MK_MEETINGS!=='undefined')window.MK_MEETINGS=window.ldMeetings();
 if(typeof window.MK_BOOKING!=='undefined')window.MK_BOOKING=window.ldBookingSettings();
 /* Recharger les données du module email si déjà initialisé */
@@ -2592,6 +2593,7 @@ function gcalAuthCallback(resp){
     GCAL.connected=true;
     toast('Connecté à Google (Agenda + Gmail)');
     gcalFetchEvents();
+    if(typeof window.mkSyncGCalBusy==='function')window.mkSyncGCalBusy(true);
 }
 function gcalConnect(){
     if(!GCAL.clientId){toast('Renseigne d\'abord ton Client ID Google','err');return;}
@@ -4245,7 +4247,7 @@ ${c.company?`<div class="text-sm text-inf">${escHtml(c.company)}</div>`:''}
 
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 ${c.email?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Email</div><a href="mailto:${escHtml(c.email)}" onclick="gmailComposeToContact(event,'${escHtml(c.email).replace(/'/g,"\\'")}')" class="text-inf hover:underline text-sm font-medium break-all"><i class="fa-solid fa-paper-plane mr-1.5 text-xs"></i>${escHtml(c.email)}</a></div>`:''}
-${c.phone?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Telephone</div><div class="flex items-center gap-2"><span class="text-sm font-medium">${escHtml(c.phone)}</span><a href="https://wa.me/${escHtml(c.phone.replace(/[^0-9]/g,''))}" target="_blank" rel="noopener" class="w-7 h-7 rounded-lg bg-[#25d366]/20 text-[#25d366] hover:bg-[#25d366]/30 flex items-center justify-center bp shrink-0" data-tip="Envoyer un WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a></div></div>`:''}
+${c.phone?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">Telephone</div><div class="flex items-center gap-2"><span class="text-sm font-medium">${escHtml(c.phone)}</span><a href="https://wa.me/${escHtml(window.waFormatPhone(c.phone))}" target="_blank" rel="noopener" class="w-7 h-7 rounded-lg bg-[#25d366]/20 text-[#25d366] hover:bg-[#25d366]/30 flex items-center justify-center bp shrink-0" data-tip="Envoyer un WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a></div></div>`:''}
 ${c.linkedin?`<div class="bg-sAlt rounded-xl p-4 border border-bdr"><div class="text-[.65rem] text-mut uppercase tracking-wide mb-1">LinkedIn</div><a href="${escHtml(c.linkedin)}" target="_blank" rel="noopener" class="text-inf hover:underline text-sm font-medium break-all"><i class="fa-brands fa-linkedin mr-1"></i>Profil LinkedIn</a></div>`:''}
 </div>
 
@@ -6120,13 +6122,12 @@ window.mkGetAllTags=function(){
   FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){(c.tags||[]).forEach(function(t){tagSet.add(t)});});});
   return Array.from(tagSet).sort(function(a,b){return a.localeCompare(b,'fr')});
 };
-window.mkContactsByTag=function(selectedTags,opts){
+window.mkContactsByTag=function(selectedTags){
   if(!selectedTags||!selectedTags.length)return[];
   var set=new Set(selectedTags);
-  var allowNoEmail=opts&&opts.allowNoEmail;
   var results=[];
   FOLDERS.forEach(function(f){(D[f.key]&&D[f.key].contacts||[]).forEach(function(c){
-    if(!allowNoEmail&&!c.email)return;
+    if(!c.email)return;
     var cTags=new Set(c.tags||[]);
     if(Array.from(set).some(function(t){return cTags.has(t)}))results.push(Object.assign({},c,{_folder:f.name,_fkey:f.key}));
   });});
@@ -7122,6 +7123,30 @@ window.ldWaLog=function(){try{var s=localStorage.getItem('cdc_wa_log');if(s)retu
 window.svWaLog=function(){localStorage.setItem('cdc_wa_log',JSON.stringify(window.MK_WA_LOG));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
 window.MK_WA_LOG=window.ldWaLog();
 
+/* --- File d'attente des envois WhatsApp issus des séquences (l'ouverture d'un lien
+   wa.me DOIT être déclenchée par un clic utilisateur direct, sinon le navigateur
+   bloque le popup — donc une étape WhatsApp automatique dans une séquence est
+   mise "en attente" ici plutôt que "faussement marquée comme envoyée". --- */
+window.ldWaSeqPending=function(){try{var s=localStorage.getItem('cdc_wa_seq_pending');if(s)return JSON.parse(s);}catch(e){}return[];};
+window.svWaSeqPending=function(){localStorage.setItem('cdc_wa_seq_pending',JSON.stringify(window.MK_WA_SEQ_PENDING));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+window.MK_WA_SEQ_PENDING=window.ldWaSeqPending();
+
+/* --- Indicatif pays par défaut pour les numéros locaux (sans indicatif) ---
+   BUG CORRIGÉ : les liens wa.me construits à partir d'un numéro local français
+   (ex: "06 12 34 56 78" -> "0612345678") sont INVALIDES pour WhatsApp, qui exige
+   le format international sans le 0 initial (ex: "33612345678"). WhatsApp affiche
+   alors une page "Le lien que vous avez suivi n'est pas valide". C'est la cause
+   du bug "le lien ne fonctionne pas" sur les campagnes/séquences WhatsApp. */
+window.ldWaDefaultCC=function(){return localStorage.getItem('cdc_wa_default_cc')||'33';};
+window.svWaDefaultCC=function(cc){localStorage.setItem('cdc_wa_default_cc',cc);if(S.mkv==='whatsapp')rMarketing();};
+window.waFormatPhone=function(raw){
+  var digits=(raw||'').replace(/[^0-9]/g,'');
+  if(!digits)return '';
+  if(digits.substr(0,2)==='00')digits=digits.substr(2); /* préfixe international 00 */
+  if(digits.charAt(0)==='0'&&digits.length===10)digits=window.ldWaDefaultCC()+digits.substr(1); /* numéro local -> ajoute l'indicatif */
+  return digits;
+};
+
 window.mkWaFilter='all';
 window.mkWaCampFilter='';
 window.mkWaSearch='';
@@ -7148,7 +7173,23 @@ window.rWhatsAppView=function(){
   var replyRate=totalSent?Math.round(totalReplied/totalSent*100):0;
   var h='<div class="af">';
   h+='<div class="flex items-center justify-between mb-6"><div><h1 class="font-disp font-bold text-2xl flex items-center gap-3"><i class="fa-brands fa-whatsapp text-[#25d366] text-3xl"></i>Campagnes WhatsApp</h1><p class="text-xs text-mut mt-1">Envoyez des messages par campagne via WhatsApp</p></div>';
-  h+='<div class="flex gap-2"><button onclick="mkWaCampModal()" class="h-10 px-5 rounded-xl bg-[#25d366] hover:bg-[#25d366]/80 text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-brands fa-whatsapp text-xs"></i>Nouvelle campagne</button></div></div>';
+  h+='<div class="flex items-center gap-2"><label class="text-[.6rem] text-mut" data-tip="Indicatif utilisé pour compléter automatiquement les numéros locaux (sans quoi les liens wa.me sont invalides)">Indicatif par défaut</label><select class="fi text-xs w-auto" onchange="window.svWaDefaultCC(this.value)"><option value="33"'+(window.ldWaDefaultCC()==='33'?' selected':'')+'>🇫🇷 +33 France</option><option value="41"'+(window.ldWaDefaultCC()==='41'?' selected':'')+'>🇨🇭 +41 Suisse</option><option value="32"'+(window.ldWaDefaultCC()==='32'?' selected':'')+'>🇧🇪 +32 Belgique</option></select>';
+  h+='<button onclick="mkWaCampModal()" class="h-10 px-5 rounded-xl bg-[#25d366] hover:bg-[#25d366]/80 text-black text-sm font-semibold flex items-center gap-2 transition-colors bp"><i class="fa-brands fa-whatsapp text-xs"></i>Nouvelle campagne</button></div></div>';
+  var waPending=(window.MK_WA_SEQ_PENDING||[]).filter(function(p){return p.status==='pending';});
+  if(waPending.length){
+    h+='<div class="mb-6"><h3 class="text-xs text-warn uppercase tracking-wide font-semibold mb-3"><i class="fa-solid fa-clock mr-1.5"></i>Envois WhatsApp en attente (séquences) — '+waPending.length+'</h3>';
+    h+='<p class="text-[.65rem] text-mut mb-3">WhatsApp exige un clic direct pour ouvrir un lien de conversation : ces messages générés automatiquement par une séquence attendent que tu cliques sur "Envoyer".</p>';
+    h+='<div class="flex flex-col gap-2">';
+    waPending.forEach(function(p){
+      h+='<div class="bg-surface border border-warn/30 rounded-xl p-3 flex items-center gap-3">';
+      h+='<div class="w-9 h-9 rounded-lg bg-[#25d366]/20 text-[#25d366] flex items-center justify-center shrink-0"><i class="fa-brands fa-whatsapp"></i></div>';
+      h+='<div class="flex-1 min-w-0"><div class="text-xs font-medium truncate">'+escHtml(p.contactName||p.phone||'Contact')+' <span class="text-mut">— '+escHtml(p.sequenceName||'')+'</span></div><div class="text-[.6rem] text-mut line-clamp-1">'+escHtml((p.message||'').substring(0,80))+'</div>'+(!p.phone?'<div class="text-[.6rem] text-warn mt-0.5"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Numéro manquant ou invalide</div>':'')+'</div>';
+      h+='<button onclick="mkWaSendPending(\''+p.id+'\')" '+(p.phone?'':'disabled style="opacity:.5;pointer-events:none"')+' class="h-8 px-3 rounded-lg bg-[#25d366] text-black text-[.6rem] font-semibold bp shrink-0"><i class="fa-brands fa-whatsapp mr-1"></i>Envoyer</button>';
+      h+='<button onclick="mkWaDismissPending(\''+p.id+'\')" class="w-7 h-7 rounded-lg text-mut hover:text-red-400 bp shrink-0" data-tip="Ignorer"><i class="fa-solid fa-xmark text-xs"></i></button>';
+      h+='</div>';
+    });
+    h+='</div></div>';
+  }
   h+='<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">';
   h+='<div class="kpi" style="background:#25d366"><i class="fa-brands fa-whatsapp text-2xl opacity-80 mb-3"></i><div class="text-2xl font-disp font-bold">'+totalSent+'</div><div class="text-xs opacity-90 mt-1">Messages envoyés</div></div>';
   h+='<div class="kpi" style="background:rgba(37,211,102,0.15)"><i class="fa-solid fa-check-double text-2xl opacity-80 mb-3" style="color:#25d366"></i><div class="text-2xl font-disp font-bold">'+totalDelivered+'</div><div class="text-xs opacity-90 mt-1">Livrés</div></div>';
@@ -7224,7 +7265,7 @@ window.rWhatsAppView=function(){
       h+='<div class="sm:col-span-2 min-w-0"><div class="text-[.6rem] text-mut line-clamp-1">'+escHtml((e.message||'').replace(/<[^>]*>/g,'').substring(0,50))+'</div></div>';
       h+='<div class="sm:col-span-2"><div class="text-[.65rem] text-mut">'+dateLabel+'</div><div class="text-[.55rem] text-mut/60">'+timeLabel+'</div></div>';
       h+='<div class="sm:col-span-1 flex items-center justify-end gap-0.5">';
-      h+='<a href="https://wa.me/'+escHtml(e.phone.replace(/[^0-9]/g,''))+'" target="_blank" class="w-7 h-7 rounded-lg text-[#25d366] hover:bg-[#25d366]/10 bp" data-tip="Ouvrir WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a>';
+      h+='<a href="https://wa.me/'+escHtml(window.waFormatPhone(e.phone))+'" target="_blank" class="w-7 h-7 rounded-lg text-[#25d366] hover:bg-[#25d366]/10 bp" data-tip="Ouvrir WhatsApp"><i class="fa-brands fa-whatsapp text-xs"></i></a>';
       h+='<button onclick="mkWaToggleStatus('+e.id+',\'replied\')" class="w-7 h-7 rounded-lg '+(e.status==='replied'?'text-inf bg-infS':'text-mut hover:text-inf hover:bg-infS/50')+' bp" data-tip="Répondu"><i class="fa-solid fa-reply text-[.5rem]"></i></button>';
       h+='<button onclick="mkWaDeleteLog('+e.id+')" class="w-7 h-7 rounded-lg text-mut hover:text-red-400 bp" data-tip="Supprimer"><i class="fa-solid fa-trash text-[.5rem]"></i></button>';
       h+='</div></div>';
@@ -7356,37 +7397,20 @@ window.mkWaRemoveManualPhone=function(idx){
   if(window._mkWaSend._manualPhones){window._mkWaSend._manualPhones.splice(idx,1);mkWaSendCampModal(window._mkWaSend.campId);}
 };
 
-/* Normalize phone for wa.me: strip non-digits, remove leading 00 or 0 (local format) */
-window.mkWaNormPhone=function(phone){
-  if(!phone)return'';
-  var p=phone.replace(/[^0-9]/g,'');
-  if(p.indexOf('00')===0)p=p.substring(2);
-  else if(p.indexOf('0')===0&&p.length>=10)p=p.substring(1);
-  return p;
-};
-
-/* Robust wa.me link opener: works in PWA/standalone iOS, regular browser & desktop */
-window.mkWaOpen=function(url){
-  var w=window.open(url,'_blank');
-  if(!w||w.closed||typeof w.closed==='undefined'){
-    var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.style.display='none';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},200);
-  }
-};
-
 window.mkWaExecuteSend=function(){
   var send=window._mkWaSend;if(!send)return;
   var camp=window.MK_WA_CAMPAIGNS.find(function(c){return c.id===send.campId;});
   if(!camp){toast('Campagne introuvable','err');return;}
-  var contacts=mkContactsByTag(send._selTags,{allowNoEmail:true}).filter(function(c){return c.phone||c.mobile;});
+  var contacts=mkContactsByTag(send._selTags).filter(function(c){return c.phone||c.mobile;});
   var manualPhones=send._manualPhones||[];
   var allRecipients=[];
   contacts.forEach(function(c){
-    var phone=mkWaNormPhone(c.phone||c.mobile||'');
-    if(phone.length>=7)allRecipients.push({phone:phone,name:contactDisplayName(c),firstName:c.firstName||'',lastName:c.lastName||'',company:c.company||'',title:c.title||''});
+    var phone=window.waFormatPhone(c.phone||c.mobile||'');
+    if(phone.length>=8)allRecipients.push({phone:phone,name:contactDisplayName(c),firstName:c.firstName||'',lastName:c.lastName||'',company:c.company||'',title:c.title||''});
   });
   manualPhones.forEach(function(p){
-    var phone=mkWaNormPhone(p);
-    if(phone.length>=7)allRecipients.push({phone:phone,name:'Contact',firstName:'',lastName:'',company:'',title:''});
+    var phone=window.waFormatPhone(p);
+    if(phone.length>=8)allRecipients.push({phone:phone,name:'Contact',firstName:'',lastName:'',company:'',title:''});
   });
   if(!allRecipients.length){toast('Aucun numéro valide','err');return;}
   allRecipients.forEach(function(r,i){
@@ -7397,7 +7421,7 @@ window.mkWaExecuteSend=function(){
   allRecipients.forEach(function(r,i){
     var personalized=baseMessage.replace(/%7B%7Bprenom%7D%7D/gi,encodeURIComponent(r.firstName)).replace(/%7B%7Bnom%7D%7D/gi,encodeURIComponent(r.lastName)).replace(/%7B%7Bname%7D%7D/gi,encodeURIComponent(r.name)).replace(/%7B%7Bentreprise%7D%7D/gi,encodeURIComponent(r.company)).replace(/%7B%7Bposte%7D%7D/gi,encodeURIComponent(r.title));
     var waUrl='https://wa.me/'+r.phone+'?text='+personalized;
-    if(i===0){mkWaOpen(waUrl);}
+    if(i===0){window.open(waUrl,'_blank');}
   });
   clsM();
   toast(allRecipients.length+' message(s) WhatsApp ouvert(s) — n\'oublie pas d\'envoyer !','ok');
@@ -7405,6 +7429,24 @@ window.mkWaExecuteSend=function(){
   svWaCampaigns();rMarketing();
 };
 
+window.mkWaSendPending=function(id){
+  var entry=(window.MK_WA_SEQ_PENDING||[]).find(function(e){return e.id===id;});
+  if(!entry)return;
+  if(!entry.phone||entry.phone.length<8){toast('Numéro invalide pour ce contact','err');return;}
+  var url='https://wa.me/'+entry.phone+'?text='+encodeURIComponent(entry.message||'');
+  window.open(url,'_blank');
+  window.MK_WA_LOG.push({id:Date.now(),campaignId:'seq_'+entry.sequenceId,campaignName:'Séquence: '+(entry.sequenceName||''),phone:entry.phone,contactName:entry.contactName,message:entry.message,status:'sent',sentAt:new Date().toISOString()});
+  svWaLog();
+  window.MK_WA_SEQ_PENDING=(window.MK_WA_SEQ_PENDING||[]).filter(function(e){return e.id!==id;});
+  window.svWaSeqPending();
+  if(S.mkv==='whatsapp')rMarketing();
+  toast('WhatsApp ouvert — n\'oublie pas d\'envoyer !','ok');
+};
+window.mkWaDismissPending=function(id){
+  window.MK_WA_SEQ_PENDING=(window.MK_WA_SEQ_PENDING||[]).filter(function(e){return e.id!==id;});
+  window.svWaSeqPending();
+  if(S.mkv==='whatsapp')rMarketing();
+};
 window.mkWaToggleStatus=function(id,newStatus){
   var e=window.MK_WA_LOG.find(function(x){return x.id===id;});
   if(e){e.status=newStatus;if(newStatus==='replied')e.repliedAt=new Date().toISOString();svWaLog();if(S.mkv==='whatsapp')rMarketing();}
@@ -7428,7 +7470,7 @@ window.mkWaExportLog=function(){
 
 /* --- Meeting Scheduler Data Layer --- */
 window.ldMeetings=function(){try{var s=localStorage.getItem('cdc_meetings');if(s)return JSON.parse(s);}catch(e){}return[];}
-window.svMeetings=function(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();};
+window.svMeetings=function(){localStorage.setItem('cdc_meetings',JSON.stringify(window.MK_MEETINGS));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();if(typeof window.mkPushPublicBooking==='function')window.mkPushPublicBooking();};
 window.MK_MEETINGS=window.ldMeetings();
 
 /* --- Firebase sync hook : recharge les données email depuis localStorage après un sync cloud --- */
@@ -7440,6 +7482,7 @@ window._onDataSynced=function(){
   try{window.MK_MEETINGS=window.ldMeetings();}catch(e){}
   try{window.MK_WA_CAMPAIGNS=window.ldWaCampaigns();}catch(e){}
   try{window.MK_WA_LOG=window.ldWaLog();}catch(e){}
+  try{window.MK_WA_SEQ_PENDING=window.ldWaSeqPending();}catch(e){}
 };
 
 /* --- Intercepter les sauvegardes du module email pour push Firebase --- */
@@ -7470,6 +7513,10 @@ function rMeetings(){
 var el=document.getElementById('PC');if(!el)return;
 /* If booking page via hash, redirect to booking view */
 if(window.mkCheckBookingHash())return;
+/* Rafraîchit les créneaux occupés Google Agenda (max 1x/5min, cf. mkSyncGCalBusy) */
+if(window.MK_BOOKING.enabled&&typeof gcalHasValidToken==='function'&&gcalHasValidToken()&&typeof window.mkSyncGCalBusy==='function'){
+  window.mkSyncGCalBusy().then(function(changed){if(changed&&S.v==='meetings')rMeetings();});
+}
 var mts=window.MK_MEETINGS||[];
 var filter=window.MK_MFILTER||'all';
 var now=new Date();var todayStr2=now.toISOString().slice(0,10);
@@ -7707,7 +7754,7 @@ window.mkProposeMeetingSlots=function(id){
 
 /* ===== MEETING SCHEDULER — BOOKING LINK SYSTEM ===== */
 window.ldBookingSettings=function(){try{var s=localStorage.getItem('cdc_booking_settings');if(s)return JSON.parse(s);}catch(e){}return{enabled:false,slotDuration:30,minNoticeHours:24,maxDaysForward:14,startHour:'09:00',endHour:'18:00',weekdays:[1,2,3,4,5],lunchBreak:true,lunchStart:'12:00',lunchEnd:'13:30',location:'',conferenceLink:'',instructions:'',bookingLink:''};};
-function svBookingSettings(){localStorage.setItem('cdc_booking_settings',JSON.stringify(window.MK_BOOKING));}
+function svBookingSettings(){localStorage.setItem('cdc_booking_settings',JSON.stringify(window.MK_BOOKING));if(typeof fbIsReady==='function'&&fbIsReady())fbQueuePush();if(typeof window.mkPushPublicBooking==='function')window.mkPushPublicBooking();}
 window.MK_BOOKING=window.ldBookingSettings();
 
 window.mkGenBookingLink=function(){
@@ -7738,22 +7785,8 @@ window.mkGetAvailableSlots=function(dateStr){
   var lunchS=bs.lunchBreak?parseInt(bs.lunchStart.split(':')[0])*60+parseInt((bs.lunchStart.split(':')[1]||'0')):null;
   var lunchE=bs.lunchBreak?parseInt(bs.lunchEnd.split(':')[0])*60+parseInt((bs.lunchEnd.split(':')[1]||'0')):null;
   var minNoticeMs=(bs.minNoticeHours||0)*3600000;
-  /* Build Google Calendar busy intervals for this date */
-  var gcalBusy=[];
-  if(typeof GCAL!=='undefined'&&GCAL.events&&GCAL.events.length){
-    GCAL.events.forEach(function(ev){
-      if(ev.status==='cancelled')return;
-      var evStart=ev.start&&(ev.start.dateTime||ev.start.date);
-      var evEnd=ev.end&&(ev.end.dateTime||ev.end.date);
-      if(!evStart||!evEnd)return;
-      var evIsAllDay=!!ev.start.date&&!ev.start.dateTime;
-      var evStartDate=evIsAllDay?ev.start.date:localDateStr(new Date(evStart));
-      if(evStartDate!==dateStr)return;
-      if(evIsAllDay){gcalBusy.push({startMins:0,endMins:1440});return;}
-      var sDt=new Date(evStart);var eDt=new Date(evEnd);
-      gcalBusy.push({startMins:sDt.getHours()*60+sDt.getMinutes(),endMins:eDt.getHours()*60+eDt.getMinutes()});
-    });
-  }
+  var busy=bs.busy||[]; /* créneaux occupés remontés de Google Agenda (freebusy) */
+  var publicMeetings=window._mkPublicMeetings||[]; /* réservations existantes vues par un visiteur sans accès local */
   for(var mins=startH*60+startM;mins<endH*60+endM;mins+=duration){
     if(lunchS!==null&&mins+duration>lunchS&&mins<lunchE)continue;
     var hh=Math.floor(mins/60);var mm=mins%60;
@@ -7761,14 +7794,67 @@ window.mkGetAvailableSlots=function(dateStr){
     var slotEnd=String(Math.floor((mins+duration)/60)).padStart(2,'0')+':'+String((mins+duration)%60).padStart(2,'0');
     var slotDateTime=new Date(dateStr+'T'+slotTime+':00');
     if(slotDateTime.getTime()-now.getTime()<minNoticeMs)continue;
+    var slotStartMs=slotDateTime.getTime();var slotEndMs=slotStartMs+duration*60000;
     var booked=window.MK_MEETINGS.some(function(m){return m.date===dateStr&&m.startTime===slotTime&&m.status!=='cancelled';});
-    if(booked)continue;
-    /* Check overlap with Google Calendar busy intervals */
-    var gcalConflict=gcalBusy.some(function(b){return mins<b.endMins&&(mins+duration)>b.startMins;});
-    if(gcalConflict)continue;
-    slots.push({date:dateStr,time:slotTime,end:slotEnd});
+    if(!booked)booked=publicMeetings.some(function(m){return m.date===dateStr&&m.startTime===slotTime;});
+    var isBusyInGCal=!booked&&busy.some(function(b){
+      var bStart=new Date(b.start).getTime(),bEnd=new Date(b.end).getTime();
+      return slotStartMs<bEnd&&slotEndMs>bStart;
+    });
+    if(!booked&&!isBusyInGCal)slots.push({date:dateStr,time:slotTime,end:slotEnd});
   }
   return slots;
+};
+
+/* --- Synchronisation Google Agenda -> disponibilités du Meeting Scheduler ---
+   Récupère les plages "occupé" (freebusy) du calendrier principal sur la fenêtre
+   de réservation, pour ne plus proposer de créneaux qui sont en réalité pris
+   dans Google Agenda. Le résultat est mis en cache dans MK_BOOKING.busy et
+   publié dans Firestore (collection public_booking) pour que la page de
+   réservation publique (ouverte par un contact, sans compte Google) en
+   bénéficie aussi. */
+window.mkSyncGCalBusy=async function(force){
+  if(typeof gcalHasValidToken!=='function'||!gcalHasValidToken())return false;
+  var bs=window.MK_BOOKING;if(!bs.enabled)return false;
+  var last=bs._busySyncedAt||0;
+  if(!force&&Date.now()-last<5*60000)return false; /* max 1 appel API toutes les 5 min */
+  try{
+    var timeMin=new Date().toISOString();
+    var timeMax=new Date(Date.now()+(bs.maxDaysForward||14)*86400000).toISOString();
+    var r=await fetch('https://www.googleapis.com/calendar/v3/freeBusy',{
+      method:'POST',headers:{Authorization:'Bearer '+GCAL.token,'Content-Type':'application/json'},
+      body:JSON.stringify({timeMin:timeMin,timeMax:timeMax,items:[{id:'primary'}]})
+    });
+    if(!r.ok)return false;
+    var data=await r.json();
+    var rawBusy=(data.calendars&&data.calendars.primary&&data.calendars.primary.busy)||[];
+    bs.busy=rawBusy.map(function(b){return{start:b.start,end:b.end};});
+    bs._busySyncedAt=Date.now();
+    svBookingSettings();
+    window.mkPushPublicBooking();
+    return true;
+  }catch(e){console.error('[mkSyncGCalBusy]',e);return false;}
+};
+
+/* --- Publie un instantané public (lisible sans authentification) des
+   disponibilités, pour que la page de réservation fonctionne aussi sur
+   l'appareil du contact qui n'a ni le token Google ni les données locales
+   de Kay. NÉCESSITE une règle Firestore autorisant la LECTURE publique de
+   la collection "public_booking" (écriture réservée au propriétaire connecté) --- */
+window.mkPushPublicBooking=function(){
+  if(!(typeof fbIsReady==='function'&&fbIsReady()))return;
+  var bs=window.MK_BOOKING;
+  if(!bs.enabled||!bs.bookingLink)return;
+  try{
+    FB.db.collection('public_booking').doc(bs.bookingLink).set({
+      enabled:bs.enabled,slotDuration:bs.slotDuration,minNoticeHours:bs.minNoticeHours,maxDaysForward:bs.maxDaysForward,
+      startHour:bs.startHour,endHour:bs.endHour,weekdays:bs.weekdays,lunchBreak:bs.lunchBreak,lunchStart:bs.lunchStart,lunchEnd:bs.lunchEnd,
+      location:bs.location,conferenceLink:bs.conferenceLink,instructions:bs.instructions,
+      busy:bs.busy||[],
+      meetings:(window.MK_MEETINGS||[]).filter(function(m){return m.status!=='cancelled';}).map(function(m){return{date:m.date,startTime:m.startTime};}),
+      _ts:Date.now()
+    }).catch(function(e){console.error('[mkPushPublicBooking]',e);});
+  }catch(e){}
 };
 
 window.mkBookingSettingsModal=function(){
@@ -7808,7 +7894,12 @@ window.mkBookingSettingsModal=function(){
   opM(h);
 };
 
-/* --- Public Booking Page (rendered when #booking=xxx in URL) --- */
+/* --- Public Booking Page (rendered when #booking=xxx in URL) ---
+   Un visiteur (contact) qui ouvre ce lien n'a ni le token Google de Kay,
+   ni ses données locales (localStorage est propre à chaque navigateur/appareil).
+   On tente donc de récupérer un instantané public (settings + créneaux occupés
+   + réservations existantes) depuis Firestore AVANT d'afficher les créneaux,
+   pour que la page fonctionne correctement même sur l'appareil du contact. */
 window.mkRenderBookingPage=function(linkId){
   /* Masquer toute l'interface CRM pour les visiteurs */
   var sidebar=document.getElementById('sb');if(sidebar)sidebar.style.display='none';
@@ -7818,7 +7909,34 @@ window.mkRenderBookingPage=function(linkId){
   var mobl=document.getElementById('mobl');if(mobl)mobl.style.display='none';
   document.body.style.overflow='auto';
   document.title='Reservation de creneau';
+  var el=document.getElementById('PC');if(!el)return;
+  el.innerHTML='<div class="af"><div class="text-center py-20 text-mut"><i class="fa-solid fa-circle-notch fa-spin text-2xl mb-3 block opacity-50"></i>Chargement des disponibilités...</div></div>';
+  window.mkBkFetchPublicData(linkId).then(function(){window.mkBkRenderBookingPageInner(linkId);});
+};
 
+window.mkBkFetchPublicData=function(linkId){
+  return new Promise(function(resolve){
+    if(typeof FB==='undefined'||!FB.db){resolve();return;}
+    FB.db.collection('public_booking').doc(linkId).get().then(function(snap){
+      if(snap.exists){
+        var d=snap.data();
+        var localMatches=window.MK_BOOKING.bookingLink===linkId&&window.MK_BOOKING.enabled;
+        if(!localMatches){
+          /* Appareil du contact : aucune donnée locale, on utilise l'instantané public */
+          window.MK_BOOKING=Object.assign({},window.MK_BOOKING,d,{bookingLink:linkId});
+        }else{
+          /* Appareil de Kay lui-même : on garde ses réglages locaux mais on
+             rafraîchit les créneaux occupés au cas où un autre appareil aurait
+             une version plus récente. */
+          window.MK_BOOKING.busy=d.busy||window.MK_BOOKING.busy;
+        }
+        window._mkPublicMeetings=d.meetings||[];
+      }
+    }).catch(function(e){console.error('[mkBkFetchPublicData]',e);}).then(resolve);
+  });
+};
+
+window.mkBkRenderBookingPageInner=function(linkId){
   var el=document.getElementById('PC');if(!el)return;
   var bs=window.MK_BOOKING;
   if(!bs.enabled||bs.bookingLink!==linkId){
@@ -7849,13 +7967,7 @@ window.mkRenderBookingPage=function(linkId){
   window._mkBkSelectedSlot=null;
   window._mkBkMinDate=localDateStr(now);
   window._mkBkMaxDate=localDateStr(maxDate);
-  /* Pre-fetch Google Calendar events for availability sync */
-  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()){
-    var maxDt2=new Date();maxDt2.setDate(maxDt2.getDate()+(bs.maxDaysForward||14));
-    gcalFetchEvents(new Date().toISOString(),maxDt2.toISOString()).then(function(){mkBkRenderWeek();}).catch(function(){mkBkRenderWeek();});
-  }else{
   mkBkRenderWeek();
-  }
 };
 
 window.mkBkNavWeek=function(dir){
@@ -7894,12 +8006,8 @@ window.mkBkSelectDay=function(dateStr){
   mkBkShowSlots(dateStr);
 };
 
-window.mkBkShowSlots=async function(dateStr){
+window.mkBkShowSlots=function(dateStr){
   var area=document.getElementById('bkSlotsArea');if(!area)return;
-  /* Always refresh Google Calendar events if connected to ensure up-to-date availability */
-  if(typeof gcalHasValidToken==='function'&&gcalHasValidToken()){
-    try{var bs2=window.MK_BOOKING;var maxDt3=new Date();maxDt3.setDate(maxDt3.getDate()+(bs2.maxDaysForward||14));await gcalFetchEvents(new Date().toISOString(),maxDt3.toISOString());}catch(e){}
-  }
   var slots=mkGetAvailableSlots(dateStr);
   var d=new Date(dateStr+'T00:00:00');
   var label=d.toLocaleDateString('fr-CH',{weekday:'long',day:'numeric',month:'long'});
@@ -9006,6 +9114,30 @@ window.seq2LoadGroup=function(gid){
   if(g){window._seq2Launch._selTags=g.tags.slice();window._seq2Launch._selIds=new Set();seq2LaunchModal(window._seq2Launch.seqId);}
 };
 
+/* --- WhatsApp dans les séquences : construit le message personnalisé et met
+   l'envoi "en attente" (voir Marketing > WhatsApp) au lieu de faire semblant
+   de l'avoir envoyé. Un clic utilisateur est indispensable pour ouvrir wa.me
+   (sinon le navigateur bloque le popup silencieusement). --- */
+window.seq2BuildWaMessage=function(step,c){
+  var sig=window.MK_SIGNATURE||'';
+  var msg=(step&&step.waMessage)||'';
+  msg=msg.replace(/\{\{prenom\}\}/gi,(c&&c.firstName)||'')
+    .replace(/\{\{nom\}\}/gi,(c&&c.lastName)||'')
+    .replace(/\{\{name\}\}/gi,(typeof contactDisplayName==='function'&&c?contactDisplayName(c):''))
+    .replace(/\{\{entreprise\}\}/gi,(c&&c.company)||'')
+    .replace(/\{\{poste\}\}/gi,(c&&c.title)||'')
+    .replace(/\{\{signature\}\}/gi,sig);
+  return msg;
+};
+window.seq2QueueWaStep=function(run,step,c,stepIndex){
+  var phone=window.waFormatPhone((c&&(c.phone||c.mobile))||'');
+  var ok=!!phone&&phone.length>=8;
+  var entry={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),runId:run.id,sequenceId:run.sequenceId,sequenceName:run.sequenceName,contactName:(typeof contactDisplayName==='function'&&c?contactDisplayName(c):run.contactName)||'',phone:ok?phone:'',message:window.seq2BuildWaMessage(step,c||{}),stepIndex:stepIndex,status:'pending',createdAt:new Date().toISOString()};
+  window.MK_WA_SEQ_PENDING.push(entry);
+  window.svWaSeqPending();
+  return ok;
+};
+
 window.seq2ExecuteLaunch=async function(seqId){
   var seq=SEQ2.find(function(s){return s.id===seqId;});if(!seq)return;
   /* Get only the manually selected contacts */
@@ -9045,17 +9177,9 @@ window.seq2ExecuteLaunch=async function(seqId){
         }else{errors++;}
       }else if(step.type==='email'&&!c.email){errors++;}
       else if(step.type==='whatsapp'){
-        var waPhone=mkWaNormPhone(c.phone||c.mobile||'');
-        if(waPhone.length>=7){
-          var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,c.firstName||'').replace(/\{\{nom\}\}/gi,c.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(c)).replace(/\{\{entreprise\}\}/gi,c.company||'').replace(/\{\{poste\}\}/gi,c.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
-          var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
-          if(i===0)mkWaOpen(waUrl);
-          run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
-          stepExecuted=true;launched++;
-        }else{
-          run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'skipped',channel:'whatsapp',detail:'no phone'});
-          stepExecuted=true;launched++;
-        }
+        var waOk=window.seq2QueueWaStep(run,step,c,0);
+        run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:waOk?'wa_pending':'wa_no_phone',channel:'whatsapp',detail:waOk?'En attente d\'envoi manuel (Marketing > WhatsApp)':'Pas de numéro de téléphone valide'});
+        stepExecuted=true;launched++;
       }else if(step.type==='wait'){
         run.nextStepAt=new Date(Date.now()+(step.waitDays||3)*86400000).toISOString();
         run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'waiting',channel:'wait'});
@@ -9182,7 +9306,8 @@ window.seq2Scheduler=async function(){
           stepExecuted=true;
         }
       }else if(step.type==='whatsapp'){
-        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp'});
+        var waOk2=window.seq2QueueWaStep(run,step,contact||{phone:'',mobile:'',firstName:'',lastName:'',company:'',title:''},run.currentStepIndex);
+        run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:waOk2?'wa_pending':'wa_no_phone',channel:'whatsapp',detail:waOk2?'En attente d\'envoi manuel (Marketing > WhatsApp)':'Pas de numéro de téléphone valide'});
         stepExecuted=true;
       }else if(step.type==='wait'){
         run.stepLog.push({stepIndex:run.currentStepIndex,sentAt:new Date().toISOString(),status:'waiting',channel:'wait'});
@@ -9288,23 +9413,22 @@ window.seq2LaunchSingle=async function(entryId,seqId){
       }
     }catch(e){console.error('[seq2PipelineLaunch]',e);}
   }else if(step.type==='whatsapp'){
-    var waPhone=mkWaNormPhone(contact.phone||contact.mobile||'');
-    if(waPhone.length>=7){
-      var waMsg=encodeURIComponent((step.waMessage||step.body||'').replace(/\{\{prenom\}\}/gi,contact.firstName||'').replace(/\{\{nom\}\}/gi,contact.lastName||'').replace(/\{\{name\}\}/gi,contactDisplayName(contact)).replace(/\{\{entreprise\}\}/gi,contact.company||'').replace(/\{\{poste\}\}/gi,contact.title||'').replace(/\{\{signature\}\}/g,window.MK_SIGNATURE||''));
-      var waUrl='https://wa.me/'+waPhone+'?text='+waMsg;
-      mkWaOpen(waUrl);
-      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_link',channel:'whatsapp',detail:'wa.me link opened'});
+    /* Lancement depuis un clic direct sur un seul contact : on peut ouvrir
+       wa.me immédiatement (le geste utilisateur est encore valide ici). */
+    var waPhone=window.waFormatPhone(contact.phone||contact.mobile||'');
+    var waMsg=window.seq2BuildWaMessage(step,contact);
+    if(waPhone&&waPhone.length>=8){
+      window.open('https://wa.me/'+waPhone+'?text='+encodeURIComponent(waMsg),'_blank');
+      window.MK_WA_LOG.push({id:Date.now(),campaignId:'seq_'+seqId,campaignName:'S\u00e9quence: '+seq.name,phone:waPhone,contactName:contactDisplayName(contact),message:waMsg,status:'sent',sentAt:new Date().toISOString()});
+      svWaLog();
+      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'sent',channel:'whatsapp'});
     }else{
-      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'skipped',channel:'whatsapp',detail:'no phone'});
+      window.seq2QueueWaStep(run,step,contact,0);
+      run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'wa_no_phone',channel:'whatsapp',detail:'Pas de num\u00e9ro de t\u00e9l\u00e9phone valide'});
+      toast('Pas de num\u00e9ro valide pour '+contactDisplayName(contact)+' \u2014 message mis en attente','info');
     }
     run.currentStepIndex=1;
-    if(seq.steps.length>1){var nd2=seq.steps[1].delay||seq.steps[1].waitDays||3;run.nextStepAt=new Date(Date.now()+nd2*86400000).toISOString();}
-    else{run.status='completed';run.nextStepAt=null;}
-  }else if(step.type==='stage_move'){
-    funnelMoveTo(entryId,step.stageTarget);
-    run.stepLog.push({stepIndex:0,sentAt:new Date().toISOString(),status:'stage_moved',channel:'funnel'});
-    run.currentStepIndex=1;
-    if(seq.steps.length>1){var nd3=seq.steps[1].delay||seq.steps[1].waitDays||3;run.nextStepAt=new Date(Date.now()+nd3*86400000).toISOString();}
+    if(seq.steps.length>1){run.nextStepAt=new Date(Date.now()+(seq.steps[1].delay||3)*86400000).toISOString();}
     else{run.status='completed';run.nextStepAt=null;}
   }else{
     run.currentStepIndex=1;
@@ -9313,6 +9437,7 @@ window.seq2LaunchSingle=async function(entryId,seqId){
   }
   SEQ2_RUNS.push(run);svSeqRuns2();
   entry.activeSequenceId=seqId;entry.activeSequenceRunId=runId;
+  if(step.type==='stage_move')funnelMoveTo(entryId,step.stageTarget);
   svFunnel();
   toast('S\u00e9quence lanc\u00e9e pour '+contactDisplayName(contact),'ok');
   pipeCloseDetail();rMarketingV2();
